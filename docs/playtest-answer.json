@@ -1,0 +1,187 @@
+{
+  "node": "v24.21.0",
+  "sourceDigest": "0ba33a90f2e7654f861d13c468ae3915a8912711905f4659af9db2e6beafd5bb",
+  "distDigest": "06bc9fefa929cacdead5217104afb9699738652596b3987727ead210e3e85a84",
+  "distUnchanged": true,
+  "checks": [
+    "48x24/48/completed-question-is-an-answer-not-success-claim",
+    "48x24/48/full-question-and-paragraphs-are-readable",
+    "48x24/48/next-model-request-includes-question-and-human-answer",
+    "48x24/48/completed-statement-keeps-the-same-available-actions",
+    "48x24/48/reader-opens-at-first-line",
+    "48x24/48/resize-preserves-readable-frame",
+    "48x24/48/long-answer-scrolls-to-end",
+    "48x24/48/reopening-starts-from-the-beginning",
+    "48x24/48/dialogue-and-answer-survive-restart",
+    "48x24/48/external-deletion-clears-answer-and-returns-to-list",
+    "80x24/80/completed-question-is-an-answer-not-success-claim",
+    "80x24/80/full-question-and-paragraphs-are-readable",
+    "80x24/80/next-model-request-includes-question-and-human-answer",
+    "80x24/80/completed-statement-keeps-the-same-available-actions",
+    "80x24/80/reader-opens-at-first-line",
+    "80x24/80/resize-preserves-readable-frame",
+    "80x24/80/long-answer-scrolls-to-end",
+    "80x24/80/reopening-starts-from-the-beginning",
+    "80x24/80/dialogue-and-answer-survive-restart",
+    "80x24/80/external-deletion-clears-answer-and-returns-to-list",
+    "200x24/200/completed-question-is-an-answer-not-success-claim",
+    "200x24/200/full-question-and-paragraphs-are-readable",
+    "200x24/200/next-model-request-includes-question-and-human-answer",
+    "200x24/200/completed-statement-keeps-the-same-available-actions",
+    "200x24/200/reader-opens-at-first-line",
+    "200x24/200/resize-preserves-readable-frame",
+    "200x24/200/long-answer-scrolls-to-end",
+    "200x24/200/reopening-starts-from-the-beginning",
+    "200x24/200/dialogue-and-answer-survive-restart",
+    "200x24/200/external-deletion-clears-answer-and-returns-to-list"
+  ],
+  "coverage": {
+    "48x24/48/clarification-actions": {
+      "status": "passed",
+      "text": "Ответ получен"
+    },
+    "48x24/48/clarification-reader": {
+      "status": "passed",
+      "text": "Ответ модели"
+    },
+    "48x24/48/reply-prompt": {
+      "status": "passed",
+      "text": "Ваш ответ модели или следующий шаг"
+    },
+    "48x24/48/answer-actions": {
+      "status": "passed",
+      "text": "Ответить или продолжить"
+    },
+    "48x24/48/answer-beginning": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "48x24/48/answer-resized-200": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "48x24/48/answer-resize-restored": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "48x24/48/answer-end": {
+      "status": "passed",
+      "text": "Последняя строка полного ответа."
+    },
+    "48x24/48/answer-reopened-from-start": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "48x24/48/answer-after-restart": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "48x24/48/answer-deleted-live": {
+      "status": "passed",
+      "text": "Задача удалена"
+    },
+    "48x24/48/deleted-answer-back-to-list": {
+      "status": "passed",
+      "text": "Мои задачи · страница"
+    },
+    "80x24/80/clarification-actions": {
+      "status": "passed",
+      "text": "Ответ получен"
+    },
+    "80x24/80/clarification-reader": {
+      "status": "passed",
+      "text": "Ответ модели"
+    },
+    "80x24/80/reply-prompt": {
+      "status": "passed",
+      "text": "Ваш ответ модели или следующий шаг"
+    },
+    "80x24/80/answer-actions": {
+      "status": "passed",
+      "text": "Ответить или продолжить"
+    },
+    "80x24/80/answer-beginning": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "80x24/80/answer-resized-200": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "80x24/80/answer-resize-restored": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "80x24/80/answer-end": {
+      "status": "passed",
+      "text": "Последняя строка полного ответа."
+    },
+    "80x24/80/answer-reopened-from-start": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "80x24/80/answer-after-restart": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "80x24/80/answer-deleted-live": {
+      "status": "passed",
+      "text": "Задача удалена"
+    },
+    "80x24/80/deleted-answer-back-to-list": {
+      "status": "passed",
+      "text": "Мои задачи · страница"
+    },
+    "200x24/200/clarification-actions": {
+      "status": "passed",
+      "text": "Ответ получен"
+    },
+    "200x24/200/clarification-reader": {
+      "status": "passed",
+      "text": "Ответ модели"
+    },
+    "200x24/200/reply-prompt": {
+      "status": "passed",
+      "text": "Ваш ответ модели или следующий шаг"
+    },
+    "200x24/200/answer-actions": {
+      "status": "passed",
+      "text": "Ответить или продолжить"
+    },
+    "200x24/200/answer-beginning": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "200x24/200/answer-resized-48": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "200x24/200/answer-resize-restored": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "200x24/200/answer-end": {
+      "status": "passed",
+      "text": "Последняя строка полного ответа."
+    },
+    "200x24/200/answer-reopened-from-start": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "200x24/200/answer-after-restart": {
+      "status": "passed",
+      "text": "Уточнение принято: проверяем Studio"
+    },
+    "200x24/200/answer-deleted-live": {
+      "status": "passed",
+      "text": "Задача удалена"
+    },
+    "200x24/200/deleted-answer-back-to-list": {
+      "status": "passed",
+      "text": "Мои задачи · страница"
+    }
+  },
+  "failures": [],
+  "transport": "isolated fixture",
+  "markdown": "preserved as source text"
+}

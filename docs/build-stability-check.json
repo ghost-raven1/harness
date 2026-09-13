@@ -1,0 +1,79 @@
+{
+  "checkedAt": "2026-09-12T18:06:15.067863+00:00",
+  "node": "v24.21.0",
+  "sourceSha256": "ba93e74b8a6a21094c6c938991f5bf58566477815c10ce2bb4b2c64ab8063710",
+  "distSha256": "c318fd076da11ab12f0c37bcd8c1134bf1404cabe8d70b884d687ea15afa3c94",
+  "testSha256": "7c6e2607ab4214a2e0e320c58b8c5e3611b22460e69c99d0b92c2d725887e450",
+  "buildFiles": {
+    "scripts/build.mjs": "b02601d94ae7f7181700a979477cc2dea52e48ee44e6bed8e8bcf31ccaa5bee4",
+    "scripts/build-state.mjs": "a03a1fda6bee28c343790a63c4b1b128066098d433d529513b0e3e4b146c484d",
+    "scripts/project-lock.mjs": "71dadf316467b73bbad4b215259de38bf4c94d1ae67824ccc63db76db403e334",
+    "scripts/bootstrap.mjs": "170d7d0d7f079dadb10f605f82a7e105673140a3f261a915e60250e0f4d1303c",
+    "scripts/install-runtime.mjs": "b139b3e53d5c6721b183625aa5fd5126bb762ffd18493e0014dabd111247a3dd",
+    "scripts/check-engines.mjs": "ede8f42b3ebb5ed66dc4b62139f72bb9a25599fcc1ad18a8d5ba830a2d6b796e",
+    "scripts/start-windows.ps1": "2cc8e82dd868674a9c055206b82a41da8913bbb134e80e7ff94abdf6a11da4c8",
+    "start.sh": "ca689a82d3b55a3fa2c67042fa500d8608baad199d5f633eafb853b567d425b8",
+    "package.json": "0d5cea18a8a408286ebec2e9eba74a348cbbe503a14529176c452b18d6535d49",
+    "package-lock.json": "a7272528f451874e6f52c2b7d1ac4d876fccaad83877e22af4d6abc705333ef6",
+    "tsconfig.json": "5cd44488b509d95c091444ef18630ab71d0f11d9f8501dcd8a83df7cca8d3663",
+    "tsconfig.build.json": "387f0debb95b3403f20c6d7b8c871cc6b0254367e924942e6fb11a408fd53f79",
+    ".nvmrc": "73fb1b615e2043a933be1c0895cde4358036acc28d785692509b822aa53c761f",
+    ".npmrc": "64df63fc1cec8f5ec47aaf339a64607c57e2381f7dd8984ef178396d3a209809",
+    ".github/workflows/check.yml": "9760e9862499dc83cc468abe99b4a4058621d19607ebcdd8e53a406eda672c78",
+    "Dockerfile.test": "aa50e51487db7a1cd5aeb09977c6a5cc79cd9d2e3850239313071b3e72178cf2",
+    ".dockerignore": "c727a22e85915a5c93c14f1ae76c4091ff3dcf44a0d6b1116d6f1d3a0b7608aa",
+    ".gitignore": "c15c7b61e4cf9f5e2d08aa4d9507152b12b5a00cd5834833c0dcf2ac41cfc3d5",
+    ".prettierignore": "303e66bac8c511c262ee55b20a0628fbb8522a5f9004fec70325e2bc4e45be8e"
+  },
+  "macosArm64": {
+    "command": "npm run check",
+    "passedFiles": 77,
+    "passedTests": 529,
+    "durationSeconds": 188.04,
+    "log": ".harness/build-check-macos-final.log",
+    "sha256": "b4f852a016dabdbb96fb7f8f945018e7eeba7eacc67101462c278c4b2d41c4ff"
+  },
+  "linuxArm64": {
+    "command": "npm run check",
+    "passedFiles": 77,
+    "passedTests": 529,
+    "durationSeconds": 174.65,
+    "log": ".harness/build-check-linux-final.log",
+    "sha256": "bffde649a8bae350829fcc89b852e5d476fcbae6128430f86e568d87527bdcb3"
+  },
+  "docker": {
+    "image": "harness-test:build-stability",
+    "imageId": "sha256:3b2fa470a066c1436f4c0ed89061ddd436212586fcd52eff8bbee9bc95b93467",
+    "network": "none",
+    "user": "node",
+    "cleanInstallLog": ".harness/build-image-linux.log",
+    "cleanInstallLogSha256": "24c88983ffd708b86efe74be095a3f1402bed925f0114df1dfe8b1db370da196",
+    "finalBuildLog": ".harness/build-image-linux-final.log",
+    "finalBuildLogSha256": "76dad59046a45fbcad33402722ed81cccc42d462cc8fa6c54c24c5b8953a87e4"
+  },
+  "launcher": {
+    "node": "v24.21.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "repeatedBuildUnchanged": true,
+    "valid": true,
+    "manifestSha256": "28793c6350e845ae152b1dc847b4f83ad2c95bad2d5eab88af14a8c1c459e986",
+    "commands": [
+      "sh ./start.sh --prepare-only",
+      "sh ./start.sh --prepare-only",
+      "sh ./start.sh --help"
+    ]
+  },
+  "terminal": {
+    "report": "docs/playtest-build-stability.json",
+    "reportSha256": "28cb380f8a5ebbcaf18464620aaeb66b905514906ae9662ef1abc4c982f5f5a6",
+    "scenarios": 2,
+    "frames": 7,
+    "viewport": "48x24",
+    "failures": [],
+    "applicationMatchesFinalBuild": true,
+    "note": "PTY used the same application JS before the final cache-null guard; its original build manifest is preserved in the PTY report."
+  },
+  "newRegressionTests": 16,
+  "notExecuted": ["Native Windows run", "GitHub Actions run", "Cloud model requests"]
+}

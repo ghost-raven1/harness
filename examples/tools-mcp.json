@@ -1,0 +1,22 @@
+{
+  "timeoutMs": 60000,
+  "resultBytes": 32768,
+  "deniedPaths": ["**/.env", "**/.env.*", "**/.harness/**"],
+  "mcp": [
+    {
+      "id": "local",
+      "transport": "stdio",
+      "command": "/absolute/path/to/node",
+      "args": ["/absolute/path/to/server.mjs"],
+      "env": { "ACCESS_TOKEN": "LOCAL_MCP_TOKEN" },
+      "tools": { "read_document": "read", "update_document": "write" }
+    },
+    {
+      "id": "remote",
+      "transport": "http",
+      "url": "https://your-mcp-server.example/mcp",
+      "tokenEnv": "REMOTE_MCP_TOKEN",
+      "tools": { "search": "read" }
+    }
+  ]
+}

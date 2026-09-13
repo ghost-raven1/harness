@@ -1,0 +1,34 @@
+{
+  "qwen": {
+    "provider": "qwen",
+    "baseUrl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    "model": "qwen3.8-max",
+    "apiKeyEnv": "QWEN_API_KEY",
+    "contextTokens": 32768,
+    "outputTokens": 2048
+  },
+  "openai": {
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "model": "gpt-4o-mini",
+    "apiKeyEnv": "OPENAI_API_KEY",
+    "contextTokens": 32768,
+    "outputTokens": 2048
+  },
+  "anthropic": {
+    "provider": "anthropic",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "model": "claude-sonnet-4-20250514",
+    "apiKeyEnv": "ANTHROPIC_API_KEY",
+    "contextTokens": 32768,
+    "outputTokens": 2048
+  },
+  "google": {
+    "provider": "google",
+    "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+    "model": "gemini-2.5-flash",
+    "apiKeyEnv": "GOOGLE_GENERATIVE_AI_API_KEY",
+    "contextTokens": 32768,
+    "outputTokens": 2048
+  }
+}

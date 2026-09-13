@@ -1,0 +1,10 @@
+node_modules/
+dist/
+releases/
+.harness-build-*/
+.harness-dist-backup/
+.tools/
+.harness/
+coverage/
+package-lock.json
+docs/playtest-opencode.json

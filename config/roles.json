@@ -1,0 +1,28 @@
+{
+  "coordinator": {
+    "prompt": "prompts/coordinator.md",
+    "permissions": [{ "tool": "*", "decision": "allow" }]
+  },
+  "researcher": {
+    "prompt": "prompts/researcher.md",
+    "permissions": [
+      { "tool": "fs.read", "decision": "allow" },
+      { "tool": "fs.list", "decision": "allow" },
+      { "tool": "fs.search", "decision": "allow" },
+      { "tool": "artifacts.read", "decision": "allow" }
+    ]
+  },
+  "executor": {
+    "prompt": "prompts/executor.md",
+    "permissions": [{ "tool": "*", "decision": "allow" }]
+  },
+  "reviewer": {
+    "prompt": "prompts/reviewer.md",
+    "permissions": [
+      { "tool": "fs.read", "decision": "allow" },
+      { "tool": "fs.list", "decision": "allow" },
+      { "tool": "fs.search", "decision": "allow" },
+      { "tool": "artifacts.read", "decision": "allow" }
+    ]
+  }
+}

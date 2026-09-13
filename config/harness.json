@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "basePrompt": "prompts/base.md",
+  "rules": "rules.json",
+  "policy": "policy.json",
+  "roles": "roles.json",
+  "profiles": "profiles.json",
+  "tools": "tools.json",
+  "learning": "learning.json",
+  "defaultRole": "coordinator",
+  "coordination": "auto",
+  "defaultProfile": "qwen",
+  "workspaces": [".."],
+  "limits": {
+    "agents": 4,
+    "depth": 2,
+    "modelConcurrency": 2,
+    "reads": 4,
+    "turns": 256,
+    "handoffs": 8
+  }
+}

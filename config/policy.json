@@ -1,0 +1,9 @@
+{
+  "default": "deny",
+  "rules": [
+    { "tool": "fs.*", "decision": "allow" },
+    { "tool": "artifacts.read", "decision": "allow" },
+    { "tool": "agents.*", "decision": "allow" },
+    { "tool": "process.exec", "decision": "ask" }
+  ]
+}

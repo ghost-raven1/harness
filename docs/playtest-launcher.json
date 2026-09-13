@@ -1,0 +1,12 @@
+{
+  "checkedAt": "2026-09-11T20:50:19Z",
+  "platform": "macOS arm64",
+  "node": "v24.21.0",
+  "passed": true,
+  "codex": "codex-cli 0.154.0",
+  "seconds": 18.9,
+  "warmCache": true,
+  "runtimeDownloaded": true,
+  "sha256Checked": true,
+  "dependenciesInstalled": true
+}

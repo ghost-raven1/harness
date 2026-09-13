@@ -1,0 +1,83 @@
+{
+  "checkedAt": "2026-09-12T19:43:22.050470+00:00",
+  "version": "0.1.0",
+  "node": "v24.21.0",
+  "sourceSha256": "4726b4465787e26afe6162ab8d644b3363ec68df2469ca76bc8131a479d03b5d",
+  "distSha256": "db941d48acc34c2c824962d1859aac21e964f36cd28411543c3979caf30fe53f",
+  "testSha256": "7722af81d78d9e6b5b43540c88919a8a5b7a43fa01acaab3c1a02a340e6e7ed0",
+  "scriptSha256": "945a21673fd8120294df46090b6e3c52f49e65c4ebaf84eb3f9fdae07d508680",
+  "archive": {
+    "path": "releases/harness-0.1.0-source.zip",
+    "bytes": 713394,
+    "sha256": "4c29c26f2f0b7f9d627c70bcdcbd4b31315ae63eb38a7eea08fc1817356a7aca",
+    "sourceFiles": 308,
+    "crcVerified": true,
+    "allFilesMatchWorkspace": true,
+    "unixModesVerified": true
+  },
+  "macosArm64ExtractedRelease": {
+    "passedFiles": 82,
+    "passedTests": 553,
+    "durationSeconds": 204.05,
+    "log": "releases/release-check.log",
+    "sha256": "6b9578f94cee85169b236ab5a9466ec017c8e884d7ee8a84a0ad7bc29ad50166",
+    "command": "npm run release:check -- --full",
+    "releaseCheck": {
+      "status": "passed",
+      "checkedAt": "2026-09-12T19:39:42.542Z",
+      "version": "0.1.0",
+      "node": "v24.21.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "archive": "harness-0.1.0-source.zip",
+      "archiveSha256": "4c29c26f2f0b7f9d627c70bcdcbd4b31315ae63eb38a7eea08fc1817356a7aca",
+      "files": 308,
+      "freshInstall": true,
+      "repeatedBuildUnchanged": true,
+      "foreignCwd": true,
+      "cliHelp": true,
+      "mcpConfig": true,
+      "fullCheck": true,
+      "cloudRequests": false
+    }
+  },
+  "linuxArm64": {
+    "passedFiles": 82,
+    "passedTests": 553,
+    "durationSeconds": 171.04,
+    "log": ".harness/release-check-linux.log",
+    "sha256": "332ebbd7cf6c06741cc01e304ee1f295963a393fc931d8b9e2b3ec4781f6036d",
+    "command": "npm run check",
+    "network": "none",
+    "user": "node",
+    "imageId": "sha256:ade4960b729669506a7d3b7987eb454c82f349f2314ffb2f574907df334f2fcc"
+  },
+  "terminal": {
+    "report": "docs/playtest-release-stability.json",
+    "sha256": "163ab364302084ccc8d689a708922741371ebe39d856966a48b5b29a5310ec1b",
+    "scenarios": 2,
+    "frames": 7,
+    "failures": []
+  },
+  "newRegressionTests": 24,
+  "launcher": {
+    "prepare": "passed",
+    "help": "passed"
+  },
+  "ci": {
+    "actionlint": "passed",
+    "pipelineSha256": "d566e9b46cf0a0fa8b35d6c6952a527d82a1f31673b8445616348c5755cb3a6e",
+    "bashTeeExitCode": 37,
+    "githubRun": "not executed"
+  },
+  "checkerCleanupFailure": {
+    "greenReportExists": false,
+    "temporaryRemoved": true,
+    "proof": ".harness/release-checker-recovery.json"
+  },
+  "dependencyChange": {
+    "addedDevDependency": "fflate@0.8.3",
+    "packageLockSha256": "4217c83586b5180f52bcd1bff07f900e96c5ae4eaf94fd96af1d2be9fb4a0312"
+  },
+  "notExecuted": ["Native Windows run", "Cloud model playtest", "Publication/deployment"]
+}

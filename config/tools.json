@@ -1,0 +1,6 @@
+{
+  "timeoutMs": 60000,
+  "resultBytes": 32768,
+  "deniedPaths": ["**/.env", "**/.env.*", "**/.harness/**", "**/config/**"],
+  "mcp": []
+}

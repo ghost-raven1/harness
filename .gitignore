@@ -1,0 +1,12 @@
+node_modules/
+dist/
+releases/
+.harness-build-*/
+.harness-dist-backup/
+.tools/
+.harness/
+.env
+coverage/
+*.tsbuildinfo
+.DS_Store
+__pycache__/

@@ -1,0 +1,63 @@
+{
+  "node": "v24.21.0",
+  "sourceDigest": "4726b4465787e26afe6162ab8d644b3363ec68df2469ca76bc8131a479d03b5d",
+  "distDigest": "db941d48acc34c2c824962d1859aac21e964f36cd28411543c3979caf30fe53f",
+  "distUnchanged": true,
+  "results": [
+    {
+      "scenario": "command-output",
+      "approvedInvocation": "process.exec",
+      "artifactEnvelope": {
+        "truncated": true,
+        "artifactId": "4ebef936-8e84-42c2-aca3-f63b3c129114",
+        "stdoutTruncated": true,
+        "stderrTruncated": true
+      },
+      "exitCode": 0,
+      "stdoutCharacters": 1048576,
+      "stderrCharacters": 1048576,
+      "lostTailsReported": true
+    },
+    {
+      "scenario": "large-answer",
+      "answerUtf8Bytes": 312085,
+      "answerUtf16Characters": 168046,
+      "pages": 2,
+      "previousPageReopened": true,
+      "exportedBytes": 312086,
+      "completeExportMatched": true
+    }
+  ],
+  "coverage": {
+    "48x24/command-output/bounded-process-output-after-artifact": {
+      "status": "passed",
+      "text": "Вывод команды обрезан: конец не сохранён."
+    },
+    "48x24/large-answer/large-answer-first-part": {
+      "status": "passed",
+      "text": "НАЧАЛО БОЛЬШОГО ОТВЕТА"
+    },
+    "48x24/large-answer/large-answer-parts-menu": {
+      "status": "passed",
+      "text": "Какую часть открыть?"
+    },
+    "48x24/large-answer/large-answer-last-part": {
+      "status": "passed",
+      "text": "КОНЕЦ БОЛЬШОГО ОТВЕТА"
+    },
+    "48x24/large-answer/large-answer-last-part-actions": {
+      "status": "passed",
+      "text": "Предыдущая часть"
+    },
+    "48x24/large-answer/large-answer-previous-part": {
+      "status": "passed",
+      "text": "НАЧАЛО БОЛЬШОГО ОТВЕТА"
+    },
+    "48x24/large-answer/large-answer-exported": {
+      "status": "passed",
+      "text": "Ответ сохранён:"
+    }
+  },
+  "failures": [],
+  "transport": "isolated fixture with approved actual process and executor artifact"
+}

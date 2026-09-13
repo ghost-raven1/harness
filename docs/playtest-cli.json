@@ -1,0 +1,28 @@
+{
+  "platform": "Darwin",
+  "node": "24.21.0",
+  "httpRequests": 9,
+  "checks": [
+    "onboarding",
+    "wrong-key-retry",
+    "masked-keys",
+    "inline-approval",
+    "file-diff",
+    "file-restore",
+    "history-search",
+    "budget-screen",
+    "session-only-key-choice",
+    "answer-file",
+    "session-followup",
+    "escape-back",
+    "restart",
+    "48-column-terminal",
+    "ctrl-c-cancel",
+    "cancel-on-exit",
+    "no-secret-on-disk",
+    "lock-cleanup"
+  ],
+  "sourceDigest": "0ba33a90f2e7654f861d13c468ae3915a8912711905f4659af9db2e6beafd5bb",
+  "distDigest": "06bc9fefa929cacdead5217104afb9699738652596b3987727ead210e3e85a84",
+  "transport": "localhost HTTP"
+}

@@ -1,0 +1,212 @@
+{
+  "node": "v24.21.0",
+  "sourceDigest": "0ba33a90f2e7654f861d13c468ae3915a8912711905f4659af9db2e6beafd5bb",
+  "distDigest": "06bc9fefa929cacdead5217104afb9699738652596b3987727ead210e3e85a84",
+  "distUnchanged": true,
+  "checks": [
+    "48x24/48-input/empty-submit-does-not-run-example",
+    "48x24/48-input/enter-and-paste-do-not-submit",
+    "48x24/48-input/draft-survives-restart",
+    "48x24/48-input/offline-input-keeps-text-and-submits-after-reconnect",
+    "48x24/48-ack/accepted-request-retry-keeps-id-and-request-key",
+    "48x24/48-deletion/actions-deletion-clears-content-and-returns-to-catalogue",
+    "48x24/48-deletion/details-deletion-clears-content-and-returns-to-catalogue",
+    "48x24/48-export/different-export-is-not-overwritten-or-reported-as-saved",
+    "48x24/48-export/whole-answer-export-and-identical-retry-leave-no-temporary-file",
+    "48x24/48-roles/validated-auto-plan-starts-two-configured-roles",
+    "48x24/48-roles/role-completion-updates-open-details",
+    "48x24/48-roles/coordinator-receives-both-child-results-before-final-answer",
+    "80x24/80-input/empty-submit-does-not-run-example",
+    "80x24/80-input/enter-and-paste-do-not-submit",
+    "80x24/80-input/draft-survives-restart",
+    "80x24/80-input/offline-input-keeps-text-and-submits-after-reconnect",
+    "80x24/80-ack/accepted-request-retry-keeps-id-and-request-key",
+    "80x24/80-deletion/actions-deletion-clears-content-and-returns-to-catalogue",
+    "80x24/80-deletion/details-deletion-clears-content-and-returns-to-catalogue",
+    "80x24/80-export/different-export-is-not-overwritten-or-reported-as-saved",
+    "80x24/80-export/whole-answer-export-and-identical-retry-leave-no-temporary-file",
+    "80x24/80-roles/validated-auto-plan-starts-two-configured-roles",
+    "80x24/80-roles/role-completion-updates-open-details",
+    "80x24/80-roles/coordinator-receives-both-child-results-before-final-answer"
+  ],
+  "coverage": {
+    "48x24/48-input/empty-editor": {
+      "status": "passed",
+      "text": "Ctrl+S — отправить"
+    },
+    "48x24/48-input/empty-input-not-submitted": {
+      "status": "passed",
+      "text": "Опишите задачу своими словами"
+    },
+    "48x24/48-input/multiline-paste-stays-in-editor": {
+      "status": "passed",
+      "text": "Последняя строка"
+    },
+    "48x24/48-input/saved-draft-after-restart": {
+      "status": "passed",
+      "text": "Сохранённые черновики"
+    },
+    "48x24/48-input/restored-multiline-editor": {
+      "status": "passed",
+      "text": "Последняя строка"
+    },
+    "48x24/48-input/offline-draft-keeps-input": {
+      "status": "passed",
+      "text": "Нет связи. Текст остаётся в этом окне."
+    },
+    "48x24/48-input/restored-draft-submitted": {
+      "status": "passed",
+      "text": "Многострочный ввод принят целиком."
+    },
+    "48x24/48-ack/run-accepted-with-lost-response": {
+      "status": "passed",
+      "text": "Запрос не подтверждён"
+    },
+    "48x24/48-ack/lost-response-retry-is-idempotent": {
+      "status": "passed",
+      "text": "Повтор открыл ту же задачу."
+    },
+    "48x24/48-deletion/actions-deleted-live": {
+      "status": "passed",
+      "text": "Задача удалена"
+    },
+    "48x24/48-deletion/actions-back-to-catalogue": {
+      "status": "passed",
+      "text": "Мои задачи · страница"
+    },
+    "48x24/48-deletion/details-deleted-live": {
+      "status": "passed",
+      "text": "Задача удалена"
+    },
+    "48x24/48-deletion/details-back-to-catalogue": {
+      "status": "passed",
+      "text": "Мои задачи · страница"
+    },
+    "48x24/48-export/answer-file-conflict": {
+      "status": "passed",
+      "text": "содержит другой текст"
+    },
+    "48x24/48-export/answer-file-saved": {
+      "status": "passed",
+      "text": "Ответ сохранён:"
+    },
+    "48x24/48-roles/role-activity-header": {
+      "status": "passed",
+      "text": "Участников:"
+    },
+    "48x24/48-roles/automatic-plan-in-log": {
+      "status": "passed",
+      "text": "Проверки независимы"
+    },
+    "48x24/48-roles/two-configured-roles-running": {
+      "status": "passed",
+      "text": "researcher · В работе"
+    },
+    "48x24/48-roles/first-role-completed-live": {
+      "status": "passed",
+      "text": "researcher · Ответ получен"
+    },
+    "48x24/48-roles/second-role-completed-live": {
+      "status": "passed",
+      "text": "reviewer · Ответ получен"
+    },
+    "48x24/48-roles/coordinator-final-answer": {
+      "status": "passed",
+      "text": "Обе проверки получены"
+    },
+    "48x24/48-roles/coordinator-full-answer": {
+      "status": "passed",
+      "text": "Обе проверки получены и сопоставлены."
+    },
+    "80x24/80-input/empty-editor": {
+      "status": "passed",
+      "text": "Ctrl+S — отправить"
+    },
+    "80x24/80-input/empty-input-not-submitted": {
+      "status": "passed",
+      "text": "Опишите задачу своими словами"
+    },
+    "80x24/80-input/multiline-paste-stays-in-editor": {
+      "status": "passed",
+      "text": "Последняя строка"
+    },
+    "80x24/80-input/saved-draft-after-restart": {
+      "status": "passed",
+      "text": "Сохранённые черновики"
+    },
+    "80x24/80-input/restored-multiline-editor": {
+      "status": "passed",
+      "text": "Последняя строка"
+    },
+    "80x24/80-input/offline-draft-keeps-input": {
+      "status": "passed",
+      "text": "Нет связи. Текст остаётся в этом окне."
+    },
+    "80x24/80-input/restored-draft-submitted": {
+      "status": "passed",
+      "text": "Многострочный ввод принят целиком."
+    },
+    "80x24/80-ack/run-accepted-with-lost-response": {
+      "status": "passed",
+      "text": "Запрос не подтверждён"
+    },
+    "80x24/80-ack/lost-response-retry-is-idempotent": {
+      "status": "passed",
+      "text": "Повтор открыл ту же задачу."
+    },
+    "80x24/80-deletion/actions-deleted-live": {
+      "status": "passed",
+      "text": "Задача удалена"
+    },
+    "80x24/80-deletion/actions-back-to-catalogue": {
+      "status": "passed",
+      "text": "Мои задачи · страница"
+    },
+    "80x24/80-deletion/details-deleted-live": {
+      "status": "passed",
+      "text": "Задача удалена"
+    },
+    "80x24/80-deletion/details-back-to-catalogue": {
+      "status": "passed",
+      "text": "Мои задачи · страница"
+    },
+    "80x24/80-export/answer-file-conflict": {
+      "status": "passed",
+      "text": "содержит другой текст"
+    },
+    "80x24/80-export/answer-file-saved": {
+      "status": "passed",
+      "text": "Ответ сохранён:"
+    },
+    "80x24/80-roles/role-activity-header": {
+      "status": "passed",
+      "text": "Участников:"
+    },
+    "80x24/80-roles/automatic-plan-in-log": {
+      "status": "passed",
+      "text": "Проверки независимы"
+    },
+    "80x24/80-roles/two-configured-roles-running": {
+      "status": "passed",
+      "text": "researcher · В работе"
+    },
+    "80x24/80-roles/first-role-completed-live": {
+      "status": "passed",
+      "text": "researcher · Ответ получен"
+    },
+    "80x24/80-roles/second-role-completed-live": {
+      "status": "passed",
+      "text": "reviewer · Ответ получен"
+    },
+    "80x24/80-roles/coordinator-final-answer": {
+      "status": "passed",
+      "text": "Обе проверки получены"
+    },
+    "80x24/80-roles/coordinator-full-answer": {
+      "status": "passed",
+      "text": "Обе проверки получены и сопоставлены."
+    }
+  },
+  "failures": [],
+  "transport": "isolated fixture"
+}

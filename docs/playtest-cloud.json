@@ -1,0 +1,8 @@
+{
+  "checkedAt": "2026-09-11T20:12:30.004Z",
+  "node": "v24.21.0",
+  "cloudTransportPassed": false,
+  "fullOpenCodeLearningScenarioPassed": false,
+  "requests": 0,
+  "blocked": "Нет ключа выбранного облачного профиля. Задайте его через окружение и повторите playtest:cloud."
+}

@@ -1,0 +1,282 @@
+{
+  "node": "v24.21.0",
+  "distDigest": "527126d0f7c932d953cb96e4a925ce375df3c3cdb1d80de443c59ed44aaaff54",
+  "distUnchanged": true,
+  "checks": [
+    "48x24/48/global-change-and-refusal",
+    "48x24/48/global-stale-confirmation-preserves-external-change",
+    "48x24/48/one-step-pauses-after-real-tool",
+    "48x24/48/limit-and-pause-survive-restart",
+    "48x24/48/resume-grants-next-portion",
+    "48x24/48/resume-does-not-repeat-completed-mutation",
+    "48x24/48/running-task-cannot-change-limit",
+    "48x24/48/per-task-change-is-independent-and-persistent",
+    "48x24/48/task-stale-confirmation-preserves-external-change",
+    "48x24/48/resume-invalidates-open-confirmation",
+    "48x24/48/deleted-task-cannot-change-limit",
+    "48x24/48/purged-task-clears-stale-limit",
+    "80x24/80/global-change-and-refusal",
+    "80x24/80/global-stale-confirmation-preserves-external-change",
+    "80x24/80/one-step-pauses-after-real-tool",
+    "80x24/80/limit-and-pause-survive-restart",
+    "80x24/80/resume-grants-next-portion",
+    "80x24/80/resume-does-not-repeat-completed-mutation",
+    "80x24/80/running-task-cannot-change-limit",
+    "80x24/80/per-task-change-is-independent-and-persistent",
+    "80x24/80/task-stale-confirmation-preserves-external-change",
+    "80x24/80/resume-invalidates-open-confirmation",
+    "80x24/80/deleted-task-cannot-change-limit",
+    "80x24/80/purged-task-clears-stale-limit"
+  ],
+  "coverage": {
+    "48x24/48/global-default": {
+      "status": "passed",
+      "text": "Изменить предел"
+    },
+    "48x24/48/step-explanation": {
+      "status": "passed",
+      "text": "Как считаются шаги"
+    },
+    "48x24/48/global-refusal-input": {
+      "status": "passed",
+      "text": "Сколько шагов в одной порции?"
+    },
+    "48x24/48/global-refusal-confirm": {
+      "status": "passed",
+      "text": "Сохранить предел шагов?"
+    },
+    "48x24/48/global-one-input": {
+      "status": "passed",
+      "text": "Сколько шагов в одной порции?"
+    },
+    "48x24/48/global-one-confirm": {
+      "status": "passed",
+      "text": "Сохранить предел шагов?"
+    },
+    "48x24/48/global-one-saved": {
+      "status": "passed",
+      "text": "Предел сохранён: 1 шагов."
+    },
+    "48x24/48/global-stale-input": {
+      "status": "passed",
+      "text": "Сколько шагов в одной порции?"
+    },
+    "48x24/48/global-stale-confirm": {
+      "status": "passed",
+      "text": "Сохранить предел шагов?"
+    },
+    "48x24/48/global-stale-blocked": {
+      "status": "passed",
+      "text": "Предел уже изменён в другом окне"
+    },
+    "48x24/48/automatic-pause": {
+      "status": "passed",
+      "text": "Продолжить после паузы"
+    },
+    "48x24/48/task-paused-limit": {
+      "status": "passed",
+      "text": "Достигнут предел. Задача на паузе."
+    },
+    "48x24/48/task-paused-counts": {
+      "status": "passed",
+      "text": "В порции: 1 / 1 шагов"
+    },
+    "48x24/48/pause-after-restart": {
+      "status": "passed",
+      "text": "Продолжить после паузы"
+    },
+    "48x24/48/resumed": {
+      "status": "passed",
+      "text": "Ход задачи"
+    },
+    "48x24/48/resumed-completed": {
+      "status": "passed",
+      "text": "Что дальше?"
+    },
+    "48x24/48/running-limit-read-only": {
+      "status": "passed",
+      "text": "Изменение доступно на паузе"
+    },
+    "48x24/48/task-two-input": {
+      "status": "passed",
+      "text": "Сколько шагов в одной порции?"
+    },
+    "48x24/48/task-two-confirm": {
+      "status": "passed",
+      "text": "Сохранить предел шагов?"
+    },
+    "48x24/48/task-two-saved": {
+      "status": "passed",
+      "text": "Предел сохранён: 2 шагов."
+    },
+    "48x24/48/task-stale-input": {
+      "status": "passed",
+      "text": "Сколько шагов в одной порции?"
+    },
+    "48x24/48/task-stale-confirm": {
+      "status": "passed",
+      "text": "Сохранить предел шагов?"
+    },
+    "48x24/48/task-stale-blocked": {
+      "status": "passed",
+      "text": "Предел уже изменён в другом окне"
+    },
+    "48x24/48/task-became-active-input": {
+      "status": "passed",
+      "text": "Сколько шагов в одной порции?"
+    },
+    "48x24/48/task-became-active-confirm": {
+      "status": "passed",
+      "text": "Сохранить предел шагов?"
+    },
+    "48x24/48/active-confirmation-blocked": {
+      "status": "passed",
+      "text": "Изменение доступно на паузе"
+    },
+    "48x24/48/task-deleted-input": {
+      "status": "passed",
+      "text": "Сколько шагов в одной порции?"
+    },
+    "48x24/48/task-deleted-confirm": {
+      "status": "passed",
+      "text": "Сохранить предел шагов?"
+    },
+    "48x24/48/deleted-confirmation-blocked": {
+      "status": "passed",
+      "text": "Изменение доступно на паузе"
+    },
+    "48x24/48/purged-task-clears-limit": {
+      "status": "passed",
+      "text": "Задача удалена"
+    },
+    "48x24/48/purged-task-back-to-list": {
+      "status": "passed",
+      "text": "Мои задачи · страница"
+    },
+    "80x24/80/global-default": {
+      "status": "passed",
+      "text": "Изменить предел"
+    },
+    "80x24/80/step-explanation": {
+      "status": "passed",
+      "text": "Как считаются шаги"
+    },
+    "80x24/80/global-refusal-input": {
+      "status": "passed",
+      "text": "Сколько шагов в одной порции?"
+    },
+    "80x24/80/global-refusal-confirm": {
+      "status": "passed",
+      "text": "Сохранить предел шагов?"
+    },
+    "80x24/80/global-one-input": {
+      "status": "passed",
+      "text": "Сколько шагов в одной порции?"
+    },
+    "80x24/80/global-one-confirm": {
+      "status": "passed",
+      "text": "Сохранить предел шагов?"
+    },
+    "80x24/80/global-one-saved": {
+      "status": "passed",
+      "text": "Предел сохранён: 1 шагов."
+    },
+    "80x24/80/global-stale-input": {
+      "status": "passed",
+      "text": "Сколько шагов в одной порции?"
+    },
+    "80x24/80/global-stale-confirm": {
+      "status": "passed",
+      "text": "Сохранить предел шагов?"
+    },
+    "80x24/80/global-stale-blocked": {
+      "status": "passed",
+      "text": "Предел уже изменён в другом окне"
+    },
+    "80x24/80/automatic-pause": {
+      "status": "passed",
+      "text": "Продолжить после паузы"
+    },
+    "80x24/80/task-paused-limit": {
+      "status": "passed",
+      "text": "Достигнут предел. Задача на паузе."
+    },
+    "80x24/80/task-paused-counts": {
+      "status": "passed",
+      "text": "В порции: 1 / 1 шагов"
+    },
+    "80x24/80/pause-after-restart": {
+      "status": "passed",
+      "text": "Продолжить после паузы"
+    },
+    "80x24/80/resumed": {
+      "status": "passed",
+      "text": "Ход задачи"
+    },
+    "80x24/80/resumed-completed": {
+      "status": "passed",
+      "text": "Что дальше?"
+    },
+    "80x24/80/running-limit-read-only": {
+      "status": "passed",
+      "text": "Изменение доступно на паузе"
+    },
+    "80x24/80/task-two-input": {
+      "status": "passed",
+      "text": "Сколько шагов в одной порции?"
+    },
+    "80x24/80/task-two-confirm": {
+      "status": "passed",
+      "text": "Сохранить предел шагов?"
+    },
+    "80x24/80/task-two-saved": {
+      "status": "passed",
+      "text": "Предел сохранён: 2 шагов."
+    },
+    "80x24/80/task-stale-input": {
+      "status": "passed",
+      "text": "Сколько шагов в одной порции?"
+    },
+    "80x24/80/task-stale-confirm": {
+      "status": "passed",
+      "text": "Сохранить предел шагов?"
+    },
+    "80x24/80/task-stale-blocked": {
+      "status": "passed",
+      "text": "Предел уже изменён в другом окне"
+    },
+    "80x24/80/task-became-active-input": {
+      "status": "passed",
+      "text": "Сколько шагов в одной порции?"
+    },
+    "80x24/80/task-became-active-confirm": {
+      "status": "passed",
+      "text": "Сохранить предел шагов?"
+    },
+    "80x24/80/active-confirmation-blocked": {
+      "status": "passed",
+      "text": "Изменение доступно на паузе"
+    },
+    "80x24/80/task-deleted-input": {
+      "status": "passed",
+      "text": "Сколько шагов в одной порции?"
+    },
+    "80x24/80/task-deleted-confirm": {
+      "status": "passed",
+      "text": "Сохранить предел шагов?"
+    },
+    "80x24/80/deleted-confirmation-blocked": {
+      "status": "passed",
+      "text": "Изменение доступно на паузе"
+    },
+    "80x24/80/purged-task-clears-limit": {
+      "status": "passed",
+      "text": "Задача удалена"
+    },
+    "80x24/80/purged-task-back-to-list": {
+      "status": "passed",
+      "text": "Мои задачи · страница"
+    }
+  },
+  "failures": []
+}

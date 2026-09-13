@@ -1,0 +1,28 @@
+{
+  "checkedAt": "2026-09-11T20:51:01.956Z",
+  "node": "v24.21.0",
+  "opencode": "1.3.2",
+  "cloudInference": false,
+  "modelTransport": "Controlled local HTTP/SSE API; real AI SDK adapters",
+  "checks": [
+    "OpenCode MCP connected",
+    "OpenCode harness.run and harness.status",
+    "Invalid arguments corrected",
+    "File write/read verified",
+    "Lesson extracted from tool evidence",
+    "3 repetitions per variant on target and holdout",
+    "New run uses published version",
+    "Original run remains baseline",
+    "Rollback"
+  ],
+  "observed": {
+    "outer": 18,
+    "inner": 8,
+    "evaluations": 12,
+    "proposals": 1,
+    "usedLesson": true
+  },
+  "firstStatus": "completed",
+  "nextStatus": "completed",
+  "learnedVersion": "89c17057-6509-42e2-adab-33113d61f40c"
+}

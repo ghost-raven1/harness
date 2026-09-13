@@ -1,0 +1,265 @@
+{
+  "node": "v24.21.0",
+  "distDigest": "2588e9a20d37c935f8c98c03597f9132a4ea569d8c15d1858276989efa5a4475",
+  "distUnchanged": true,
+  "coverage": {
+    "48x24/48-commands/init-provider": {
+      "status": "passed",
+      "text": "Провайдер модели"
+    },
+    "48x24/48-commands/init-workspace": {
+      "status": "passed",
+      "text": "Рабочая папка проекта"
+    },
+    "48x24/48-commands/init-model": {
+      "status": "passed",
+      "text": "ID модели из вашего аккаунта"
+    },
+    "48x24/48-commands/init-address": {
+      "status": "passed",
+      "text": "Адрес API"
+    },
+    "48x24/48-commands/init-key-required": {
+      "status": "passed",
+      "text": "Этот API требует ключ?"
+    },
+    "48x24/48-commands/init-result": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Проект подготовлен"
+    },
+    "48x24/48-commands/approvals-empty": {
+      "status": "passed",
+      "text": "Ожидающих разрешений нет"
+    },
+    "48x24/48-commands/approvals-pending-live": {
+      "status": "passed",
+      "text": "process.exec"
+    },
+    "48x24/48-commands/approval-deny": {
+      "status": "passed",
+      "text": "Разрешить однократное выполнение этой операции?"
+    },
+    "48x24/48-commands/approval-denied": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Выполнение отклонено"
+    },
+    "48x24/48-commands/approval-before-external-decision": {
+      "status": "passed",
+      "text": "Разрешить однократное выполнение этой операции?"
+    },
+    "48x24/48-commands/approval-external-decision": {
+      "status": "passed",
+      "text": "Операция уже разрешена или отменена"
+    },
+    "48x24/48-commands/run-command-task": {
+      "status": "passed",
+      "text": "Что нужно сделать?"
+    },
+    "48x24/48-commands/run-command-profile": {
+      "status": "passed",
+      "text": "Профиль модели"
+    },
+    "48x24/48-commands/run-command-workspace": {
+      "status": "passed",
+      "text": "Рабочая папка"
+    },
+    "48x24/48-commands/run-command-result": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "runId"
+    },
+    "48x24/48-commands/doctor-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Доступность модели проверяется при выполнении задачи."
+    },
+    "48x24/48-commands/logs-command": {
+      "status": "passed",
+      "text": "Включить запись в файл"
+    },
+    "48x24/48-commands/reset-command": {
+      "status": "passed",
+      "text": "Что очистить?"
+    },
+    "48x24/48-commands/purge-command": {
+      "status": "passed",
+      "text": "Удалить эту переписку навсегда?"
+    },
+    "48x24/48-commands/purge-error": {
+      "status": "passed",
+      "text": "Удаление не выполнено"
+    },
+    "48x24/48-commands/status-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Модель:"
+    },
+    "48x24/48-commands/status-list-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Последние задачи"
+    },
+    "48x24/48-commands/learning-status-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Самообучение"
+    },
+    "48x24/48-commands/resolve-command-decline": {
+      "status": "passed",
+      "text": "Вы проверили фактический результат операции?"
+    },
+    "48x24/48-commands/resolve-command-confirm": {
+      "status": "passed",
+      "text": "Вы проверили фактический результат операции?"
+    },
+    "48x24/48-commands/resolve-command-result": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Результат"
+    },
+    "48x24/48-commands/resume-command-result": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Готово"
+    },
+    "48x24/48-commands/cancel-command-result": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "cancelled"
+    },
+    "80x24/80-commands/init-provider": {
+      "status": "passed",
+      "text": "Провайдер модели"
+    },
+    "80x24/80-commands/init-workspace": {
+      "status": "passed",
+      "text": "Рабочая папка проекта"
+    },
+    "80x24/80-commands/init-model": {
+      "status": "passed",
+      "text": "ID модели из вашего аккаунта"
+    },
+    "80x24/80-commands/init-address": {
+      "status": "passed",
+      "text": "Адрес API"
+    },
+    "80x24/80-commands/init-key-required": {
+      "status": "passed",
+      "text": "Этот API требует ключ?"
+    },
+    "80x24/80-commands/init-result": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Проект подготовлен"
+    },
+    "80x24/80-commands/approvals-empty": {
+      "status": "passed",
+      "text": "Ожидающих разрешений нет"
+    },
+    "80x24/80-commands/approvals-pending-live": {
+      "status": "passed",
+      "text": "process.exec"
+    },
+    "80x24/80-commands/approval-deny": {
+      "status": "passed",
+      "text": "Разрешить однократное выполнение этой операции?"
+    },
+    "80x24/80-commands/approval-denied": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Выполнение отклонено"
+    },
+    "80x24/80-commands/approval-before-external-decision": {
+      "status": "passed",
+      "text": "Разрешить однократное выполнение этой операции?"
+    },
+    "80x24/80-commands/approval-external-decision": {
+      "status": "passed",
+      "text": "Операция уже разрешена или отменена"
+    },
+    "80x24/80-commands/run-command-task": {
+      "status": "passed",
+      "text": "Что нужно сделать?"
+    },
+    "80x24/80-commands/run-command-profile": {
+      "status": "passed",
+      "text": "Профиль модели"
+    },
+    "80x24/80-commands/run-command-workspace": {
+      "status": "passed",
+      "text": "Рабочая папка"
+    },
+    "80x24/80-commands/run-command-result": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "runId"
+    },
+    "80x24/80-commands/doctor-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Доступность модели проверяется при выполнении задачи."
+    },
+    "80x24/80-commands/logs-command": {
+      "status": "passed",
+      "text": "Включить запись в файл"
+    },
+    "80x24/80-commands/reset-command": {
+      "status": "passed",
+      "text": "Что очистить?"
+    },
+    "80x24/80-commands/purge-command": {
+      "status": "passed",
+      "text": "Удалить эту переписку навсегда?"
+    },
+    "80x24/80-commands/purge-error": {
+      "status": "passed",
+      "text": "Удаление не выполнено"
+    },
+    "80x24/80-commands/status-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Модель:"
+    },
+    "80x24/80-commands/status-list-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Последние задачи"
+    },
+    "80x24/80-commands/learning-status-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Самообучение"
+    },
+    "80x24/80-commands/resolve-command-decline": {
+      "status": "passed",
+      "text": "Вы проверили фактический результат операции?"
+    },
+    "80x24/80-commands/resolve-command-confirm": {
+      "status": "passed",
+      "text": "Вы проверили фактический результат операции?"
+    },
+    "80x24/80-commands/resolve-command-result": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Результат"
+    },
+    "80x24/80-commands/resume-command-result": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Готово"
+    },
+    "80x24/80-commands/cancel-command-result": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "cancelled"
+    }
+  },
+  "failures": [],
+  "unverified": [
+    "Реальная авторизация Codex и хранилище ключей ОС",
+    "Реальные облачные каталоги и ограничения аккаунтов провайдеров",
+    "Настройка при ошибке системного хранилища ключей"
+  ]
+}

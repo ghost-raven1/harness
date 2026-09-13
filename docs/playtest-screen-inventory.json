@@ -1,0 +1,1028 @@
+{
+  "node": "v24.21.0",
+  "distDigest": "b1dd122ea301eb14abadf496dfb8bb53bc62da95fae7b581d157a7689800c321",
+  "distUnchanged": true,
+  "coverage": {
+    "48x24/48-startup/broken-config-recovery": {
+      "status": "passed",
+      "text": "Следующий шаг"
+    },
+    "48x24/48-startup/recovery-help": {
+      "status": "passed",
+      "text": "Как пользоваться"
+    },
+    "48x24/48-startup/recovery-completed": {
+      "status": "passed",
+      "text": "Чем займёмся?"
+    },
+    "48x24/48-startup/setup-folder": {
+      "status": "passed",
+      "text": "Выбор папки"
+    },
+    "48x24/48-startup/setup-folder-input": {
+      "status": "passed",
+      "text": "Вставьте полный путь к существующей папке"
+    },
+    "48x24/48-startup/project-config-found": {
+      "status": "passed",
+      "text": "Для этой папки найдены настройки Harness"
+    },
+    "48x24/48-startup/project-workspace-restricted": {
+      "status": "passed",
+      "text": "В какой разрешённой папке работать?"
+    },
+    "48x24/48-startup/project-workspace-restored": {
+      "status": "passed",
+      "text": "Чем займёмся?"
+    },
+    "48x24/48-commands/init-provider": {
+      "status": "passed",
+      "text": "Провайдер модели"
+    },
+    "48x24/48-commands/init-workspace": {
+      "status": "passed",
+      "text": "Рабочая папка проекта"
+    },
+    "48x24/48-commands/init-model": {
+      "status": "passed",
+      "text": "ID модели из вашего аккаунта"
+    },
+    "48x24/48-commands/init-address": {
+      "status": "passed",
+      "text": "Адрес API"
+    },
+    "48x24/48-commands/init-key-required": {
+      "status": "passed",
+      "text": "Этот API требует ключ?"
+    },
+    "48x24/48-commands/init-result": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Проект подготовлен"
+    },
+    "48x24/48-commands/approvals-empty": {
+      "status": "passed",
+      "text": "Ожидающих разрешений нет"
+    },
+    "48x24/48-commands/approvals-pending-live": {
+      "status": "passed",
+      "text": "process.exec"
+    },
+    "48x24/48-commands/approval-deny": {
+      "status": "passed",
+      "text": "Разрешить однократное выполнение этой операции?"
+    },
+    "48x24/48-commands/approval-denied": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Выполнение отклонено"
+    },
+    "48x24/48-commands/approval-before-external-decision": {
+      "status": "passed",
+      "text": "Разрешить однократное выполнение этой операции?"
+    },
+    "48x24/48-commands/approval-external-decision": {
+      "status": "passed",
+      "text": "Операция уже разрешена или отменена"
+    },
+    "48x24/48-commands/run-command-task": {
+      "status": "passed",
+      "text": "Что нужно сделать?"
+    },
+    "48x24/48-commands/run-command-profile": {
+      "status": "passed",
+      "text": "Профиль модели"
+    },
+    "48x24/48-commands/run-command-workspace": {
+      "status": "passed",
+      "text": "Рабочая папка"
+    },
+    "48x24/48-commands/run-command-result": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "runId"
+    },
+    "48x24/48-commands/doctor-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Доступность модели проверяется при выполнении задачи."
+    },
+    "48x24/48-commands/logs-command": {
+      "status": "passed",
+      "text": "Включить запись в файл"
+    },
+    "48x24/48-commands/reset-command": {
+      "status": "passed",
+      "text": "Что очистить?"
+    },
+    "48x24/48-commands/purge-command": {
+      "status": "passed",
+      "text": "Удалить эту переписку навсегда?"
+    },
+    "48x24/48-commands/purge-error": {
+      "status": "passed",
+      "text": "Удаление не выполнено"
+    },
+    "48x24/48-commands/status-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Модель:"
+    },
+    "48x24/48-commands/status-list-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Последние задачи"
+    },
+    "48x24/48-commands/learning-status-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Самообучение"
+    },
+    "48x24/48-commands/resolve-command-decline": {
+      "status": "passed",
+      "text": "Вы проверили фактический результат операции?"
+    },
+    "48x24/48-settings/attached-model": {
+      "status": "passed",
+      "text": "Сервис работает в другом окне"
+    },
+    "48x24/48-settings/attached-recent": {
+      "status": "passed",
+      "text": "Сервис работает в другом окне"
+    },
+    "48x24/48-settings/attached-key": {
+      "status": "passed",
+      "text": "Ключ задаётся в окне"
+    },
+    "48x24/48-settings/attached-project": {
+      "status": "passed",
+      "text": "Сервис открыт в другом окне"
+    },
+    "48x24/48-settings/profile-select": {
+      "status": "passed",
+      "text": "Вторая модель"
+    },
+    "48x24/48-settings/workspace-select": {
+      "status": "passed",
+      "text": "Папка для новых задач"
+    },
+    "48x24/48-settings/profile-saved": {
+      "status": "passed",
+      "text": "Выбор сохранён для новых задач"
+    },
+    "48x24/48-settings/diagnostics": {
+      "status": "passed",
+      "text": "Диагностика"
+    },
+    "48x24/48-settings/learning-paused": {
+      "status": "passed",
+      "text": "Возобновить обучение"
+    },
+    "48x24/48-settings/learning-resumed": {
+      "status": "passed",
+      "text": "Обучение возобновлено"
+    },
+    "48x24/48-settings/learning-paused-result": {
+      "status": "passed",
+      "text": "Обучение приостановлено"
+    },
+    "48x24/48-settings/quota-input": {
+      "status": "passed",
+      "text": "Сколько токенов добавить?"
+    },
+    "48x24/48-settings/quota-confirmation": {
+      "status": "passed",
+      "text": "Добавить 100000 токенов?"
+    },
+    "48x24/48-settings/quota-added": {
+      "status": "passed",
+      "text": "Квота увеличена"
+    },
+    "48x24/48-tasks/details-task": {
+      "status": "passed",
+      "text": "[Задача]"
+    },
+    "48x24/48-tasks/details-execution": {
+      "status": "passed",
+      "text": "[Выполнение]"
+    },
+    "48x24/48-tasks/details-files": {
+      "status": "passed",
+      "text": "[Файлы]"
+    },
+    "48x24/48-tasks/details-errors": {
+      "status": "passed",
+      "text": "[Ошибки]"
+    },
+    "48x24/48-tasks/feedback-choice": {
+      "status": "passed",
+      "text": "Вы проверили результат?"
+    },
+    "48x24/48-tasks/feedback-input": {
+      "status": "passed",
+      "text": "Что именно вы проверили"
+    },
+    "48x24/48-tasks/feedback-saved": {
+      "status": "passed",
+      "text": "Отзыв сохранён"
+    },
+    "48x24/48-tasks/paused-actions": {
+      "status": "passed",
+      "text": "Продолжить после паузы"
+    },
+    "48x24/48-tasks/paused-quota-input": {
+      "status": "passed",
+      "text": "Сколько токенов добавить?"
+    },
+    "48x24/48-tasks/paused-quota-confirmation": {
+      "status": "passed",
+      "text": "Добавить 100000 токенов?"
+    },
+    "48x24/48-tasks/paused-resumed": {
+      "status": "passed",
+      "text": "Ход задачи"
+    },
+    "48x24/48-tasks/cancel-confirmation": {
+      "status": "passed",
+      "text": "Остановить задачу и её подзадачи?"
+    },
+    "48x24/48-tasks/failed-actions": {
+      "status": "passed",
+      "text": "Продолжить задачу"
+    },
+    "48x24/48-interrupted/unknown-actions": {
+      "status": "passed",
+      "text": "Проверить прерванную операцию"
+    },
+    "48x24/48-interrupted/purge-blocked": {
+      "status": "passed",
+      "text": "Удаление пока недоступно"
+    },
+    "48x24/48-interrupted/unknown-review": {
+      "status": "passed",
+      "text": "Что установлено после проверки?"
+    },
+    "48x24/48-interrupted/unknown-arguments": {
+      "status": "passed",
+      "text": "Проверяемая операция"
+    },
+    "48x24/48-interrupted/unknown-result": {
+      "status": "passed",
+      "text": "Опишите фактический результат проверки"
+    },
+    "48x24/48-interrupted/unknown-confirmation": {
+      "status": "passed",
+      "text": "Зафиксировать этот проверенный результат?"
+    },
+    "48x24/48-interrupted/unknown-resolved": {
+      "status": "passed",
+      "text": "Продолжить задачу"
+    },
+    "48x24/48-knowledge/catalogue-page-one": {
+      "status": "passed",
+      "text": "страница 1/2"
+    },
+    "48x24/48-knowledge/catalogue-page-two": {
+      "status": "passed",
+      "text": "страница 2/2"
+    },
+    "48x24/48-knowledge/catalogue-active": {
+      "status": "passed",
+      "text": "Применяемые уроки"
+    },
+    "48x24/48-knowledge/search-input": {
+      "status": "passed",
+      "text": "Название, роль, профиль или папка"
+    },
+    "48x24/48-knowledge/search-result": {
+      "status": "passed",
+      "text": "Поиск: Правило 1"
+    },
+    "48x24/48-knowledge/lesson": {
+      "status": "passed",
+      "text": "[Урок]"
+    },
+    "48x24/48-knowledge/proof": {
+      "status": "passed",
+      "text": "[Доказательства]"
+    },
+    "48x24/48-knowledge/evaluation": {
+      "status": "passed",
+      "text": "[Оценка]"
+    },
+    "48x24/48-knowledge/lesson-actions": {
+      "status": "passed",
+      "text": "Действия с уроком"
+    },
+    "48x24/48-knowledge/lesson-exported": {
+      "status": "passed",
+      "text": "Урок сохранён"
+    },
+    "48x24/48-knowledge/lesson-export-exists": {
+      "status": "passed",
+      "text": "Файл уже существует"
+    },
+    "48x24/48-knowledge/queue": {
+      "status": "passed",
+      "text": "Обработано"
+    },
+    "48x24/48-knowledge/releases": {
+      "status": "passed",
+      "text": "Версии знаний"
+    },
+    "48x24/48-connection/recent-projects": {
+      "status": "passed",
+      "text": "Недавние проекты"
+    },
+    "48x24/48-connection/project-switched": {
+      "status": "passed",
+      "text": "Подключение выбрано для новых задач"
+    },
+    "48x24/48-connection/provider-picker": {
+      "status": "passed",
+      "text": "Какую модель подключим?"
+    },
+    "48x24/48-connection/provider-help": {
+      "status": "passed",
+      "text": "Как подключить модель"
+    },
+    "48x24/48-connection/endpoint-Qwen": {
+      "status": "passed",
+      "text": "Другой адрес"
+    },
+    "48x24/48-connection/endpoint-Anthropic": {
+      "status": "passed",
+      "text": "Другой адрес"
+    },
+    "48x24/48-connection/endpoint-Google": {
+      "status": "passed",
+      "text": "Другой адрес"
+    },
+    "48x24/48-connection/endpoint-input": {
+      "status": "passed",
+      "text": "Адрес API из настроек сервера"
+    },
+    "48x24/48-connection/endpoint-invalid": {
+      "status": "passed",
+      "text": "Нужен HTTPS"
+    },
+    "48x24/48-connection/key-required": {
+      "status": "passed",
+      "text": "Сервер требует ключ API?"
+    },
+    "48x24/48-connection/catalogue-unavailable": {
+      "status": "passed",
+      "text": "Как продолжить?"
+    },
+    "48x24/48-connection/model-manual": {
+      "status": "passed",
+      "text": "Название модели"
+    },
+    "48x24/48-connection/connection-ready": {
+      "status": "passed",
+      "text": "Подключение выбрано для новых задач"
+    },
+    "48x24/48-diagnostics/log-off": {
+      "status": "passed",
+      "text": "Включить запись в файл"
+    },
+    "48x24/48-diagnostics/log-on": {
+      "status": "passed",
+      "text": "Выключить запись в файл"
+    },
+    "48x24/48-diagnostics/log-details": {
+      "status": "passed",
+      "text": "Запись включена."
+    },
+    "48x24/48-diagnostics/log-details-updated": {
+      "status": "passed",
+      "text": "Запись выключена."
+    },
+    "48x24/48-diagnostics/log-menu-updated": {
+      "status": "passed",
+      "text": "Включить запись в файл"
+    },
+    "48x24/48-diagnostics/log-off-after-restart": {
+      "status": "passed",
+      "text": "Включить запись в файл"
+    },
+    "48x24/48-diagnostics/log-external-enable": {
+      "status": "passed",
+      "text": "Выключить запись в файл"
+    },
+    "48x24/48-diagnostics/log-on-after-restart": {
+      "status": "passed",
+      "text": "Выключить запись в файл"
+    },
+    "48x24/48-diagnostics/log-ui-disabled": {
+      "status": "passed",
+      "text": "Включить запись в файл"
+    },
+    "48x24/48-reset_data/reset-picker": {
+      "status": "passed",
+      "text": "Что очистить?"
+    },
+    "48x24/48-reset_data/reset-decline": {
+      "status": "passed",
+      "text": "Удалить выбранные данные навсегда?"
+    },
+    "48x24/48-reset_data/reset-declined": {
+      "status": "passed",
+      "text": "Что очистить?"
+    },
+    "48x24/48-reset_data/reset-learning-confirmation": {
+      "status": "passed",
+      "text": "Удалить выбранные данные навсегда?"
+    },
+    "48x24/48-reset_data/reset-learning-result": {
+      "status": "passed",
+      "text": "Данные очищены"
+    },
+    "48x24/48-reset_data/reset-tasks-confirmation": {
+      "status": "passed",
+      "text": "Удалить выбранные данные навсегда?"
+    },
+    "48x24/48-reset_data/reset-tasks-result": {
+      "status": "passed",
+      "text": "Данные очищены"
+    },
+    "48x24/48-reset_data/reset-all-confirmation": {
+      "status": "passed",
+      "text": "Удалить выбранные данные навсегда?"
+    },
+    "48x24/48-reset_data/reset-all-result": {
+      "status": "passed",
+      "text": "Данные очищены"
+    },
+    "48x24/48-reset_data/reset-blocked": {
+      "status": "passed",
+      "text": "Очистка пока недоступна"
+    },
+    "48x24/48-reset_data/reset-unblocked-live": {
+      "status": "passed",
+      "text": "Теперь очистка доступна."
+    },
+    "48x24/48-reset_data/reset-before-drift": {
+      "status": "passed",
+      "text": "Удалить выбранные данные навсегда?"
+    },
+    "48x24/48-reset_data/reset-drift": {
+      "status": "passed",
+      "text": "Состав изменился."
+    },
+    "48x24/48-external_reset/before-external-task-reset": {
+      "status": "passed",
+      "text": "Ход задачи"
+    },
+    "48x24/48-external_reset/external-task-reset": {
+      "status": "passed",
+      "text": "Задача удалена"
+    },
+    "48x24/48-external_reset/before-external-lesson-reset": {
+      "status": "passed",
+      "text": "[Урок]"
+    },
+    "48x24/48-external_reset/external-lesson-reset": {
+      "status": "passed",
+      "text": "Урок удалён"
+    },
+    "48x24/48-external_reset/knowledge-empty-after-reset": {
+      "status": "passed",
+      "text": "Уроков пока нет"
+    },
+    "48x24/48-external_reset/lesson-actions-before-reset": {
+      "status": "passed",
+      "text": "Действия с уроком"
+    },
+    "48x24/48-external_reset/lesson-actions-after-reset": {
+      "status": "passed",
+      "text": "Урок удалён в другом окне."
+    },
+    "48x24/48-external_reset/knowledge-empty-after-actions": {
+      "status": "passed",
+      "text": "Уроков пока нет"
+    },
+    "80x24/80-startup/broken-config-recovery": {
+      "status": "passed",
+      "text": "Следующий шаг"
+    },
+    "80x24/80-startup/recovery-help": {
+      "status": "passed",
+      "text": "Как пользоваться"
+    },
+    "80x24/80-startup/recovery-completed": {
+      "status": "passed",
+      "text": "Чем займёмся?"
+    },
+    "80x24/80-startup/setup-folder": {
+      "status": "passed",
+      "text": "Выбор папки"
+    },
+    "80x24/80-startup/setup-folder-input": {
+      "status": "passed",
+      "text": "Вставьте полный путь к существующей папке"
+    },
+    "80x24/80-startup/project-config-found": {
+      "status": "passed",
+      "text": "Для этой папки найдены настройки Harness"
+    },
+    "80x24/80-startup/project-workspace-restricted": {
+      "status": "passed",
+      "text": "В какой разрешённой папке работать?"
+    },
+    "80x24/80-startup/project-workspace-restored": {
+      "status": "passed",
+      "text": "Чем займёмся?"
+    },
+    "80x24/80-commands/init-provider": {
+      "status": "passed",
+      "text": "Провайдер модели"
+    },
+    "80x24/80-commands/init-workspace": {
+      "status": "passed",
+      "text": "Рабочая папка проекта"
+    },
+    "80x24/80-commands/init-model": {
+      "status": "passed",
+      "text": "ID модели из вашего аккаунта"
+    },
+    "80x24/80-commands/init-address": {
+      "status": "passed",
+      "text": "Адрес API"
+    },
+    "80x24/80-commands/init-key-required": {
+      "status": "passed",
+      "text": "Этот API требует ключ?"
+    },
+    "80x24/80-commands/init-result": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Проект подготовлен"
+    },
+    "80x24/80-commands/approvals-empty": {
+      "status": "passed",
+      "text": "Ожидающих разрешений нет"
+    },
+    "80x24/80-commands/approvals-pending-live": {
+      "status": "passed",
+      "text": "process.exec"
+    },
+    "80x24/80-commands/approval-deny": {
+      "status": "passed",
+      "text": "Разрешить однократное выполнение этой операции?"
+    },
+    "80x24/80-commands/approval-denied": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Выполнение отклонено"
+    },
+    "80x24/80-commands/approval-before-external-decision": {
+      "status": "passed",
+      "text": "Разрешить однократное выполнение этой операции?"
+    },
+    "80x24/80-commands/approval-external-decision": {
+      "status": "passed",
+      "text": "Операция уже разрешена или отменена"
+    },
+    "80x24/80-commands/run-command-task": {
+      "status": "passed",
+      "text": "Что нужно сделать?"
+    },
+    "80x24/80-commands/run-command-profile": {
+      "status": "passed",
+      "text": "Профиль модели"
+    },
+    "80x24/80-commands/run-command-workspace": {
+      "status": "passed",
+      "text": "Рабочая папка"
+    },
+    "80x24/80-commands/run-command-result": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "runId"
+    },
+    "80x24/80-commands/doctor-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Доступность модели проверяется при выполнении задачи."
+    },
+    "80x24/80-commands/logs-command": {
+      "status": "passed",
+      "text": "Включить запись в файл"
+    },
+    "80x24/80-commands/reset-command": {
+      "status": "passed",
+      "text": "Что очистить?"
+    },
+    "80x24/80-commands/purge-command": {
+      "status": "passed",
+      "text": "Удалить эту переписку навсегда?"
+    },
+    "80x24/80-commands/purge-error": {
+      "status": "passed",
+      "text": "Удаление не выполнено"
+    },
+    "80x24/80-commands/status-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Модель:"
+    },
+    "80x24/80-commands/status-list-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Последние задачи"
+    },
+    "80x24/80-commands/learning-status-command": {
+      "status": "passed",
+      "type": "command-output",
+      "text": "Самообучение"
+    },
+    "80x24/80-commands/resolve-command-decline": {
+      "status": "passed",
+      "text": "Вы проверили фактический результат операции?"
+    },
+    "80x24/80-settings/attached-model": {
+      "status": "passed",
+      "text": "Сервис работает в другом окне"
+    },
+    "80x24/80-settings/attached-recent": {
+      "status": "passed",
+      "text": "Сервис работает в другом окне"
+    },
+    "80x24/80-settings/attached-key": {
+      "status": "passed",
+      "text": "Ключ задаётся в окне"
+    },
+    "80x24/80-settings/attached-project": {
+      "status": "passed",
+      "text": "Сервис открыт в другом окне"
+    },
+    "80x24/80-settings/profile-select": {
+      "status": "passed",
+      "text": "Вторая модель"
+    },
+    "80x24/80-settings/workspace-select": {
+      "status": "passed",
+      "text": "Папка для новых задач"
+    },
+    "80x24/80-settings/profile-saved": {
+      "status": "passed",
+      "text": "Выбор сохранён для новых задач"
+    },
+    "80x24/80-settings/diagnostics": {
+      "status": "passed",
+      "text": "Диагностика"
+    },
+    "80x24/80-settings/learning-paused": {
+      "status": "passed",
+      "text": "Возобновить обучение"
+    },
+    "80x24/80-settings/learning-resumed": {
+      "status": "passed",
+      "text": "Обучение возобновлено"
+    },
+    "80x24/80-settings/learning-paused-result": {
+      "status": "passed",
+      "text": "Обучение приостановлено"
+    },
+    "80x24/80-settings/quota-input": {
+      "status": "passed",
+      "text": "Сколько токенов добавить?"
+    },
+    "80x24/80-settings/quota-confirmation": {
+      "status": "passed",
+      "text": "Добавить 100000 токенов?"
+    },
+    "80x24/80-settings/quota-added": {
+      "status": "passed",
+      "text": "Квота увеличена"
+    },
+    "80x24/80-tasks/details-task": {
+      "status": "passed",
+      "text": "[Задача]"
+    },
+    "80x24/80-tasks/details-execution": {
+      "status": "passed",
+      "text": "[Выполнение]"
+    },
+    "80x24/80-tasks/details-files": {
+      "status": "passed",
+      "text": "[Файлы]"
+    },
+    "80x24/80-tasks/details-errors": {
+      "status": "passed",
+      "text": "[Ошибки]"
+    },
+    "80x24/80-tasks/feedback-choice": {
+      "status": "passed",
+      "text": "Вы проверили результат?"
+    },
+    "80x24/80-tasks/feedback-input": {
+      "status": "passed",
+      "text": "Что именно вы проверили"
+    },
+    "80x24/80-tasks/feedback-saved": {
+      "status": "passed",
+      "text": "Отзыв сохранён"
+    },
+    "80x24/80-tasks/paused-actions": {
+      "status": "passed",
+      "text": "Продолжить после паузы"
+    },
+    "80x24/80-tasks/paused-quota-input": {
+      "status": "passed",
+      "text": "Сколько токенов добавить?"
+    },
+    "80x24/80-tasks/paused-quota-confirmation": {
+      "status": "passed",
+      "text": "Добавить 100000 токенов?"
+    },
+    "80x24/80-tasks/paused-resumed": {
+      "status": "passed",
+      "text": "Ход задачи"
+    },
+    "80x24/80-tasks/cancel-confirmation": {
+      "status": "passed",
+      "text": "Остановить задачу и её подзадачи?"
+    },
+    "80x24/80-tasks/failed-actions": {
+      "status": "passed",
+      "text": "Продолжить задачу"
+    },
+    "80x24/80-interrupted/unknown-actions": {
+      "status": "passed",
+      "text": "Проверить прерванную операцию"
+    },
+    "80x24/80-interrupted/purge-blocked": {
+      "status": "passed",
+      "text": "Удаление пока недоступно"
+    },
+    "80x24/80-interrupted/unknown-review": {
+      "status": "passed",
+      "text": "Что установлено после проверки?"
+    },
+    "80x24/80-interrupted/unknown-arguments": {
+      "status": "passed",
+      "text": "Проверяемая операция"
+    },
+    "80x24/80-interrupted/unknown-result": {
+      "status": "passed",
+      "text": "Опишите фактический результат проверки"
+    },
+    "80x24/80-interrupted/unknown-confirmation": {
+      "status": "passed",
+      "text": "Зафиксировать этот проверенный результат?"
+    },
+    "80x24/80-interrupted/unknown-resolved": {
+      "status": "passed",
+      "text": "Продолжить задачу"
+    },
+    "80x24/80-knowledge/catalogue-page-one": {
+      "status": "passed",
+      "text": "страница 1/2"
+    },
+    "80x24/80-knowledge/catalogue-page-two": {
+      "status": "passed",
+      "text": "страница 2/2"
+    },
+    "80x24/80-knowledge/catalogue-active": {
+      "status": "passed",
+      "text": "Применяемые уроки"
+    },
+    "80x24/80-knowledge/search-input": {
+      "status": "passed",
+      "text": "Название, роль, профиль или папка"
+    },
+    "80x24/80-knowledge/search-result": {
+      "status": "passed",
+      "text": "Поиск: Правило 1"
+    },
+    "80x24/80-knowledge/lesson": {
+      "status": "passed",
+      "text": "[Урок]"
+    },
+    "80x24/80-knowledge/proof": {
+      "status": "passed",
+      "text": "[Доказательства]"
+    },
+    "80x24/80-knowledge/evaluation": {
+      "status": "passed",
+      "text": "[Оценка]"
+    },
+    "80x24/80-knowledge/lesson-actions": {
+      "status": "passed",
+      "text": "Действия с уроком"
+    },
+    "80x24/80-knowledge/lesson-exported": {
+      "status": "passed",
+      "text": "Урок сохранён"
+    },
+    "80x24/80-knowledge/lesson-export-exists": {
+      "status": "passed",
+      "text": "Файл уже существует"
+    },
+    "80x24/80-knowledge/queue": {
+      "status": "passed",
+      "text": "Обработано"
+    },
+    "80x24/80-knowledge/releases": {
+      "status": "passed",
+      "text": "Версии знаний"
+    },
+    "80x24/80-connection/recent-projects": {
+      "status": "passed",
+      "text": "Недавние проекты"
+    },
+    "80x24/80-connection/project-switched": {
+      "status": "passed",
+      "text": "Подключение выбрано для новых задач"
+    },
+    "80x24/80-connection/provider-picker": {
+      "status": "passed",
+      "text": "Какую модель подключим?"
+    },
+    "80x24/80-connection/provider-help": {
+      "status": "passed",
+      "text": "Как подключить модель"
+    },
+    "80x24/80-connection/endpoint-Qwen": {
+      "status": "passed",
+      "text": "Другой адрес"
+    },
+    "80x24/80-connection/endpoint-Anthropic": {
+      "status": "passed",
+      "text": "Другой адрес"
+    },
+    "80x24/80-connection/endpoint-Google": {
+      "status": "passed",
+      "text": "Другой адрес"
+    },
+    "80x24/80-connection/endpoint-input": {
+      "status": "passed",
+      "text": "Адрес API из настроек сервера"
+    },
+    "80x24/80-connection/endpoint-invalid": {
+      "status": "passed",
+      "text": "Нужен HTTPS"
+    },
+    "80x24/80-connection/key-required": {
+      "status": "passed",
+      "text": "Сервер требует ключ API?"
+    },
+    "80x24/80-connection/catalogue-unavailable": {
+      "status": "passed",
+      "text": "Как продолжить?"
+    },
+    "80x24/80-connection/model-manual": {
+      "status": "passed",
+      "text": "Название модели"
+    },
+    "80x24/80-connection/connection-ready": {
+      "status": "passed",
+      "text": "Подключение выбрано для новых задач"
+    },
+    "80x24/80-diagnostics/log-off": {
+      "status": "passed",
+      "text": "Включить запись в файл"
+    },
+    "80x24/80-diagnostics/log-on": {
+      "status": "passed",
+      "text": "Выключить запись в файл"
+    },
+    "80x24/80-diagnostics/log-details": {
+      "status": "passed",
+      "text": "Запись включена."
+    },
+    "80x24/80-diagnostics/log-details-updated": {
+      "status": "passed",
+      "text": "Запись выключена."
+    },
+    "80x24/80-diagnostics/log-menu-updated": {
+      "status": "passed",
+      "text": "Включить запись в файл"
+    },
+    "80x24/80-diagnostics/log-off-after-restart": {
+      "status": "passed",
+      "text": "Включить запись в файл"
+    },
+    "80x24/80-diagnostics/log-external-enable": {
+      "status": "passed",
+      "text": "Выключить запись в файл"
+    },
+    "80x24/80-diagnostics/log-on-after-restart": {
+      "status": "passed",
+      "text": "Выключить запись в файл"
+    },
+    "80x24/80-diagnostics/log-ui-disabled": {
+      "status": "passed",
+      "text": "Включить запись в файл"
+    },
+    "80x24/80-reset_data/reset-picker": {
+      "status": "passed",
+      "text": "Что очистить?"
+    },
+    "80x24/80-reset_data/reset-decline": {
+      "status": "passed",
+      "text": "Удалить выбранные данные навсегда?"
+    },
+    "80x24/80-reset_data/reset-declined": {
+      "status": "passed",
+      "text": "Что очистить?"
+    },
+    "80x24/80-reset_data/reset-learning-confirmation": {
+      "status": "passed",
+      "text": "Удалить выбранные данные навсегда?"
+    },
+    "80x24/80-reset_data/reset-learning-result": {
+      "status": "passed",
+      "text": "Данные очищены"
+    },
+    "80x24/80-reset_data/reset-tasks-confirmation": {
+      "status": "passed",
+      "text": "Удалить выбранные данные навсегда?"
+    },
+    "80x24/80-reset_data/reset-tasks-result": {
+      "status": "passed",
+      "text": "Данные очищены"
+    },
+    "80x24/80-reset_data/reset-all-confirmation": {
+      "status": "passed",
+      "text": "Удалить выбранные данные навсегда?"
+    },
+    "80x24/80-reset_data/reset-all-result": {
+      "status": "passed",
+      "text": "Данные очищены"
+    },
+    "80x24/80-reset_data/reset-blocked": {
+      "status": "passed",
+      "text": "Очистка пока недоступна"
+    },
+    "80x24/80-reset_data/reset-unblocked-live": {
+      "status": "passed",
+      "text": "Теперь очистка доступна."
+    },
+    "80x24/80-reset_data/reset-before-drift": {
+      "status": "passed",
+      "text": "Удалить выбранные данные навсегда?"
+    },
+    "80x24/80-reset_data/reset-drift": {
+      "status": "passed",
+      "text": "Состав изменился."
+    },
+    "80x24/80-external_reset/before-external-task-reset": {
+      "status": "passed",
+      "text": "Ход задачи"
+    },
+    "80x24/80-external_reset/external-task-reset": {
+      "status": "passed",
+      "text": "Задача удалена"
+    },
+    "80x24/80-external_reset/before-external-lesson-reset": {
+      "status": "passed",
+      "text": "[Урок]"
+    },
+    "80x24/80-external_reset/external-lesson-reset": {
+      "status": "passed",
+      "text": "Урок удалён"
+    },
+    "80x24/80-external_reset/knowledge-empty-after-reset": {
+      "status": "passed",
+      "text": "Уроков пока нет"
+    },
+    "80x24/80-external_reset/lesson-actions-before-reset": {
+      "status": "passed",
+      "text": "Действия с уроком"
+    },
+    "80x24/80-external_reset/lesson-actions-after-reset": {
+      "status": "passed",
+      "text": "Урок удалён в другом окне."
+    },
+    "80x24/80-external_reset/knowledge-empty-after-actions": {
+      "status": "passed",
+      "text": "Уроков пока нет"
+    }
+  },
+  "failures": [
+    {
+      "screen": "48x24/commands",
+      "reason": "Приложение не закрылось"
+    },
+    {
+      "screen": "48x24/knowledge",
+      "reason": "Не открыт экран 48x24/48-knowledge/lesson-export-error\n╭─ [H] Harness by Ghost_Raven ────────────────╮\n│ Файл уже существует                         │\n───────────────────────────────────────────────\n│ [Файл]                                      │\n│ Существующий файл сохранён без изменений:   │\n│ /private/var/folders/rt/rtbg6dxn741_5gm2_67 │\n│ 2lrxh0000gn/T/harness-inventory-4i_c13wy/48 │\n│ -knowledge/state/exports/Урок Harness       │\n│ 00000000-0000-4000-8000-000000000001.md     │\n│                                             │\n│                                             │\n│                                             │\n│                                             │\n│                                             │\n│                                             │\n│                                             │\n│                                             │\n│                                             │\n│                                             │\n── Строки 1–5 из 5 ────────────────────────────\n│ ↑↓/PgUp/PgDn — прокрутка · Home/End         │\n│ Tab / ←→ — раздел · Esc — назад             │\n╰─────────────────────────────────────────────╯\n"
+    },
+    {
+      "screen": "80x24/commands",
+      "reason": "Приложение не закрылось"
+    },
+    {
+      "screen": "80x24/knowledge",
+      "reason": "Не открыт экран 80x24/80-knowledge/lesson-export-error\n╭─ [H] Harness by Ghost_Raven ────────────────────────────────────────────────╮\n│ Файл уже существует                                                         │\n───────────────────────────────────────────────────────────────────────────────\n│ [Файл]                                                                      │\n│ Существующий файл сохранён без изменений:                                   │\n│ /private/var/folders/rt/rtbg6dxn741_5gm2_672lrxh0000gn/T/harness-inventory- │\n│ 4i_c13wy/80-knowledge/state/exports/Урок Harness                            │\n│ 00000000-0000-4000-8000-000000000001.md                                     │\n│                                                                             │\n│                                                                             │\n│                                                                             │\n│                                                                             │\n│                                                                             │\n│                                                                             │\n│                                                                             │\n│                                                                             │\n│                                                                             │\n│                                                                             │\n│                                                                             │\n── Строки 1–4 из 4 ────────────────────────────────────────────────────────────\n│ ↑↓/PgUp/PgDn — прокрутка · Home/End                                         │\n│ Tab / ←→ — раздел · Esc — назад                                             │\n╰─────────────────────────────────────────────────────────────────────────────╯\n"
+    }
+  ],
+  "unverified": [
+    "Реальная авторизация Codex и хранилище ключей ОС",
+    "Реальные облачные каталоги и ограничения аккаунтов провайдеров",
+    "Настройка при ошибке системного хранилища ключей"
+  ]
+}

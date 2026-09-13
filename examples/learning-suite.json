@@ -1,0 +1,37 @@
+{
+  "enabled": true,
+  "cases": [
+    {
+      "id": "read-after-write",
+      "kind": "target",
+      "role": "coordinator",
+      "prompt": "Проверь содержимое результата в answer.txt. Сообщи его после чтения.",
+      "tools": [
+        {
+          "name": "fs.read",
+          "description": "Чтение тестового файла",
+          "effect": "read",
+          "schema": {
+            "type": "object",
+            "properties": { "path": { "type": "string" } },
+            "required": ["path"],
+            "additionalProperties": false
+          },
+          "result": { "content": "Проверенный результат" }
+        }
+      ],
+      "expect": {
+        "includes": ["Проверенный результат"],
+        "calls": [{ "name": "fs.read", "args": { "path": "answer.txt" } }]
+      }
+    },
+    {
+      "id": "preserve-explicit-answer",
+      "kind": "holdout",
+      "role": "coordinator",
+      "prompt": "Ответь ровно: контекст сохранён. Файловые операции не нужны.",
+      "tools": [],
+      "expect": { "includes": ["контекст сохранён"], "excludes": ["ошибка"] }
+    }
+  ]
+}

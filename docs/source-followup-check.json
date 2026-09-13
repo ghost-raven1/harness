@@ -1,0 +1,48 @@
+{
+  "checkedAt": "2026-09-12T20:42:41.833506+00:00",
+  "version": "0.1.0",
+  "node": "v24.21.0",
+  "sourceSha256": "f76337ace28f1db83de96fea8bd7825990f1e6b8e3bf99ed50b682402ead25a8",
+  "testSha256": "0575495970ac33ff346edec9f71d6166627fcf71d49efa26178620e50d2c1150",
+  "scriptSha256": "945a21673fd8120294df46090b6e3c52f49e65c4ebaf84eb3f9fdae07d508680",
+  "distSha256": "b3d05d07ff8529247582ad72c7cf2f2319afeccd56f64f75517eb2fbcb05604b",
+  "sourceUnchangedDuringChecks": true,
+  "linuxSourceMatchesMacos": true,
+  "macosArm64": {
+    "command": "npm run check",
+    "exitCode": 0,
+    "passedFiles": 86,
+    "passedTests": 570,
+    "durationSeconds": 338.89,
+    "log": ".harness/source-followup-macos.log",
+    "logSha256": "f3b1b19e4e14efdbf6620930d5797f3023a2b39ca36a805a4d93cd018c4784f5"
+  },
+  "linuxArm64": {
+    "command": "npm run check",
+    "exitCode": 0,
+    "passedFiles": 86,
+    "passedTests": 570,
+    "durationSeconds": 362.34,
+    "log": ".harness/source-followup-linux.log",
+    "logSha256": "55dadc31c367454c9ce3c914764e8f2b4349e4f01c030c583921cdfe789b1fe1",
+    "imageId": "sha256:183e19a7afe6ccf083aa9434f4577aecaeeb7aab33fc2c61ff217d997d3c3278",
+    "network": "none",
+    "user": "node"
+  },
+  "newRegressionTests": 17,
+  "buildIntegrity": true,
+  "initialCheckFailure": {
+    "code": "TS2345",
+    "fixedBy": "CompatibilityCallToolResult",
+    "logs": [
+      ".harness/source-followup-macos-typecheck.log",
+      ".harness/source-followup-linux-typecheck.log"
+    ]
+  },
+  "notExecuted": [
+    "Native Windows",
+    "Cloud model playtest",
+    "User service restart",
+    "New release ZIP"
+  ]
+}

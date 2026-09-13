@@ -1,0 +1,47 @@
+{
+  "checkedAt": "2026-09-12T17:08:24.566146+00:00",
+  "node": "24.21.0",
+  "sourceDigest": "ba93e74b8a6a21094c6c938991f5bf58566477815c10ce2bb4b2c64ab8063710",
+  "testDigest": "f1a37239f6c1c4620146e353faee7113395712bb77c7f63df7513925c1d455f0",
+  "distDigest": "c318fd076da11ab12f0c37bcd8c1134bf1404cabe8d70b884d687ea15afa3c94",
+  "checks": [
+    {
+      "platform": "macos arm64",
+      "command": "npm run check",
+      "exitCode": 0,
+      "files": 74,
+      "tests": 513,
+      "durationSeconds": 144.57,
+      "log": ".harness/source-check-macos.log",
+      "logSha256": "47ebcb51ac44eb093b16dd70ac08b42b622ea5b7f4cd39326b69843c440efea0"
+    },
+    {
+      "platform": "linux arm64",
+      "command": "npm run check",
+      "exitCode": 0,
+      "files": 74,
+      "tests": 513,
+      "durationSeconds": 125.65,
+      "log": ".harness/source-check-linux.log",
+      "logSha256": "6b98d069f0df7a0f27843ffcdbb60d7b2e9e61bddee28c9b98cdf8e0549c4764"
+    }
+  ],
+  "dockerImage": "harness-test:source-bug-audit",
+  "dockerManifest": "sha256:218c5ef2da30466708fa79fe01c53640a57ae51b7cd2f27017db0da255171425",
+  "confirmedDefects": 9,
+  "newTests": 31,
+  "ptyReport": "playtest-source-bugs.json",
+  "ptyScenarios": 2,
+  "ptyFrames": 7,
+  "initialCheck": {
+    "passed": 512,
+    "failed": 1,
+    "reason": "Тест ручного подтверждения искал пользовательский факт без проверки роли сообщения; уточнён поиск и добавлена проверка сохранённого tool-результата.",
+    "logs": [".harness/source-check-macos-initial.log", ".harness/source-check-linux-initial.log"]
+  },
+  "limitations": [
+    "Нативная Windows не проверялась",
+    "Реальные облачные аккаунты не использовались; провайдеры проверены управляемыми потоками и процессами",
+    "Работающий пользовательский сервис автоматически не перезапускался"
+  ]
+}
