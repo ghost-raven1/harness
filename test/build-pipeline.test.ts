@@ -60,10 +60,14 @@ async function project() {
   );
   return root;
 }
+/** ESM ожидает файловый URL, включая букву диска Windows и специальные символы пути. */
 const build = (root: string, preload?: string) =>
   execute(
     process.execPath,
-    [...(preload ? ['--import', preload] : []), join(root, 'scripts/build.mjs')],
+    [
+      ...(preload ? ['--import', pathToFileURL(preload).href] : []),
+      join(root, 'scripts/build.mjs'),
+    ],
     { cwd: root, timeout: 15000 },
   );
 const manifest = (root: string) => readFile(join(root, 'dist/build-manifest.json'), 'utf8');
@@ -133,7 +137,7 @@ it('ошибка публикации откатывает каталог, а п
   const root = await project();
   await build(root);
   const first = await manifest(root);
-  const loader = join(root, 'fail-rename.mjs');
+  const loader = join(root, 'fail # rename.mjs');
   await writeFile(
     loader,
     `import fs from 'node:fs/promises'; import {syncBuiltinESMExports} from 'node:module';
