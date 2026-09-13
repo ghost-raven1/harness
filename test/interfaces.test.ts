@@ -53,6 +53,7 @@ describe('Настоящие процессы CLI + MCP + локальный с�
       async () =>
         (await rpc<StatusView>(directory, 'runtime.status', { runId: ids.runId })).status ===
         'completed',
+      15000,
     );
     expect(await readFile(join(root, 'workspace', 'result.txt'), 'utf8')).toBe(
       'Исправлено через CLI',
@@ -97,7 +98,7 @@ describe('Настоящие процессы CLI + MCP + локальный с�
     const approvals = await command(['--state', directory, '--json', 'approvals']);
     expect(approvals.code).toBe(0);
     expect(JSON.parse(approvals.stdout)).toEqual([]);
-  });
+  }, 40000);
   it('SIGKILL после побочного эффекта → unknown → проверка человеком → resume без повторной команды', async () => {
     const root = await temporary(),
       directory = join(root, 'state');

@@ -5,9 +5,12 @@ import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { expect, it, vi } from 'vitest';
 import { temporary } from './helpers.js';
+import { stopProcessTree } from '../src/tools/process.js';
 
 const execute = promisify(execFile);
 const repository = resolve('.');
+// Установка локальных пакетов на Windows включает более медленные операции с файлами.
+const timeoutFactor = process.platform === 'win32' ? 3 : 1;
 const npm = join(
   dirname(process.execPath),
   process.platform === 'win32'
@@ -88,115 +91,182 @@ async function project() {
 }
 
 /** Среда production не должна убирать компилятор из локального приложения. */
-async function prepare(root: string) {
-  try {
-    return await execute(process.execPath, ['scripts/bootstrap.mjs', '--prepare-only'], {
-      cwd: root,
-      timeout: 20_000,
-      env: { ...process.env, NODE_ENV: 'production', npm_config_omit: 'dev' },
+async function prepare(root: string, timeoutMs = 20_000 * timeoutFactor) {
+  const child = spawn(process.execPath, ['scripts/bootstrap.mjs', '--prepare-only'], {
+    cwd: root,
+    detached: process.platform !== 'win32',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, NODE_ENV: 'production', npm_config_omit: 'dev' },
+  });
+  let stdout = '',
+    stderr = '';
+  child.stdout.on('data', (data) => (stdout += String(data)));
+  child.stderr.on('data', (data) => (stderr += String(data)));
+  const execution = new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', (code, signal) => {
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(new Error(`Подготовка завершилась: ${code ?? signal}\n${stderr}`));
     });
+  });
+  let timedOut = false;
+  let stopping: Promise<void> | undefined;
+  const timer = setTimeout(() => {
+    if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
+    timedOut = true;
+    // Завершаем дерево до родителя: иначе npm продолжает удерживать временную папку Windows.
+    stopping = stopProcessTree(child.pid).catch(() => {
+      child.kill('SIGKILL');
+    });
+  }, timeoutMs);
+  try {
+    const result = await execution;
+    if (timedOut) throw new Error('Превышено время тестовой подготовки.');
+    return result;
   } catch (error) {
+    await stopping;
     throw new Error(
-      String(error) + '\n' + (await readFile(join(root, '.tools/setup.log'), 'utf8')),
+      (timedOut ? 'Превышено время тестовой подготовки.' : String(error)) +
+        '\n' +
+        (await readFile(join(root, '.tools/setup.log'), 'utf8')),
     );
+  } finally {
+    clearTimeout(timer);
+    await stopping;
   }
 }
 
-it('чистая установка с пробелами в пути включает dev tools и повторно использует исправный кэш', async () => {
-  const root = await project();
-  const first = await prepare(root);
-  expect(first.stdout).toContain('Всё готово');
-  expect(await readFile(join(root, 'node_modules/typescript/package.json'), 'utf8')).toContain(
-    'typescript',
-  );
-  const compiled = join(root, 'dist/interfaces/cli.js');
-  const before = await stat(compiled);
-  const second = await prepare(root);
-  expect(second.stdout).toContain('Библиотеки готовы');
-  expect(second.stdout).toContain('Приложение готово');
-  expect((await stat(compiled)).mtimeMs).toBe(before.mtimeMs);
-  expect((await execute(process.execPath, [compiled, '--help'], { cwd: root })).stdout).toContain(
-    'HARNESS_FIXTURE_READY',
-  );
-}, 40_000);
+it(
+  'чистая установка с пробелами в пути включает dev tools и повторно использует исправный кэш',
+  async () => {
+    const root = await project();
+    const first = await prepare(root);
+    expect(first.stdout).toContain('Всё готово');
+    expect(await readFile(join(root, 'node_modules/typescript/package.json'), 'utf8')).toContain(
+      'typescript',
+    );
+    const compiled = join(root, 'dist/interfaces/cli.js');
+    const before = await stat(compiled);
+    const second = await prepare(root);
+    expect(second.stdout).toContain('Библиотеки готовы');
+    expect(second.stdout).toContain('Приложение готово');
+    expect((await stat(compiled)).mtimeMs).toBe(before.mtimeMs);
+    expect((await execute(process.execPath, [compiled, '--help'], { cwd: root })).stdout).toContain(
+      'HARNESS_FIXTURE_READY',
+    );
+  },
+  40_000 * timeoutFactor,
+);
 
-it('повторная подготовка чинит удалённый обязательный пакет и повреждённый результат сборки', async () => {
-  const root = await project();
-  await prepare(root);
-  await rm(join(root, 'node_modules/fixture-required'), { recursive: true, force: true });
-  const repaired = await prepare(root);
-  expect(repaired.stdout).toContain('Устанавливаю библиотеки');
-  expect(
-    await readFile(join(root, 'node_modules/fixture-required/package.json'), 'utf8'),
-  ).toContain('fixture-required');
-  await rm(join(root, 'node_modules/fixture-required/index.js'));
-  expect((await prepare(root)).stdout).toContain('Устанавливаю библиотеки');
-  expect(await readFile(join(root, 'node_modules/fixture-required/index.js'), 'utf8')).toContain(
-    'module.exports',
-  );
-  const compiled = join(root, 'dist/interfaces/cli.js');
-  await writeFile(compiled, "throw new Error('BROKEN_BUILD');\n");
-  await prepare(root);
-  const run = await execute(process.execPath, [compiled, '--help'], { cwd: root });
-  expect(run.stdout).toContain('HARNESS_FIXTURE_READY');
-  expect(run.stderr).toBe('');
-}, 60_000);
+it(
+  'повторная подготовка чинит удалённый обязательный пакет и повреждённый результат сборки',
+  async () => {
+    const root = await project();
+    await prepare(root);
+    await rm(join(root, 'node_modules/fixture-required'), { recursive: true, force: true });
+    const repaired = await prepare(root);
+    expect(repaired.stdout).toContain('Устанавливаю библиотеки');
+    expect(
+      await readFile(join(root, 'node_modules/fixture-required/package.json'), 'utf8'),
+    ).toContain('fixture-required');
+    await rm(join(root, 'node_modules/fixture-required/index.js'));
+    expect((await prepare(root)).stdout).toContain('Устанавливаю библиотеки');
+    expect(await readFile(join(root, 'node_modules/fixture-required/index.js'), 'utf8')).toContain(
+      'module.exports',
+    );
+    const compiled = join(root, 'dist/interfaces/cli.js');
+    await writeFile(compiled, "throw new Error('BROKEN_BUILD');\n");
+    await prepare(root);
+    const run = await execute(process.execPath, [compiled, '--help'], { cwd: root });
+    expect(run.stdout).toContain('HARNESS_FIXTURE_READY');
+    expect(run.stderr).toBe('');
+  },
+  60_000 * timeoutFactor,
+);
 
-it('падение справки не выдаёт готовность и не затрагивает исходный каталог состояния', async () => {
-  const root = await project();
-  await prepare(root);
-  const preserved = join(root, 'состояние пользователя');
-  const report = join(root, 'help-states.jsonl');
-  await mkdir(preserved);
-  await writeFile(join(preserved, 'keep.txt'), 'сохранённые данные');
-  const marker = await stat(join(root, '.tools/prepared.json'));
-  const result = await execute(process.execPath, ['scripts/bootstrap.mjs', '--prepare-only'], {
-    cwd: root,
-    timeout: 20_000,
-    env: {
-      ...process.env,
-      NODE_ENV: 'production',
-      npm_config_omit: 'dev',
-      HARNESS_STATE_DIR: preserved,
-      HARNESS_TEST_STATE_REPORT: report,
-      HARNESS_TEST_HELP_CRASH: '1',
-    },
-  }).then(
-    () => undefined,
-    (error: { code: number; stdout: string; stderr: string }) => error,
-  );
-  expect(result?.code).toBe(1);
-  expect(result?.stdout).not.toContain('Всё готово');
-  expect(result?.stderr).toContain('Не удалось проверить запуск приложения');
-  const states = (await readFile(report, 'utf8'))
-    .trim()
-    .split('\n')
-    .map((line) => JSON.parse(line));
-  expect(states).toHaveLength(2);
-  expect(new Set(states).size).toBe(2);
-  for (const state of states) {
-    expect(state).not.toBe(preserved);
-    await expect(stat(state)).rejects.toMatchObject({ code: 'ENOENT' });
-  }
-  expect(await readdir(preserved)).toEqual(['keep.txt']);
-  expect(await readFile(join(preserved, 'keep.txt'), 'utf8')).toBe('сохранённые данные');
-  expect((await stat(join(root, '.tools/prepared.json'))).mtimeMs).toBe(marker.mtimeMs);
-}, 40_000);
+it(
+  'падение справки не выдаёт готовность и не затрагивает исходный каталог состояния',
+  async () => {
+    const root = await project();
+    await prepare(root);
+    const preserved = join(root, 'состояние пользователя');
+    const report = join(root, 'help-states.jsonl');
+    await mkdir(preserved);
+    await writeFile(join(preserved, 'keep.txt'), 'сохранённые данные');
+    const marker = await stat(join(root, '.tools/prepared.json'));
+    const result = await execute(process.execPath, ['scripts/bootstrap.mjs', '--prepare-only'], {
+      cwd: root,
+      timeout: 20_000,
+      env: {
+        ...process.env,
+        NODE_ENV: 'production',
+        npm_config_omit: 'dev',
+        HARNESS_STATE_DIR: preserved,
+        HARNESS_TEST_STATE_REPORT: report,
+        HARNESS_TEST_HELP_CRASH: '1',
+      },
+    }).then(
+      () => undefined,
+      (error: { code: number; stdout: string; stderr: string }) => error,
+    );
+    expect(result?.code).toBe(1);
+    expect(result?.stdout).not.toContain('Всё готово');
+    expect(result?.stderr).toContain('Не удалось проверить запуск приложения');
+    const states = (await readFile(report, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(states).toHaveLength(2);
+    expect(new Set(states).size).toBe(2);
+    for (const state of states) {
+      expect(state).not.toBe(preserved);
+      await expect(stat(state)).rejects.toMatchObject({ code: 'ENOENT' });
+    }
+    expect(await readdir(preserved)).toEqual(['keep.txt']);
+    expect(await readFile(join(preserved, 'keep.txt'), 'utf8')).toBe('сохранённые данные');
+    expect((await stat(join(root, '.tools/prepared.json'))).mtimeMs).toBe(marker.mtimeMs);
+  },
+  40_000 * timeoutFactor,
+);
 
-it('некорректные JSON-маркеры восстанавливаются вместо внутренней ошибки', async () => {
-  const root = await project();
-  await prepare(root);
-  await writeFile(join(root, '.tools/prepared.json'), 'null');
-  await writeFile(join(root, 'dist/build-manifest.json'), 'null');
-  const result = await prepare(root);
-  expect(result.stdout).toContain('Всё готово');
-  expect(JSON.parse(await readFile(join(root, '.tools/prepared.json'), 'utf8'))).toHaveProperty(
-    'dependencies',
+it(
+  'некорректные JSON-маркеры восстанавливаются вместо внутренней ошибки',
+  async () => {
+    const root = await project();
+    await prepare(root);
+    await writeFile(join(root, '.tools/prepared.json'), 'null');
+    await writeFile(join(root, 'dist/build-manifest.json'), 'null');
+    const result = await prepare(root);
+    expect(result.stdout).toContain('Всё готово');
+    expect(JSON.parse(await readFile(join(root, '.tools/prepared.json'), 'utf8'))).toHaveProperty(
+      'dependencies',
+    );
+    expect(
+      JSON.parse(await readFile(join(root, 'dist/build-manifest.json'), 'utf8')).schemaVersion,
+    ).toBe(1);
+  },
+  40_000 * timeoutFactor,
+);
+
+it('таймаут тестовой подготовки завершает дочерний процесс до удаления временной папки', async () => {
+  const root = await temporary();
+  await mkdir(join(root, 'scripts'));
+  await mkdir(join(root, '.tools'));
+  await writeFile(join(root, '.tools/setup.log'), 'Тестовая подготовка');
+  await writeFile(
+    join(root, 'scripts/bootstrap.mjs'),
+    `import {spawn} from 'node:child_process';
+import {writeFileSync} from 'node:fs';
+const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {stdio: 'inherit'});
+writeFileSync('child.pid', String(child.pid));
+setInterval(() => {}, 1000);`,
   );
-  expect(
-    JSON.parse(await readFile(join(root, 'dist/build-manifest.json'), 'utf8')).schemaVersion,
-  ).toBe(1);
-}, 40_000);
+  await expect(prepare(root, 3000)).rejects.toThrow('Превышено время тестовой подготовки');
+  const pid = Number(await readFile(join(root, 'child.pid'), 'utf8'));
+  expect(pid).toBeGreaterThan(0);
+  // Живой потомок удерживал бы унаследованный pipe и не дал бы prepare дождаться close.
+  await rm(root, { recursive: true });
+});
 
 it.skipIf(process.platform === 'win32')(
   'отмена зависшего npm завершает подготовку и освобождает проект',
