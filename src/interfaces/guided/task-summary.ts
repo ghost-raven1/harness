@@ -36,6 +36,7 @@ export function taskSummary(
     ).join('\n');
 
   const metadata = [workspaceLine(status.workspace, width), state];
+  if (status.pendingMessages) metadata.push('Сообщений в очереди: ' + status.pendingMessages);
   if (status.deletedAt)
     metadata.push(
       hasInterruptedOperations(status)

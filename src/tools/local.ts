@@ -17,6 +17,7 @@ const object = (
   additionalProperties: false,
 });
 
+/** Регистрирует схемы и исполнители локальных файлов, процессов и артефактов. */
 export function registerLocalTools(registry: ToolRegistry, store: FileSessionStore): void {
   registry.register({
     definition: {
@@ -32,6 +33,7 @@ export function registerLocalTools(registry: ToolRegistry, store: FileSessionSto
         ['path'],
       ),
     },
+    /** Читает ограниченный фрагмент UTF-8 после проверки пути и размера файла. */
     async execute(args, context) {
       const path = await safePath(args.path as string, context);
       const metadata = await stat(path);
@@ -62,6 +64,7 @@ export function registerLocalTools(registry: ToolRegistry, store: FileSessionSto
         ['path'],
       ),
     },
+    /** Возвращает список каталога целиком либо страницу по переданным границам. */
     async execute(args, context) {
       return listDirectory(args as { path: string; offset?: number; limit?: number }, context);
     },
@@ -76,6 +79,7 @@ export function registerLocalTools(registry: ToolRegistry, store: FileSessionSto
         ['path', 'content'],
       ),
     },
+    /** Передаёт запись файла в механизм резервирования и проверки предпросмотра. */
     async execute(args, context) {
       return new FileChanges(store).write(args.path as string, args.content as string, context);
     },
@@ -91,6 +95,7 @@ export function registerLocalTools(registry: ToolRegistry, store: FileSessionSto
         'text',
       ]),
     },
+    /** Ищет буквальный текст в разрешённых файлах с признаком неполной выдачи. */
     async execute(args, context) {
       return searchFiles(args as { path: string; text: string }, context);
     },
@@ -109,6 +114,7 @@ export function registerLocalTools(registry: ToolRegistry, store: FileSessionSto
         ['command', 'args'],
       ),
     },
+    /** Запускает программу с отдельными аргументами в рабочей папке задачи. */
     execute(args, context) {
       return executeProgram(args.command as string, args.args as string[], context);
     },
@@ -128,6 +134,7 @@ export function registerLocalTools(registry: ToolRegistry, store: FileSessionSto
         ['id'],
       ),
     },
+    /** Читает страницу артефакта, доступного текущей беседе и рабочей папке. */
     execute(args, context) {
       return store.readArtifact(
         context.runId,

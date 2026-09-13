@@ -21,6 +21,7 @@ import { isMissingResource } from '../../shared/resource-errors.js';
 import { showRemovedTask } from './task-removed.js';
 import { saveAnswer } from './answer-export.js';
 import { completeResult } from '../result-client.js';
+import { canMessageTask, writeTaskMessage } from './task-message.js';
 export { saveAnswer } from './answer-export.js';
 
 /** Повторный вопрос остаётся в той же сессии; новая задача всегда получает отдельную историю. */
@@ -192,10 +193,12 @@ export async function chooseTask(
   }
 }
 
+/** Показывает действия, допустимые для текущего состояния и режима скрытой задачи. */
 function taskActionOptions(status: StatusView) {
   const readOnly = !!status.deletedAt;
   const active = ['running', 'awaiting_approval', 'paused'].includes(status.status);
   return [
+    ...(canMessageTask(status) ? [{ value: 'message', label: 'Написать модели' }] : []),
     ...(hasInterruptedOperations(status)
       ? [{ value: 'review', label: 'Проверить прерванную операцию' }]
       : []),
@@ -239,6 +242,7 @@ function taskActionOptions(status: StatusView) {
     ...(!readOnly ? [{ value: 'iterations', label: 'Предел шагов задачи' }] : []),
     { value: 'details', label: 'Технические подробности' },
     { value: 'history', label: 'Журнал, мысли и полный ответ' },
+    ...(!readOnly && !active ? [{ value: 'message', label: 'Черновики сообщений' }] : []),
     ...(!readOnly ? [{ value: 'delete', label: 'Убрать из списка' }] : []),
     ...(!active ? [{ value: 'purge', label: 'Удалить навсегда' }] : []),
     ...(!readOnly ? [{ value: 'archive', label: '← К списку задач' }] : []),
@@ -246,6 +250,7 @@ function taskActionOptions(status: StatusView) {
   ];
 }
 
+/** Перед действием перечитывает задачу, чтобы не применять устаревший выбор другого окна. */
 async function taskActions(
   context: CliContext,
   preferences: Pick<Preferences, 'workspace' | 'profile'>,
@@ -280,6 +285,11 @@ async function taskActions(
       const status = await context.request<StatusView>('runtime.status', { runId });
       if (!taskActionOptions(status).some((option) => option.value === action)) {
         notice = 'Состояние изменилось в другом окне. Выберите актуальное действие.';
+        continue;
+      }
+
+      if (action === 'message') {
+        notice = await writeTaskMessage(context, status);
         continue;
       }
 
@@ -371,6 +381,7 @@ async function taskActions(
   }
 }
 
+/** Записывает только явно выбранную оценку пользователя с его пояснением. */
 async function feedback(context: CliContext, runId: string): Promise<string> {
   const positive = selected(
     await prompts.select<boolean | 'skip'>({

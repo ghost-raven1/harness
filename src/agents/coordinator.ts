@@ -10,11 +10,13 @@ type ExecuteAgent = (runId: string, agentId: string, signal: AbortSignal) => Pro
 export class AgentCoordinator {
   private readonly tasks = new Map<string, Promise<void>>();
 
+  /** Связывает сохранённое дерево с исполнителем одного агента. */
   constructor(
     private readonly store: FileSessionStore,
     private readonly executeAgent: ExecuteAgent,
   ) {}
 
+  /** Дожидается запущенных дочерних исполнителей, включая завершение после отмены. */
   async waitForRun(runId: string): Promise<void> {
     const tasks = [...this.tasks.entries()]
       .filter(([key]) => key.startsWith(runId + ':'))
@@ -22,17 +24,20 @@ export class AgentCoordinator {
     await Promise.allSettled(tasks);
   }
 
+  /** Удаляет завершённые обещания перед очисткой запуска или его возобновлением. */
   forgetRun(runId: string): void {
     for (const key of this.tasks.keys()) {
       if (key.startsWith(runId + ':')) this.tasks.delete(key);
     }
   }
 
+  /** Запускает агента один раз и останавливает его потомков при ошибке ветки. */
   private spawn(runId: string, agentId: string, signal: AbortSignal): Promise<void> {
     const key = runId + ':' + agentId;
     const existing = this.tasks.get(key);
     if (existing) return existing;
     const controller = new AbortController();
+    /** Передаёт отмену родительской ветки собственному сигналу дочернего исполнителя. */
     const cancel = (): void => controller.abort();
     signal.addEventListener('abort', cancel, { once: true });
     if (signal.aborted) cancel();
@@ -40,6 +45,7 @@ export class AgentCoordinator {
       .catch(async (error) => {
         controller.abort();
         const descendants: string[] = [];
+        /** Собирает потомков, остановки которых нужно дождаться до фиксации ошибки. */
         const collect = (parent: string): void => {
           for (const child of this.store.get(runId).agents[parent]!.children) {
             descendants.push(child);
@@ -71,6 +77,7 @@ export class AgentCoordinator {
     this.tasks.set(key, task);
     return task;
   }
+  /** Возвращает итог только собственного ребёнка; включение в историю подтверждает вызывающий цикл. */
   async childResult(
     runId: string,
     parentId: string,
@@ -93,6 +100,7 @@ export class AgentCoordinator {
       artifacts: (this.store.get(runId).artifacts ?? []).filter((item) => item.agentId === childId),
     };
   }
+  /** Применяет проверенный вызов управления и фиксирует изменения дерева в журнале. */
   async handleToolCall(
     runId: string,
     agentId: string,

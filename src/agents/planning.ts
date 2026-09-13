@@ -65,6 +65,7 @@ export function needsPlanning(run: RunRecord, agent: AgentState): boolean {
   return agent.id === run.rootAgentId && !!run.coordination && !run.coordination.plan;
 }
 
+/** Объясняет модели выбор маршрута с учётом специализаций и оставшихся пределов дерева. */
 export function planningInstruction(run: RunRecord): string {
   return [
     'HARNESS ROUTING: before execution, call agents.plan exactly once. Do not call other tools yet.',

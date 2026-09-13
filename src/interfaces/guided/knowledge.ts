@@ -158,6 +158,7 @@ export async function browseKnowledge(context: CliContext): Promise<void> {
   }
 }
 
+/** При удалении урока во время просмотра возвращает понятный экран вместо старого текста. */
 async function inspectKnowledge(context: CliContext, id: string): Promise<void> {
   try {
     await readKnowledge(context, id);
@@ -173,6 +174,7 @@ async function inspectKnowledge(context: CliContext, id: string): Promise<void> 
   }
 }
 
+/** Обновляет урок и его применимость; экспорт доступен отдельным действием. */
 async function readKnowledge(context: CliContext, id: string): Promise<void> {
   const loadLesson = async () => {
     const [detail, state] = await Promise.all([
@@ -256,6 +258,7 @@ async function readKnowledge(context: CliContext, id: string): Promise<void> {
   }
 }
 
+/** Показывает все задания обучения с состояниями и причинами остановки. */
 function queueText(state: LearningStatusView): string {
   const labels = { queued: 'Ожидает обработки', done: 'Обработано', inactive: 'Неактивно' };
   return knowledgeText(

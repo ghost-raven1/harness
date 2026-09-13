@@ -8,6 +8,7 @@ import { page } from './screen.js';
 import { TaskScreen, type ViewKey } from './task-screen.js';
 import { isMissingResource } from '../../shared/resource-errors.js';
 import { readText } from './text-reader.js';
+import { canMessageTask, writeTaskMessage } from './task-message.js';
 
 /** Клавиши принадлежат экрану только между вопросами Clack; исходный режим восстанавливается. */
 export function watchKeys(onKey: (action: ViewKey) => void): () => void {
@@ -17,6 +18,7 @@ export function watchKeys(onKey: (action: ViewKey) => void): () => void {
   emitKeypressEvents(process.stdin);
   const handler = (_text: string, key: Key): void => {
     if (key.ctrl && key.name === 'c') onKey('cancel');
+    if (key.ctrl && key.name === 'w') onKey('message');
     const names: Record<string, ViewKey> = {
       escape: 'back',
       return: 'enter',
@@ -39,6 +41,7 @@ export function watchKeys(onKey: (action: ViewKey) => void): () => void {
   };
 }
 
+/** Показывает итог или паузу без живого экрана и объясняет способ продолжения. */
 export function simpleResult(status: StatusView): void {
   if (status.result)
     note(
@@ -68,7 +71,7 @@ export async function followRun(
     while (true) {
       let action: ViewKey | undefined;
       const stopKeys = watchKeys((value) => {
-        if (['back', 'cancel', 'enter'].includes(value)) action = value;
+        if (['back', 'cancel', 'enter', 'message'].includes(value)) action = value;
         else screen.key(value);
       });
       let status: TaskView;
@@ -116,6 +119,15 @@ export async function followRun(
         screen.render();
       }
       screen.close();
+      if (action === 'message') {
+        const notice = canMessageTask(status)
+          ? await writeTaskMessage(context, status)
+          : 'Задача завершилась. Ответьте через меню действий.';
+        page('', false);
+        screen = new TaskScreen(screen.feed);
+        screen.notice = notice;
+        continue;
+      }
       if (
         !status.deletedAt &&
         status.approvals.length &&

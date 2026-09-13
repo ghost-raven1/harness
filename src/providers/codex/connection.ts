@@ -162,14 +162,16 @@ export class CodexConnection extends EventEmitter {
     signal.addEventListener('abort', this.cancel, { once: true });
   }
 
+  /** Согласует возможности app-server и подтверждает готовность клиента Codex. */
   async initialize(): Promise<void> {
     await this.call('initialize', {
-      clientInfo: { name: 'modular_harness', version: '0.1.0' },
+      clientInfo: { name: 'modular_harness', version: '0.2.0' },
       capabilities: { experimentalApi: true },
     });
     this.child.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');
   }
 
+  /** Отправляет RPC с уникальным идентификатором и ожидает связанный ответ. */
   call(method: string, params: JsonObject): Promise<unknown> {
     if (this.closed) return Promise.reject(new ProviderError('Соединение с Codex уже закрыто.'));
     return new Promise((resolve, reject) => {
@@ -179,6 +181,7 @@ export class CodexConnection extends EventEmitter {
     });
   }
 
+  /** Отклоняет ожидающие RPC и завершает процесс при первой ошибке соединения. */
   private fail(error: Error): void {
     if (this.closed) return;
     this.closed = true;

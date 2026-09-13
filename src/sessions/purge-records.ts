@@ -33,6 +33,7 @@ export async function readPurgeRecords(directory: string): Promise<PurgeRecord[]
   return records;
 }
 
+/** Атомарно сохраняет проверенный маркер удаления в служебном каталоге. */
 export async function writePurgeRecord(directory: string, record: PurgeRecord): Promise<void> {
   await assertRealDirectory(join(directory, 'purged'));
   await atomicJson(join(directory, 'purged', record.sessionId + '.json'), schema.parse(record));
@@ -104,6 +105,7 @@ export async function removeLearningTemps(directory: string): Promise<void> {
   await syncExisting(directory);
 }
 
+/** Перечисляет каталог, считая отсутствующий каталог пустым. */
 async function names(directory: string): Promise<string[]> {
   try {
     return await readdir(directory);
@@ -112,6 +114,7 @@ async function names(directory: string): Promise<string[]> {
     throw error;
   }
 }
+/** Синхронизирует существующий каталог после удаления его файлов. */
 async function syncExisting(directory: string): Promise<void> {
   try {
     await syncDirectory(directory);

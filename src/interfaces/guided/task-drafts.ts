@@ -6,6 +6,7 @@ import { selected } from '../ui.js';
 import { terminalText } from './screen.js';
 import { isMissingResource } from '../../shared/resource-errors.js';
 
+/** Адресует запись внутри беседы, не передавая текст и ключ повторной отправки. */
 export const draftLocation = (draft: TaskDraft) => ({
   id: draft.id,
   sessionId: draft.scope.sessionId,
@@ -15,6 +16,7 @@ export const draftLocation = (draft: TaskDraft) => ({
 export async function chooseDraft(
   context: CliContext,
   scope: DraftScope,
+  options: { allowNew?: boolean; inspect?: boolean } = {},
 ): Promise<TaskDraft | undefined> {
   let offset = 0;
   while (true) {
@@ -37,14 +39,16 @@ export async function chooseDraft(
         load: async () => {
           const page = await load();
           return {
-            message: 'Продолжить сообщение или начать новое?',
+            message: options.inspect
+              ? 'Выберите сохранённое сообщение'
+              : 'Продолжить сообщение или начать новое?',
             options: [
               ...page.items.map((item) => ({
                 value: item.id,
                 label: item.preview || 'Пустой черновик',
                 hint: item.state === 'pending' ? 'отправка не подтверждена' : 'не отправлен',
               })),
-              { value: 'new', label: 'Новое сообщение' },
+              ...(options.allowNew === false ? [] : [{ value: 'new', label: 'Новое сообщение' }]),
               ...(offset + page.items.length < page.total
                 ? [{ value: 'next', label: 'Следующие черновики →' }]
                 : []),
@@ -66,7 +70,7 @@ export async function chooseDraft(
       let draft = await context.request<TaskDraft>('drafts.get', location);
       const action = selected(
         await liveSelect({
-          title: 'Черновик задачи',
+          title: scope.messageRunId ? 'Черновик сообщения' : 'Черновик задачи',
           exitOnError: (error) => isMissingResource(error, 'draft'),
           load: async () => {
             draft = await context.request<TaskDraft>('drafts.get', location);
@@ -80,7 +84,12 @@ export async function chooseDraft(
               options: [
                 {
                   value: 'restore',
-                  label: draft.state === 'pending' ? 'Проверить отправку' : 'Продолжить ввод',
+                  label:
+                    options.inspect && draft.state !== 'pending'
+                      ? 'Прочитать полный текст'
+                      : draft.state === 'pending'
+                        ? 'Проверить отправку'
+                        : 'Продолжить ввод',
                 },
                 { value: 'delete', label: 'Удалить черновик' },
                 { value: 'back', label: '← К черновикам' },

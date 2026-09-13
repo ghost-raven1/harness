@@ -9,6 +9,7 @@ export class TaskInputState {
     this.text = initial;
     this.cursor = initial.length;
   }
+  /** Нормализует переносы и проверяет предел до добавления всей вставки. */
   insert(value: string): boolean {
     const text = value
       .replace(/\r\n?/g, '\n')
@@ -22,6 +23,7 @@ export class TaskInputState {
     this.error = '';
     return true;
   }
+  /** Перемещает курсор между графемами, не разрезая составные символы. */
   move(delta: -1 | 1): void {
     const edges = [
       ...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(this.text),
@@ -32,6 +34,7 @@ export class TaskInputState {
         ? (edges.filter((index) => index < this.cursor).at(-1) ?? 0)
         : (edges.find((index) => index > this.cursor) ?? this.text.length);
   }
+  /** Удаляет соседнюю графему целиком и сбрасывает прежнюю ошибку ввода. */
   erase(backward: boolean): void {
     const previous = this.cursor;
     this.move(backward ? -1 : 1);
@@ -41,6 +44,7 @@ export class TaskInputState {
     this.cursor = start;
     this.error = '';
   }
+  /** Переходит к началу или концу текущей строки. */
   edge(end: boolean): void {
     if (!end && this.cursor === 0) return;
     this.cursor = end
@@ -48,6 +52,7 @@ export class TaskInputState {
       : this.text.lastIndexOf('\n', this.cursor - 1) + 1;
     if (this.cursor < 0) this.cursor = this.text.length;
   }
+  /** Сохраняет столбец при переходе между строками и выравнивает курсор по графеме. */
   vertical(delta: -1 | 1): void {
     const start = this.cursor ? this.text.lastIndexOf('\n', this.cursor - 1) + 1 : 0;
     const column = this.cursor - start;
@@ -77,6 +82,7 @@ export class PasteDecoder {
     private readonly keys: (text: string) => void,
     private readonly insert: (text: string) => void,
   ) {}
+  /** Накапливает части терминальной вставки до закрывающего маркера. */
   write(text: string): void {
     this.buffer += text;
     const start = '\u001b[200~',
@@ -110,6 +116,7 @@ export class PasteDecoder {
       this.buffer = '';
     }
   }
+  /** Убирает повторный LF после CR, даже если символы пришли разными пакетами. */
   private plain(text: string): void {
     const value = this.previousCR && text.startsWith('\n') ? text.slice(1) : text;
     this.previousCR = text.endsWith('\r');

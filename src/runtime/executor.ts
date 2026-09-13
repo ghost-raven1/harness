@@ -25,6 +25,7 @@ export class InvocationExecutor {
     private readonly policy: PolicyService,
     private readonly approvals: FileApprovalService,
   ) {}
+  /** Проверяет схему, права и сохранённый исход перед выполнением одного вызова. */
   async execute(
     runId: string,
     agentId: string,
@@ -179,6 +180,7 @@ export class InvocationExecutor {
     }
   }
 
+  /** Сохраняет статус и результат вызова, вынося большой текст в артефакт. */
   async finish(
     runId: string,
     agentId: string,

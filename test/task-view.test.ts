@@ -178,8 +178,8 @@ it.each([48, 90])(
     expect(tail).toContain('Enter — действия');
     expect(tail.split('\n').length).toBeLessThanOrEqual(23);
     expect(tail.split('\n').every((line) => line.length < width)).toBe(true);
-    expect(taskFrame(feed, width, 24, 'text', 10000)).toMatch(/│\s+Строка 0\s+│/);
-    expect(taskFrame(feed, width, 24, 'reasoning', 0)).toContain(
+    expect(terminalText(taskFrame(feed, width, 24, 'text', 10000))).toMatch(/│\s+Строка 0\s+│/);
+    expect(terminalText(taskFrame(feed, width, 24, 'reasoning', 0))).toContain(
       'Модель пока не передала пояснения.',
     );
   },

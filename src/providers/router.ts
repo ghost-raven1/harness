@@ -12,6 +12,7 @@ export class ProviderRouter implements ModelProvider {
     this.limiter = new Semaphore(concurrency);
     this.sdk = new SdkModelProvider(concurrency);
   }
+  /** Выбирает SDK или Codex и соблюдает общий предел одновременных запросов. */
   generate(request: ModelRequest): Promise<ModelOutput> {
     return this.limiter.use(
       () => (request.profile.provider === 'codex' ? this.codex : this.sdk).generate(request),

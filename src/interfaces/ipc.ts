@@ -58,6 +58,7 @@ export async function acquireLock(directory: string): Promise<() => Promise<void
   }
   throw new Error('Could not acquire daemon lock');
 }
+/** Захватывает каталог состояния и открывает локальный JSON-RPC после восстановления приложения. */
 export async function serve(
   configFile: string,
   directory: string,
@@ -151,6 +152,7 @@ export async function serve(
   let closed = false;
   return {
     app,
+    /** Закрывает подключения и приложение до освобождения владения каталогом состояния. */
     async close() {
       if (closed) return;
       closed = true;
@@ -164,6 +166,7 @@ export async function serve(
     },
   };
 }
+/** Выполняет один запрос к локальному сервису с проверкой размера, ID ответа и тайм-аута. */
 export async function rpc<T = unknown>(
   directory: string,
   method: string,

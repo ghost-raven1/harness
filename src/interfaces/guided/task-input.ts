@@ -17,6 +17,7 @@ export interface TaskInputOptions {
   message: string;
   initialValue?: string;
   workspace?: string;
+  description?(): string;
   save(text: string): Promise<void>;
   refresh?(): Promise<unknown>;
 }
@@ -89,7 +90,7 @@ export async function readTaskInput(options: TaskInputOptions): Promise<string |
               boxLine(workspaceLine(options.workspace, inner), width),
             ]
           : []),
-        rule(width, 'Опишите задачу своими словами'),
+        rule(width, options.description?.() ?? 'Опишите задачу своими словами'),
         ...visible.map((line) => boxLine(line, width)),
         rule(width, `${state.text.length} / ${taskTextLimit} символов`),
         boxLine(discarding ? 'Выйти без последних изменений?' : foot, width),
@@ -225,13 +226,9 @@ export async function readTaskInput(options: TaskInputOptions): Promise<string |
       process.stdin.on('data', data);
       process.stdout.on('resize', render);
       if (options.refresh)
-        stopRefresh = startRefresh(
-          options.refresh,
-          () => undefined,
-          (error) => {
-            if (isMissingResource(error, 'draft')) missing(error);
-          },
-        );
+        stopRefresh = startRefresh(options.refresh, render, (error) => {
+          if (isMissingResource(error, 'draft')) missing(error);
+        });
       render();
     });
   } finally {

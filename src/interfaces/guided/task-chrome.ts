@@ -21,6 +21,7 @@ export function taskGeometry(columns: number): { width: number; margin: string; 
   return { width, margin, content: Math.max(1, width - 4) };
 }
 
+/** Собирает краткую карточку задачи, состав команды и очередь сообщений по размеру окна. */
 export function taskHeader(
   status: TaskView | undefined,
   width: number,
@@ -64,6 +65,9 @@ export function taskHeader(
     ),
     boxLine(color.dim(workspaceLine(status?.workspace ?? 'загружается', width - 3)), width),
     ...(team ? [boxLine(color.dim(team), width)] : []),
+    ...(status?.pendingMessages
+      ? [boxLine('Сообщений в очереди: ' + status.pendingMessages, width)]
+      : []),
     rule(width, '', 'bottom'),
     ...(height >= 30 ? [''] : []),
     ' ' +
@@ -78,7 +82,8 @@ export function taskHeader(
   return rows;
 }
 
-export function taskFooter(width: number, active: boolean): string[] {
+/** Показывает доступные клавиши и переносит управление в узком терминале. */
+export function taskFooter(width: number, active: boolean, writable = active): string[] {
   const key = (name: string, action: string): string =>
     color.bold(name) + color.dim(' — ' + action);
   const primary = key('Enter', 'действия') + ' · ' + key('Esc', 'назад');
@@ -92,6 +97,7 @@ export function taskFooter(width: number, active: boolean): string[] {
     rule(width, color.bold('Управление')),
     ' ' + primary + (active && width >= 65 ? ' · ' + key('Ctrl+C', 'остановить') : ''),
     ' ' + navigation,
+    ...(writable ? [' ' + key('Ctrl+W', 'написать модели')] : []),
     ...(active && width < 65 ? [' ' + key('Ctrl+C', 'остановить') + ' · PgUp/PgDn'] : []),
   ];
 }

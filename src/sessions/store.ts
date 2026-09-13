@@ -25,6 +25,7 @@ export class FileSessionStore implements SessionStore {
   constructor(readonly directory: string) {
     this.output = new RunOutputStore(directory);
   }
+  /** Восстанавливает последнее состояние из журналов и отмечает прерванные операции. */
   async initialize(): Promise<void> {
     for (const record of await readPurgeRecords(this.directory))
       this.purged.set(record.sessionId, record);
@@ -66,22 +67,26 @@ export class FileSessionStore implements SessionStore {
       }
     });
   }
+  /** Возвращает отсортированные копии запусков, по умолчанию исключая скрытые. */
   list(includeDeleted = false): RunRecord[] {
     return [...this.runs.values()]
       .filter((run) => includeDeleted || !run.deletedAt)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .map(clone);
   }
+  /** Возвращает копию запуска; отсутствие записи отличается от ошибки подключения. */
   get(runId: string): RunRecord {
     const run = this.runs.get(runId);
     if (!run) throw new ResourceNotFoundError('task');
     return clone(run);
   }
+  /** Читает ограниченную страницу событий после указанного курсора. */
   history(runId: string, after: number, limit?: number): JournalEvent[] {
     return (this.events.get(runId) ?? [])
       .slice(after, limit === undefined ? undefined : after + limit)
       .map(clone);
   }
+  /** Сохраняет новый запуск после проверки ключа, последнего этапа и занятости сессии. */
   create(run: RunRecord): Promise<RunRecord> {
     return this.serial.run(async () => {
       this.assertRequestAllowed(run.requestKey, run.sessionId);
@@ -111,6 +116,7 @@ export class FileSessionStore implements SessionStore {
       return this.get(run.id);
     });
   }
+  /** Последовательно применяет изменение к копии и фиксирует его в журнале. */
   mutate(
     runId: string,
     type: string,
@@ -125,6 +131,13 @@ export class FileSessionStore implements SessionStore {
       return this.get(runId);
     });
   }
+  /** Сериализует служебные файлы с журналом и очисткой, не ожидая долгих инструментов проекта. */
+  withStateFiles<T>(work: () => Promise<T>): Promise<T> {
+    return this.serial.run(async () => {
+      this.assertWritable();
+      return work();
+    });
+  }
   /** Скрывает завершённую задачу; доказательства обучения, учёт расхода и защита от повторов сохраняются. */
   async delete(runId: string): Promise<void> {
     await this.serial.run(async () => {
@@ -137,6 +150,7 @@ export class FileSessionStore implements SessionStore {
       await this.persist(run, 'run.deleted', {});
     });
   }
+  /** Сначала синхронизирует журнал, затем обновляет память и вспомогательный снимок. */
   private async persist(state: RunRecord, type: string, payload: unknown): Promise<void> {
     const previous = this.events.get(state.id) ?? [];
     const event: JournalEvent = {
@@ -151,6 +165,7 @@ export class FileSessionStore implements SessionStore {
     this.events.set(state.id, [...previous, event]);
     await writeSnapshot(join(this.directory, 'runs', state.id + '.json'), state);
   }
+  /** Сохраняет полный результат инструмента в отдельном файле текущего запуска. */
   async artifact(runId: string, content: string): Promise<string> {
     this.assertWritable();
     this.get(runId);
@@ -170,10 +185,12 @@ export class FileSessionStore implements SessionStore {
     )
       throw new Error('Эта беседа удалена навсегда. Для новой задачи нужен новый запрос.');
   }
+  /** Запрещает запись, пока выполняется подтверждённая очистка данных. */
   assertWritable(): void {
     if (this.maintenance)
       throw new Error('Удаляется беседа. Повторите действие после завершения удаления.');
   }
+  /** Дожидается прежних изменений и устанавливает блокировку обслуживания после проверки. */
   beginMaintenance(check: () => void): Promise<() => void> {
     return this.serial.run(async () => {
       this.assertWritable();
@@ -184,6 +201,7 @@ export class FileSessionStore implements SessionStore {
       };
     });
   }
+  /** Ищет сохранённое намерение удаления, к которому относится запуск. */
   purgeRecord(runId: string): PurgeRecord | undefined {
     return [...this.purged.values()].find((record) => record.runIds.includes(runId));
   }
@@ -194,6 +212,7 @@ export class FileSessionStore implements SessionStore {
       this.purged.set(record.sessionId, clone(record));
     });
   }
+  /** Убирает файлы и кэш выбранной беседы после остановки её писателей. */
   purgeFiles(record: PurgeRecord): Promise<void> {
     return this.serial.run(async () => {
       await this.output.forget(record.runIds);
@@ -204,6 +223,7 @@ export class FileSessionStore implements SessionStore {
       }
     });
   }
+  /** Читает часть артефакта текущего запуска или предшествующего этапа той же беседы. */
   async readArtifact(
     runId: string,
     artifactId: string,

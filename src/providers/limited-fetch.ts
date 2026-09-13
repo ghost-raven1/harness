@@ -9,6 +9,7 @@ export function limitedFetch(fetcher: typeof fetch, limit = 8 * 1024 * 1024): ty
     const inspect = inspectStreamErrors(response.headers);
     const body = response.body.pipeThrough(
       new TransformStream<Uint8Array, Uint8Array>({
+        /** Проверяет общий размер и ошибки потока до передачи очередного блока парсеру SDK. */
         transform(chunk, controller) {
           bytes += chunk.byteLength;
           if (bytes > limit) throw new Error('Превышен лимит размера ответа API.');

@@ -35,6 +35,7 @@ export function note(content: string, title: string): void {
   prompts.note(wrapAnsi(content, width, options), heading);
 }
 
+/** Преобразует отмену интерактивного выбора в единый сигнал возврата. */
 export function selected<T>(value: T | symbol): T {
   if (typeof value === 'symbol' || prompts.isCancel(value)) {
     prompts.cancel('Действие отменено');
@@ -42,11 +43,13 @@ export function selected<T>(value: T | symbol): T {
   }
   return value as T;
 }
+/** Выводит машинный JSON либо представление для терминала. */
 export function print(value: unknown, json: boolean): void {
   if (json) process.stdout.write(JSON.stringify(value) + '\n');
   else if (!process.stdout.isTTY) process.stdout.write(JSON.stringify(value, null, 2) + '\n');
   else note(typeof value === 'string' ? value : JSON.stringify(value, null, 2), 'Результат');
 }
+/** Показывает краткое состояние задачи, результат и причину остановки. */
 export function statusCard(status: StatusView): void {
   const paint =
     status.status === 'completed'
@@ -124,6 +127,7 @@ export async function watch(directory: string, runId: string, json: boolean): Pr
     throw error;
   }
 }
+/** Даёт человеку проверить и однократно разрешить либо отклонить ожидающие операции. */
 export async function decideApprovals(directory: string, runId?: string): Promise<void> {
   if (!process.stdin.isTTY) throw new Error('Для подтверждения нужен интерактивный терминал');
   const load = async () =>

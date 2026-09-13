@@ -21,6 +21,7 @@ const frequentReads = new Set([
   'diagnostics.status',
 ]);
 
+/** Оставляет лишь разрешённый код ошибки, не сохраняя её произвольный текст. */
 function failureCode(error: unknown): DiagnosticCode {
   const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
   return typeof code === 'string' && (diagnosticCodes as readonly string[]).includes(code)
@@ -36,6 +37,7 @@ export async function observeCommand<T>(
 ): Promise<T> {
   const name = diagnosticMethod(method);
   const start = performance.now();
+  /** Ограничивает длительность диапазоном схемы диагностического события. */
   const duration = (): number =>
     Math.min(86400000, Math.max(0, Math.round(performance.now() - start)));
   try {

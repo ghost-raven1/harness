@@ -27,6 +27,7 @@ const backupSchema = z.object({
   existed: z.boolean(),
 });
 const maxBytes = 4 * 1024 * 1024;
+/** Читает содержимое и права файла для отката; отсутствие файла сохраняет отдельно. */
 async function snapshot(path: string) {
   try {
     const meta = await stat(path);
@@ -41,6 +42,7 @@ async function snapshot(path: string) {
     return { bytes: Buffer.alloc(0), existed: false, mode: 0o600 };
   }
 }
+/** Связывает подтверждение с путём, исходным состоянием и предлагаемым содержимым. */
 function token(path: string, before: Awaited<ReturnType<typeof snapshot>>, after: Buffer): string {
   return hash({
     path,
@@ -50,6 +52,7 @@ function token(path: string, before: Awaited<ReturnType<typeof snapshot>>, after
     after: digest(after),
   });
 }
+/** Возвращает страницу изменений; для двоичных файлов показывает только размеры. */
 function diff(path: string, before: Buffer, after: Buffer, offset = 0) {
   const patch =
     before.includes(0) || after.includes(0)
@@ -74,6 +77,7 @@ function diff(path: string, before: Buffer, after: Buffer, offset = 0) {
 /** Хранит исходные байты до записи и восстанавливает их только поверх ожидаемой версии. */
 export class FileChanges {
   constructor(private readonly store: FileSessionStore) {}
+  /** Восстанавливает рабочую папку и закреплённую конфигурацию задачи для файловых проверок. */
   private context(runId: string): ToolContext {
     const run = this.store.get(runId);
     return {
@@ -83,6 +87,7 @@ export class FileChanges {
       signal: new AbortController().signal,
     };
   }
+  /** Показывает ожидающую разрешения запись и выдаёт токен текущего состояния файла. */
   async previewApproval(approvalId: string, offset = 0) {
     const run = this.store.list().find((run) => run.approvals[approvalId]);
     const approval = run?.approvals[approvalId];
@@ -101,6 +106,7 @@ export class FileChanges {
       ...diff(args.path, before.bytes, after, offset),
     };
   }
+  /** Сохраняет резервную копию и проверяет предпросмотр перед записью; неопределённый исход требует проверки. */
   async write(local: string, content: string, context: ToolContext) {
     const path = await safePath(local, context, true),
       before = await snapshot(path),
@@ -150,9 +156,11 @@ export class FileChanges {
     }
     return { path: change.path, bytes: after.length, changeId: change.id };
   }
+  /** Адресует резервную копию по идентификаторам задачи и изменения. */
   private backupPath(runId: string, changeId: string): string {
     return join(this.store.directory, 'file-backups', runId, changeId + '.json');
   }
+  /** Проверяет завершение задачи, неизменность записанного файла и целостность резервной копии. */
   private async restoration(runId: string, changeId: string) {
     const run = this.store.get(runId),
       change = run.fileChanges?.find((item) => item.id === changeId);
@@ -178,6 +186,7 @@ export class FileChanges {
       throw new Error('Резервная копия повреждена.');
     return { change, path, current, backup, bytes };
   }
+  /** Показывает откат к резервной копии и связывает его с текущим состоянием файла. */
   async previewRestore(runId: string, changeId: string, offset = 0) {
     const item = await this.restoration(runId, changeId);
     return {
@@ -186,6 +195,7 @@ export class FileChanges {
       ...diff(item.change.path, item.current.bytes, item.bytes, offset),
     };
   }
+  /** Применяет подтверждённый откат и сохраняет факт восстановления в истории задачи. */
   async restore(runId: string, changeId: string, previewToken: string): Promise<void> {
     const item = await this.restoration(runId, changeId);
     if (previewToken !== token(item.path, item.current, item.bytes))

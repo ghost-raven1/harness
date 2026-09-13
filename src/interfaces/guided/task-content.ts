@@ -16,6 +16,7 @@ export interface ContentRow {
   text: string;
 }
 
+/** Выделяет источник записи, чтобы при прокрутке не смешивать вывод разных агентов. */
 function heading(block: ContentBlock, width: number, continued = false): string {
   const suffix = continued ? ' · продолжение' : '';
   return color.bold(fitLine('◆ ' + block.title, width - suffix.length) + color.dim(suffix));

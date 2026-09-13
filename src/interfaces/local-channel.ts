@@ -64,6 +64,7 @@ export async function privateDirectory(directory: string): Promise<void> {
   );
 }
 
+/** Создаёт токен доступа к именованному каналу Windows; Unix использует права сокета. */
 export async function createAccessToken(directory: string): Promise<string | undefined> {
   if (process.platform !== 'win32') return undefined;
   const token = randomBytes(32).toString('hex');
@@ -71,11 +72,13 @@ export async function createAccessToken(directory: string): Promise<string | und
   return token;
 }
 
+/** Читает токен Windows из защищённого каталога состояния. */
 export async function readAccessToken(directory: string): Promise<string | undefined> {
   if (process.platform !== 'win32') return undefined;
   return readFile(join(directory, 'control.token'), 'utf8');
 }
 
+/** Проверяет токен без сравнения содержимого по времени; Unix-канал токена не требует. */
 export function checkAccessToken(expected: string | undefined, actual: string | undefined): void {
   if (expected === undefined) return;
   const reference = Buffer.from(expected);
@@ -85,6 +88,7 @@ export function checkAccessToken(expected: string | undefined, actual: string | 
   }
 }
 
+/** Удаляет токен Windows при освобождении каталога сервиса. */
 export async function removeAccessToken(directory: string): Promise<void> {
   if (process.platform === 'win32')
     await unlink(join(directory, 'control.token')).catch(() => undefined);

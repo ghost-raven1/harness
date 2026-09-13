@@ -46,6 +46,7 @@ export async function syncDirectory(path: string): Promise<void> {
     await directory.close();
   }
 }
+/** Читает JSON, возвращая undefined только при отсутствии файла. */
 export async function optionalJson<T>(path: string): Promise<T | undefined> {
   try {
     return JSON.parse(await readFile(path, 'utf8')) as T;

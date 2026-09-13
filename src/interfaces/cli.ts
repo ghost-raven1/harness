@@ -13,6 +13,7 @@ import { registerSetupCommands } from './commands/setup.js';
 import { registerDoctorCommand } from './commands/doctor.js';
 import { registerDashboard } from './commands/dashboard.js';
 import { registerMaintenanceCommands } from './commands/maintenance.js';
+import { registerMessageCommand } from './commands/message.js';
 import { message } from '../shared/primitives.js';
 import type { CliContext } from './types.js';
 
@@ -25,7 +26,7 @@ interface GlobalOptions {
 export function createCli(): Command {
   const program = new Command()
     .name('harness')
-    .version('0.1.0')
+    .version('0.2.0')
     .description(brandName + ' · агенты, инструменты и проверяемое обучение')
     .option(
       '--state <directory>',
@@ -69,6 +70,7 @@ export function createCli(): Command {
   registerServiceCommands(program, context);
   registerDoctorCommand(program, context);
   registerRunCommands(program, context);
+  registerMessageCommand(program, context);
   registerLearningCommands(program, context);
   registerMaintenanceCommands(program, context);
   program

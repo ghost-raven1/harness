@@ -5,10 +5,12 @@ import type { ToolCall } from '../providers/types.js';
 import { hash, id, abort } from '../shared/primitives.js';
 import type { FileSessionStore } from '../sessions/store.js';
 
+/** Объединяет решения с приоритетом запрета, затем запроса разрешения. */
 function combine(decisions: Decision[]): Decision {
   return decisions.includes('deny') ? 'deny' : decisions.includes('ask') ? 'ask' : 'allow';
 }
 
+/** Допускает разрешение без начатого вызова, включая старые записи о преждевременном списании. */
 function availableApproval(run: RunRecord, approval: Approval): boolean {
   return (
     approval.status === 'allowed' ||
@@ -17,6 +19,7 @@ function availableApproval(run: RunRecord, approval: Approval): boolean {
       !Object.hasOwn(run.invocations, approval.agentId + ':' + approval.callId))
   );
 }
+/** Применяет совпавшие правила инструмента и аргументов либо решение по умолчанию. */
 function evaluate(
   rules: PermissionRule[],
   fallback: Decision,
@@ -66,6 +69,7 @@ export class PolicyService {
     }
     return combine(decisions);
   }
+  /** Привязывает разрешение к вызову, роли, унаследованным правам и снимку конфигурации. */
   binding(run: RunRecord, agent: AgentState, call: ToolCall): string {
     return hash({
       run: run.id,
@@ -90,6 +94,7 @@ export class FileApprovalService implements ApprovalService {
     private readonly store: FileSessionStore,
     private readonly policy: PolicyService,
   ) {}
+  /** Сохраняет запрос человеку и ждёт решения или отмены, повторно проверяя привязку. */
   async request(
     runId: string,
     agentId: string,
@@ -156,6 +161,7 @@ export class FileApprovalService implements ApprovalService {
       ? 'awaiting_approval'
       : 'running';
   }
+  /** Сохраняет однократное решение человека и пробуждает ожидающий вызов. */
   async resolve(approvalId: string, allow: boolean, previewToken?: string): Promise<void> {
     const run = this.store.list().find((item) => item.approvals[approvalId]);
     if (!run) throw new Error('Unknown approval');
@@ -168,6 +174,7 @@ export class FileApprovalService implements ApprovalService {
     });
     this.waiters.get(approvalId)?.();
   }
+  /** Возвращает нерешённые запросы разрешений из работающих и приостановленных задач. */
   pending(): Approval[] {
     return this.store
       .list()

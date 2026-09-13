@@ -8,9 +8,11 @@ export function activity(): { start(text: string): void; stop(text: string): voi
     isSilent: !process.stdout.isTTY,
   });
   return {
+    /** Показывает индикатор, оставляя обработку клавиш текущему экрану. */
     start(text) {
       spinner.start(text);
     },
+    /** Завершает индикатор и оставляет итоговую строку на экране. */
     stop(text) {
       spinner.stopAndPersist({ symbol: '·', text });
     },

@@ -6,6 +6,7 @@ import { hash } from '../../shared/primitives.js';
 import { atomicJson } from '../../sessions/files.js';
 import { privateDirectory } from '../local-channel.js';
 
+/** Разделяет ключи разных адресов и провайдеров, не включая секрет в идентификатор. */
 export const connectionId = (profile: Profile): string =>
   hash({ provider: profile.provider, baseUrl: profile.baseUrl, env: profile.apiKeyEnv });
 export interface CredentialEntry {
@@ -14,6 +15,7 @@ export interface CredentialEntry {
   deletePassword(): Promise<boolean>;
 }
 export type CredentialFactory = (account: string) => Promise<CredentialEntry>;
+/** Загружает системное хранилище по требованию, чтобы его отсутствие не мешало работе без ключей. */
 const nativeEntry: CredentialFactory = async (account) => {
   const { AsyncEntry } = await import('@napi-rs/keyring');
   const entry = new AsyncEntry('Modular Harness', account);
@@ -30,9 +32,11 @@ export class CredentialStore {
     private readonly directory: string,
     private readonly entry: CredentialFactory = nativeEntry,
   ) {}
+  /** Разделяет записи ключей по каталогу состояния и подключению. */
   private account(profile: Profile): string {
     return hash(resolve(this.directory)) + ':' + connectionId(profile);
   }
+  /** Читает только идентификаторы ключей, явно сохранённых через Harness. */
   private async enrolled(): Promise<string[]> {
     try {
       return z
@@ -43,11 +47,13 @@ export class CredentialStore {
       throw error;
     }
   }
+  /** Возвращает ключ лишь для зарегистрированного подключения. */
   async get(profile: Profile): Promise<string | undefined> {
     const account = this.account(profile);
     if (!(await this.enrolled()).includes(account)) return undefined;
     return (await this.entry(account)).getPassword();
   }
+  /** Сначала сохраняет секрет в системе, затем фиксирует его идентификатор без значения. */
   async save(profile: Profile, value: string): Promise<void> {
     await privateDirectory(this.directory);
     const accounts = await this.enrolled(),
@@ -57,6 +63,7 @@ export class CredentialStore {
       ...new Set([...accounts, account]),
     ]);
   }
+  /** Удаляет секрет из системного хранилища и убирает его локальный идентификатор. */
   async forget(profile: Profile): Promise<void> {
     const accounts = await this.enrolled(),
       account = this.account(profile);

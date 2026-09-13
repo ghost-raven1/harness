@@ -9,6 +9,7 @@ export const delegateSchema = z
   .strict();
 export const awaitSchema = z.object({ agentId: z.string() }).strict();
 export const handoffSchema = z.object({ role: z.string(), reason: z.string().min(1) }).strict();
+/** Описывает аргументы управляющего инструмента без произвольных дополнительных полей. */
 const shape = (
   properties: Record<string, unknown>,
   required: string[],
@@ -55,6 +56,7 @@ export function configuredControlDefinitions(config: Config): ToolDefinition[] {
     return tool;
   });
 }
+/** Создаёт отдельную историю роли и наследует весь потолок прав родительской ветки. */
 export function newAgent(
   role: string,
   task: string,
@@ -80,6 +82,7 @@ export function newAgent(
     collectedChildren: [],
   };
 }
+/** Проверяет существование роли, глубину и свободное место в команде перед её созданием. */
 export function checkDelegation(run: RunRecord, parent: AgentState, role: string): void {
   if (!Object.hasOwn(run.config.value.roles, role)) throw new Error('Unknown role: ' + role);
   if (parent.depth >= run.config.value.limits.depth) throw new Error('Delegation depth exhausted');

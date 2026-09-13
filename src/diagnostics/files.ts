@@ -14,6 +14,7 @@ export async function checkDiagnosticFile(path: string): Promise<void> {
   }
 }
 
+/** Создаёт закрытый каталог и отвергает ссылку вместо его последнего компонента. */
 export async function diagnosticDirectory(path: string): Promise<void> {
   await mkdir(path, { recursive: true, mode: 0o700 });
   const value = await lstat(path);

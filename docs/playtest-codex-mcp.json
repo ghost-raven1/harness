@@ -1,9 +1,0 @@
-{
-  "checkedAt": "2026-09-11T20:51:52.343Z",
-  "registered": true,
-  "handshake": true,
-  "tools": ["harness.cancel", "harness.run", "harness.status"],
-  "serviceReachable": true,
-  "profile": "codex",
-  "model": "gpt-6-astra"
-}

@@ -267,7 +267,7 @@ it('широкие Unicode-символы и длинный путь не лом
     workspace: '/Projects/東京/研究',
     result: 'Проверка 日本語 👩‍💻 '.repeat(70),
   });
-  const frame = taskFrame(feed, 48, 24, 'text', 0);
+  const frame = terminalText(taskFrame(feed, 48, 24, 'text', 0));
   expect(frame.split('\n').every((row) => stringWidth(row) < 48)).toBe(true);
   expect(frame).toContain('Исследуй');
   expect(frame).toContain('Последний ответ модели');

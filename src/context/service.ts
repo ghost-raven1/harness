@@ -15,12 +15,14 @@ export function estimate(value: unknown): number {
 }
 export class ContextService {
   constructor(private readonly learning: LearningStore) {}
+  /** Выбирает профиль текущей роли или профиль, закреплённый за запуском. */
   profile(run: RunRecord, agent: AgentState): { id: string; profile: Profile } {
     const id = run.config.value.roles[agent.role]?.modelProfile ?? run.profile;
     const profile = run.config.value.profiles[id];
     if (!profile) throw new Error('Unknown model profile: ' + id);
     return { id, profile };
   }
+  /** Собирает инструкции и контекст в порядке приоритетов, завершая актуальным напоминанием. */
   build(run: RunRecord, agent: AgentState, tools: ToolDefinition[]): ChatMessage[] {
     const config = run.config.value;
     const role = config.roles[agent.role]!;
@@ -75,15 +77,21 @@ export class ContextService {
       }
     }
     messages.push(...agent.messages);
+    const latestMessage =
+      agent.id === run.rootAgentId
+        ? run.userMessages?.filter((item) => !!item.deliveredAt).at(-1)?.content
+        : undefined;
     messages.push({
       role: 'user',
       content:
         '[HARNESS REMINDER, not a new human request]\nCurrent task: ' +
         agent.task +
+        (latestMessage ? '\nLatest user clarification: ' + latestMessage : '') +
         '\nRespect enforced permissions. Use structured tools. Finish only after your delegated work is resolved.',
     });
     return messages;
   }
+  /** Сравнивает оценку входа с порогом сжатия после резерва ответа. */
   needsCompaction(run: RunRecord, agent: AgentState, tools: ToolDefinition[]): boolean {
     const { profile } = this.profile(run, agent);
     return (
@@ -91,6 +99,7 @@ export class ContextService {
       (profile.contextTokens - profile.outputTokens) * 0.75
     );
   }
+  /** Отклоняет запрос, если обязательный контекст превышает доступное окно модели. */
   assertFits(run: RunRecord, agent: AgentState, tools: ToolDefinition[]): void {
     const { profile } = this.profile(run, agent);
     if (
@@ -100,6 +109,7 @@ export class ContextService {
       throw new Error('CONTEXT_LIMIT: mandatory context does not fit after compaction');
     }
   }
+  /** Сворачивает завершённую историю, сохраняя последний обмен целиком и проверяя ответ-сводку. */
   async compact(
     run: RunRecord,
     agent: AgentState,

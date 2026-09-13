@@ -212,6 +212,7 @@ export async function createApplication(
       runtime,
       nest.get(ToolScheduler),
     ),
+    /** Останавливает задачи и обучение, затем закрывает MCP, контейнер и журнал диагностики. */
     async close() {
       await runtime.close();
       await learning.close();

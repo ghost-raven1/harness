@@ -68,11 +68,15 @@ export interface LearningState {
 }
 /** Хранит проверяемые уроки, очередь и неизменяемое содержимое выпусков. */
 export interface LearningStore {
+  /** Возвращает независимую копию текущего состояния обучения. */
   read(): LearningState;
+  /** Последовательно сохраняет изменение состояния до разрешения обещания. */
   update(change: (state: LearningState) => void): Promise<void>;
+  /** Выбирает уроки закреплённой версии для конкретной папки, роли и профиля. */
   lessons(version: string, workspace: string, role: string, profile: string): string[];
 }
 /** Сравнивает версии на доверенных случаях и возвращает проверяемый отчёт. */
 export interface LearningEvaluator {
+  /** Возвращает результаты доверенных проверок; сам отчёт не публикует новую версию. */
   evaluate(candidate: LearningCandidate): Promise<EvaluationReport>;
 }

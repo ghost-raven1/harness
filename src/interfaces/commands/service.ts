@@ -8,6 +8,7 @@ import { note } from '../ui.js';
 import { message } from '../../shared/primitives.js';
 import type { CliContext } from '../types.js';
 
+/** Удерживает сервис до сигнала остановки и дожидается корректного закрытия. */
 async function runService(context: CliContext, config: string | undefined): Promise<void> {
   assertRuntime();
   const service = await serve(configFile(config), context.directory());

@@ -10,12 +10,13 @@ import { toolOutputValidator } from './output-validation.js';
 /** В реестр попадают только внешние инструменты с явной классификацией. */
 export class McpClientService {
   private readonly clients: Client[] = [];
+  /** Подключает настроенные MCP-серверы и регистрирует разрешённые инструменты со всех страниц каталога. */
   async connect(config: Config, registry: ToolRegistry): Promise<void> {
     try {
       for (const server of config.tools.mcp) {
         const jsonSchemaValidator = new AjvJsonSchemaValidator();
         const client = new Client(
-          { name: 'modular-harness', version: '0.1.0' },
+          { name: 'modular-harness', version: '0.2.0' },
           { jsonSchemaValidator },
         );
         this.clients.push(client);
@@ -64,6 +65,7 @@ export class McpClientService {
                 schema: tool.inputSchema,
                 effect,
               },
+              /** Проверяет ответ MCP; ошибку после запроса записи считает неизвестным исходом. */
               async execute(args, context) {
                 try {
                   const result = await client.callTool(
@@ -97,6 +99,7 @@ export class McpClientService {
       throw error;
     }
   }
+  /** Закрывает все соединения, не прерывая очистку из-за ошибки одного клиента. */
   async close(): Promise<void> {
     await Promise.allSettled(this.clients.splice(0).map((client) => client.close()));
   }

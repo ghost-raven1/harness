@@ -31,6 +31,7 @@ export const runInputSchema = z
     'Parent run requires a session',
   );
 export type RunInput = z.infer<typeof runInputSchema>;
+/** Выделяет настройки общих сервисов, несовместимые с продолжением без перезапуска. */
 export function serviceFingerprint(value: ConfigSnapshot['value']): string {
   return hash({
     mcp: value.tools.mcp,
@@ -49,6 +50,7 @@ export class RunFactory {
     private readonly learning: LearningStore,
     private readonly iterations: IterationSettings,
   ) {}
+  /** Перечитывает авторскую конфигурацию для нового запуска либо возвращает тестовый снимок. */
   private currentConfig(): Promise<ConfigSnapshot> {
     return this.configFile ? loadConfig(this.configFile) : Promise.resolve(this.initialConfig);
   }
@@ -110,6 +112,9 @@ export class RunFactory {
         ...prior.messages,
         ...interrupted,
         ...this.humanResolutions(sessionRuns),
+        ...(last.userMessages ?? [])
+          .filter((item) => !item.deliveredAt)
+          .map((item): ChatMessage => ({ role: 'user', content: item.content })),
         ...agent.messages,
       ];
       agent.completedCalls = prior.messages.flatMap(

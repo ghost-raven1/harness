@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { syncDirectory } from '../../sessions/files.js';
 import type { StatusView } from '../types.js';
 
+/** Переводит сбой записи в понятную причину, сохраняя исходный код ошибки. */
 function exportError(error: unknown): Error {
   const code = (error as NodeJS.ErrnoException).code;
   const explanation =

@@ -29,6 +29,7 @@ const keyPages: Record<Profile['provider'], string> = {
   codex: 'Вход в аккаунт через официальный клиент Codex.',
 };
 
+/** Использует ключ окружения или системного хранилища; новый ключ запрашивает скрыто. */
 export async function enterKey(
   profile: Profile,
   keys: SessionKeys,

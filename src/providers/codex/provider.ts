@@ -25,9 +25,11 @@ export class CodexModelProvider implements ModelProvider {
     private readonly threadOverrides: JsonObject = {},
   ) {}
 
+  /** Выполняет запрос Codex с общими правилами повторов и отмены. */
   generate(request: ModelRequest): Promise<ModelOutput> {
     return retryModelRequest(request, () => this.once(request));
   }
+  /** Собирает ответ временной сессии и останавливает Codex до передачи вызовов Harness. */
   private async once(request: ModelRequest): Promise<ModelOutput> {
     const directory = await mkdtemp(join(tmpdir(), 'harness-codex-'));
     const timeout = deadline(request.signal, request.profile.timeoutMs);

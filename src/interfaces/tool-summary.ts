@@ -1,10 +1,12 @@
 import type { ToolInvocation } from '../sessions/types.js';
 
+/** Приводит неизвестное значение к объекту для безопасного предпросмотра. */
 function object(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 }
+/** Разбирает JSON результата, не прерывая интерфейс из-за обычного текста. */
 function parse(value?: string): unknown {
   try {
     return value === undefined ? undefined : JSON.parse(value);
@@ -12,11 +14,13 @@ function parse(value?: string): unknown {
     return undefined;
   }
 }
+/** Готовит однострочный предпросмотр текста или числа заданной длины. */
 function short(value: unknown, limit = 150): string {
   if (typeof value !== 'string' && typeof value !== 'number') return '';
   const text = String(value).replace(/\s+/g, ' ').trim();
   return text.length > limit ? text.slice(0, limit - 1) + '…' : text;
 }
+/** Подсчитывает типы записей и показывает первые имена в читаемом виде. */
 function directorySummary(entries: unknown[]): string {
   const rows = entries.map(object);
   const folders = rows.filter((row) => row.directory === true && row.symlink !== true);

@@ -43,6 +43,7 @@ export class ReaderState {
     this.tabId = snapshot.tabs[0]?.id ?? '';
   }
 
+  /** Обновляет текст, сохраняя существующую вкладку и положение чтения. */
   update(snapshot: ReaderSnapshot): void {
     if (!snapshot.tabs.some((tab) => tab.id === this.tabId)) {
       this.tabId = snapshot.tabs[0]?.id ?? '';
@@ -53,14 +54,17 @@ export class ReaderState {
     this.error = undefined;
   }
 
+  /** Сохраняет читаемую ошибку обновления поверх последнего доступного текста. */
   failed(error: unknown): void {
     this.error = 'Обновление: ' + explainError(error);
   }
 
+  /** Возвращает действие текущего снимка, включая переход к частям большого ответа. */
   get actionLabel(): string | undefined {
     return this.snapshot.actionLabel;
   }
 
+  /** Переключает вкладки и прокрутку с учётом режима следования за концом текста. */
   key(key: Pick<Key, 'name' | 'shift'>): void {
     const tabs = this.snapshot.tabs;
     if (key.name === 'tab' || key.name === 'left' || key.name === 'right') {
@@ -87,6 +91,7 @@ export class ReaderState {
     this.offset = Math.max(0, Math.min(this.offset, this.maximum));
   }
 
+  /** Пересчитывает предел прокрутки после изменения текста или размеров окна. */
   frame(title: string, width: number, height: number, options: ReaderOptions = {}): string {
     const { tabs, subtitle, notice } = this.snapshot;
     const tab = Math.max(

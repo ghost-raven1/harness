@@ -35,10 +35,12 @@ export class MenuSelection<T> {
   constructor(initial?: T) {
     this.value = initial;
   }
+  /** Сохраняет выбор по значению; исчезнувший пункт не заменяется без действия пользователя. */
   update(options: LiveOption<T>[], initial = false): void {
     if (!options.some((item) => item.value === this.value))
       this.value = initial ? options[0]?.value : undefined;
   }
+  /** Перемещает выбор циклически по актуальному набору пунктов. */
   move(options: LiveOption<T>[], delta: number): void {
     const index = options.findIndex((item) => item.value === this.value);
     const next =

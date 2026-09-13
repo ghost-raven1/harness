@@ -30,6 +30,7 @@ export class UsageLedger {
     private readonly store: FileSessionStore,
     private readonly date = () => new Date().toISOString().slice(0, 10),
   ) {}
+  /** Загружает учёт один раз; повреждённый файл блокирует новые запросы к API. */
   private async load(): Promise<void> {
     if (this.loaded) return;
     try {
@@ -44,10 +45,12 @@ export class UsageLedger {
     }
     this.loaded = true;
   }
+  /** Обновляет учёт в памяти только после атомарной записи на диск. */
   private async save(next: Ledger): Promise<void> {
     await atomicJson(join(this.store.directory, 'usage.json'), next);
     this.state = next;
   }
+  /** Возвращает запись суток UTC, создавая начальные нулевые счётчики. */
   private day(state: Ledger, date: string) {
     return (state.days[date] ??= {
       tasks: 0,
@@ -57,6 +60,7 @@ export class UsageLedger {
       extra: 0,
     });
   }
+  /** Возвращает расход выбранной задачи и суток без токеновых ограничений. */
   async status(runId?: string) {
     return this.serial.run(async () => {
       await this.load();
@@ -74,6 +78,7 @@ export class UsageLedger {
       };
     });
   }
+  /** Оборачивает модель предварительным учётом нагрузки и сохранением фактического расхода. */
   provider(source: ModelProvider, runId?: string): ModelProvider {
     return {
       generate: async (request) => {
@@ -93,6 +98,7 @@ export class UsageLedger {
       },
     };
   }
+  /** Записывает оценку запроса с запасом на ответ и повторы до обращения к провайдеру. */
   private reserve(request: ModelRequest, runId?: string): Promise<string> {
     return this.serial.run(async () => {
       await this.load();

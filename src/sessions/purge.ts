@@ -40,6 +40,7 @@ export class SessionPurge {
     private readonly scheduler: ToolScheduler,
   ) {}
 
+  /** Вычисляет состав удаления, причины блокировки и привязанный к данным токен. */
   async preview(runId: string): Promise<PurgePreview> {
     const { runs, state, selection } = this.plan(runId);
     const runIds = runs.map((run) => run.id);
@@ -181,6 +182,7 @@ export class SessionPurge {
     });
   }
 
+  /** Выбирает все этапы беседы и связанные с ними знания. */
   private plan(runId: string) {
     const sessionId = this.sessions.get(runId).sessionId;
     const runs = this.sessions.list(true).filter((run) => run.sessionId === sessionId);
@@ -209,6 +211,7 @@ export async function recoverPurges(directory: string): Promise<void> {
   }
 }
 
+/** Подсчитывает записи внутреннего каталога; отсутствующий каталог даёт ноль. */
 async function fileCount(directory: string): Promise<number> {
   try {
     return (await readdir(directory)).length;

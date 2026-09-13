@@ -8,6 +8,7 @@ import { liveSelect } from './live-select.js';
 import { page } from './screen.js';
 import { readText } from './text-reader.js';
 
+/** Различает настройку новых задач и расход текущей порции шагов. */
 function summary(status: IterationStatus): string {
   const run = status.run;
   if (!run)
@@ -29,6 +30,7 @@ function summary(status: IterationStatus): string {
     .join('\n');
 }
 
+/** Отклоняет дробные, отрицательные и небезопасно большие пределы шагов. */
 function validateLimit(value: string): string | undefined {
   if (!/^\d+$/.test(value.trim()) || !Number.isSafeInteger(Number(value)) || Number(value) < 1)
     return 'Введите положительное целое число, не больше ' + Number.MAX_SAFE_INTEGER + '.';

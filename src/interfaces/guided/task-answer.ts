@@ -4,6 +4,7 @@ import { isMissingResource } from '../../shared/resource-errors.js';
 import { readText, type ReaderSnapshot } from './text-reader.js';
 import { showPagedAnswer } from './paged-answer.js';
 
+/** Отличает полный ответ от первой части и предлагает отдельное чтение большого текста. */
 function answerSnapshot(status: StatusView): ReaderSnapshot {
   return {
     tabs: [{ id: 'answer', label: 'Ответ', text: status.result ?? 'Ответ ещё не получен.' }],

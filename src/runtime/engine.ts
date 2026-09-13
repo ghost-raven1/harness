@@ -22,6 +22,9 @@ import { AgentCoordinator } from '../agents/coordinator.js';
 import { AgentLoop } from './agent-loop.js';
 import { RunFactory, serviceFingerprint, type RunInput } from './run-factory.js';
 import { abort, message } from '../shared/primitives.js';
+import { RunInbox, hasPendingMessages, type RunMessageInput } from './messages.js';
+
+class PendingMessagesError extends Error {}
 
 export { runInputSchema, type RunInput } from './run-factory.js';
 
@@ -53,12 +56,15 @@ export class HarnessRuntime {
   private readonly agents: AgentCoordinator;
   private readonly loop: AgentLoop;
   private readonly factory: RunFactory;
+  private readonly inbox: RunInbox;
   readonly store: FileSessionStore;
   private readonly initialConfig: ConfigSnapshot;
+  /** Вызывается после остановки дерева; по умолчанию завершение не запускает дополнительные действия. */
   private terminal: (runId: string) => Promise<void> = async () => undefined;
 
   constructor(services: RuntimeServices) {
     this.store = services.store;
+    this.inbox = new RunInbox(services.store);
     this.usage = new UsageLedger(services.store);
     this.iterations = new IterationSettings(services.store.directory);
     this.initialConfig = services.initialConfig;
@@ -101,9 +107,11 @@ export class HarnessRuntime {
     });
   }
 
+  /** Назначает обработчик завершения для диагностики и очереди обучения. */
   onTerminal(listener: (runId: string) => Promise<void>): void {
     this.terminal = listener;
   }
+  /** Показывает незавершённое исполнение, включая остановку и завершающие обработчики. */
   busy(): boolean {
     return this.executions.size > 0;
   }
@@ -115,18 +123,33 @@ export class HarnessRuntime {
     return { runId: run.id, sessionId: run.sessionId };
   }
 
+  /** Сохраняет уточнение для следующего шага текущего запуска. */
+  sendMessage(input: RunMessageInput) {
+    return this.inbox.send(input);
+  }
+
+  /** Запускает корень и координирует финализацию, паузы и остановку дочерних веток. */
   private launch(runId: string): void {
     if (this.executions.has(runId)) throw new Error('Run already executing');
     const controller = new AbortController();
     const done = Promise.resolve().then(async () => {
       try {
-        await this.loop.run(runId, this.store.get(runId).rootAgentId, controller.signal);
-        const root = this.store.get(runId);
-        abort(controller.signal);
-        await this.store.mutate(runId, 'run.completed', {}, (run) => {
-          run.status = 'completed';
-          run.result = root.agents[root.rootAgentId]!.result;
-        });
+        while (true) {
+          await this.loop.run(runId, this.store.get(runId).rootAgentId, controller.signal);
+          abort(controller.signal);
+          try {
+            await this.store.mutate(runId, 'run.completed', {}, (run) => {
+              abort(controller.signal);
+              // Приём сообщения и финализация используют один журнал: принятое уточнение не теряется.
+              if (hasPendingMessages(run)) throw new PendingMessagesError();
+              run.status = 'completed';
+              run.result = run.agents[run.rootAgentId]!.result;
+            });
+            break;
+          } catch (error) {
+            if (!(error instanceof PendingMessagesError)) throw error;
+          }
+        }
       } catch (caught) {
         const error = this.executions.get(runId)?.stopReason ?? caught;
         const providerPause = error instanceof ProviderError ? error.limit : undefined;
@@ -227,6 +250,14 @@ export class HarnessRuntime {
       delete state.error;
       for (const agent of Object.values(state.agents))
         if (agent.status !== 'completed' && agent.status !== 'failed') {
+          let parent = agent.parentId ? state.agents[agent.parentId] : undefined;
+          while (parent && !['completed', 'failed'].includes(parent.status))
+            parent = parent.parentId ? state.agents[parent.parentId] : undefined;
+          if (parent) {
+            // Завершённая ветка не запустит потомков повторно через agents.await.
+            agent.status = 'cancelled';
+            continue;
+          }
           agent.status = 'running';
           delete agent.error;
         }
@@ -271,6 +302,7 @@ export class HarnessRuntime {
     });
   }
 
+  /** Записывает проверенный человеком исход неизвестной операции без её повторения. */
   async resolveInvocation(
     runId: string,
     invocationId: string,
@@ -289,9 +321,11 @@ export class HarnessRuntime {
       invocation.result = result;
     });
   }
+  /** Дожидается завершения исполнителей выбранной задачи и передаёт ошибку сохранения. */
   async wait(runId: string): Promise<void> {
     await this.executions.get(runId)?.done;
   }
+  /** Отменяет принадлежащие runtime запуски и дожидается завершения остановки. */
   async close(): Promise<void> {
     await Promise.all([...this.executions.keys()].map((runId) => this.cancel(runId)));
   }

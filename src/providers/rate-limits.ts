@@ -16,6 +16,7 @@ const rateCodes = new Set([
   'too_many_requests',
 ]);
 
+/** Нормализует объект ошибки для чтения полей; массивы и простые значения отбрасывает. */
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -57,6 +58,7 @@ export function retryAfter(headers?: Record<string, string>, now = Date.now()): 
     : undefined;
 }
 
+/** Создаёт типизированную ошибку ограничения с причиной и подсказкой о продолжении. */
 export function limitError(limit: ProviderLimit): ProviderError {
   const description =
     limit.kind === 'quota'

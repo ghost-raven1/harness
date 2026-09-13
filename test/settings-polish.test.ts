@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
+import { stripVTControlCharacters } from 'node:util';
 import * as prompts from '@clack/prompts';
 import { settings } from '../src/interfaces/guided/settings.js';
 import { changeProject } from '../src/interfaces/guided/projects.js';
@@ -108,7 +109,9 @@ it('весь diff показывается до возврата токена п
   expect(await showFilePreview(load)).toBe('immutable-token');
   expect(load.mock.calls).toEqual([[0], [12000]]);
   expect(page).toHaveBeenCalledTimes(2);
-  expect(prompts.note).toHaveBeenLastCalledWith('+ конец', 'Изменения: файл.txt');
+  const [text, title] = vi.mocked(prompts.note).mock.calls.at(-1)!;
+  expect(stripVTControlCharacters(text ?? '')).toBe('+ конец');
+  expect(title).toBe('Изменения: файл.txt');
 });
 
 it('отмена просмотра не возвращает разрешение и не загружает следующую часть', async () => {

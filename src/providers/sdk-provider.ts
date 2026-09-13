@@ -17,12 +17,14 @@ export class SdkModelProvider implements ModelProvider {
   ) {
     this.limiter = new Semaphore(concurrency);
   }
+  /** Ожидает свободное место и выполняет запрос SDK с ограниченным числом повторов. */
   generate(request: ModelRequest): Promise<ModelOutput> {
     return this.limiter.use(
       () => retryModelRequest(request, () => this.once(request)),
       request.signal,
     );
   }
+  /** Собирает текст, вызовы и расход из полного потока SDK; обрыв возвращает как ошибку. */
   private async once(request: ModelRequest): Promise<ModelOutput> {
     const timeout = deadline(request.signal, request.profile.timeoutMs);
     try {

@@ -31,6 +31,7 @@ const rootFiles = [
   '.npmrc',
   '.nvmrc',
   '.gitignore',
+  '.gitattributes',
   '.dockerignore',
   '.prettierignore',
   '.prettierrc.json',

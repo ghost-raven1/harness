@@ -66,6 +66,7 @@ export async function loadConfig(file: string): Promise<ConfigSnapshot> {
   }
   return { value, hash: hash(value) };
 }
+/** Проверяет вложенность путей без обращения к файловой системе и разрешения символических ссылок. */
 export function isWithin(root: string, target: string, paths = path): boolean {
   const local = paths.relative(root, target);
   return (

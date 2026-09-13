@@ -45,6 +45,7 @@ export class FileDiagnosticLog {
   readonly retainedFiles = 3;
   readonly maxBytes: number;
 
+  /** Определяет расположение файлов и размер ротации внутри каталога состояния. */
   constructor(directory: string, options: { maxBytes?: number } = {}) {
     this.root = resolve(directory);
     this.settingsFile = join(this.root, 'diagnostics.json');
@@ -53,6 +54,7 @@ export class FileDiagnosticLog {
     this.maxBytes = options.maxBytes ?? 1024 * 1024;
   }
 
+  /** Восстанавливает настройку записи и проверяет пути без остановки приложения при ошибке. */
   async initialize(): Promise<void> {
     await this.serial.run(async () => {
       try {
@@ -73,6 +75,7 @@ export class FileDiagnosticLog {
     });
   }
 
+  /** Возвращает состояние записи и понятную причину последнего отказа файловой системы. */
   status(): DiagnosticStatus {
     return {
       enabled: this.enabled,
@@ -84,6 +87,7 @@ export class FileDiagnosticLog {
     };
   }
 
+  /** Сохраняет включение или отключение журнала для последующих запусков сервиса. */
   async setEnabled(enabled: boolean): Promise<DiagnosticStatus> {
     await this.serial.run(async () => {
       if (this.closed) return;
@@ -101,6 +105,7 @@ export class FileDiagnosticLog {
     return this.status();
   }
 
+  /** Записывает только разрешённые поля события и ограничивает размер журнала ротацией. */
   async record(event: DiagnosticEvent): Promise<void> {
     const parsed = eventSchema.safeParse(event);
     if (!parsed.success) return;
@@ -124,15 +129,18 @@ export class FileDiagnosticLog {
     });
   }
 
+  /** Дожидается уже поставленных в очередь записей. */
   flush(): Promise<void> {
     return this.serial.run(async () => undefined);
   }
+  /** Завершает очередь и запрещает дальнейшие записи. */
   close(): Promise<void> {
     return this.serial.run(async () => {
       this.closed = true;
     });
   }
 
+  /** Проверяет каталоги и все файлы ротации перед изменением журнала. */
   private async prepareFiles(): Promise<void> {
     await diagnosticDirectory(this.root);
     await diagnosticDirectory(this.directory);
@@ -140,10 +148,12 @@ export class FileDiagnosticLog {
       await checkDiagnosticFile(this.rotatedFile(index));
   }
 
+  /** Возвращает путь текущего журнала или одной из сохраняемых предыдущих частей. */
   private rotatedFile(index: number): string {
     return index === 0 ? this.file : join(this.directory, 'harness.' + index + '.jsonl');
   }
 
+  /** Сдвигает сохранённые части журнала, удаляя только самую старую. */
   private async rotate(): Promise<void> {
     await rm(this.rotatedFile(this.retainedFiles - 1), { force: true });
     for (let index = this.retainedFiles - 2; index >= 0; index--) {
@@ -155,6 +165,7 @@ export class FileDiagnosticLog {
     }
   }
 
+  /** Преобразует технический отказ в подсказку без содержимого исходного исключения. */
   private failure(error: unknown): void {
     this.error =
       error instanceof UnsafeDiagnosticPath

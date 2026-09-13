@@ -9,6 +9,7 @@ export type ViewKey =
   | 'back'
   | 'cancel'
   | 'enter'
+  | 'message'
   | 'tab'
   | 'up'
   | 'down'
@@ -25,6 +26,7 @@ export function taskFrame(
   offset: number,
   lines = contentRows(feed, taskGeometry(width).content, tab),
   connectionLost = false,
+  notice = '',
 ): string {
   const status = feed.status;
   const geometry = taskGeometry(width);
@@ -40,7 +42,18 @@ export function taskFrame(
       .slice(0, Math.max(1, height - 1))
       .join('\n');
   const header = taskHeader(status, geometry.width, height, tab);
-  const footer = taskFooter(geometry.width, active);
+  const writable =
+    !!status &&
+    !status.deletedAt &&
+    ['running', 'awaiting_approval', 'paused'].includes(status.status);
+  const footer = taskFooter(geometry.width, active, writable);
+  if (notice)
+    footer.unshift(
+      ...wrapAnsi(notice, geometry.content, { hard: true, trim: false })
+        .split('\n')
+        .slice(0, 2)
+        .map((line) => boxLine(line, geometry.width)),
+    );
   const room = Math.max(1, height - header.length - footer.length - 3);
   const visible = contentWindow(lines, room, offset, geometry.content);
   const hint = connectionLost ? 'Нет связи · повторяем подключение' : '';
@@ -59,6 +72,7 @@ export function taskFrame(
 export class TaskScreen {
   readonly feed: TaskFeed;
   connectionLost = false;
+  notice = '';
   private tab: FeedTab = 'all';
   private offset = 0;
   private closed = false;
@@ -75,6 +89,7 @@ export class TaskScreen {
     this.timer = setInterval(() => this.render(), 250);
     process.stdout.on('resize', this.render);
   }
+  /** Меняет вкладку или позицию чтения, оставляя действия задачи внешнему контроллеру. */
   key(key: ViewKey): void {
     if (key === 'tab') {
       this.tab =
@@ -92,6 +107,7 @@ export class TaskScreen {
     if (key === 'end') this.offset = 0;
     this.render();
   }
+  /** Перерисовывает экран без сдвига выбранного фрагмента при поступлении новых событий. */
   render = (): void => {
     if (this.closed || !this.draw) return;
     const width = process.stdout.columns || 80;
@@ -112,9 +128,11 @@ export class TaskScreen {
         this.offset,
         this.lines,
         this.connectionLost,
+        this.notice,
       ),
     );
   };
+  /** Освобождает таймер, обработчик размера и область перерисовки при уходе с экрана. */
   close(): void {
     if (this.closed) return;
     this.closed = true;

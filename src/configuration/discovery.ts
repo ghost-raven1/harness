@@ -19,6 +19,7 @@ export function findConfig(start = process.cwd()): string | undefined {
   }
 }
 
+/** Возвращает явный путь или найденный конфиг; при отсутствии объясняет способ настройки. */
 export function configFile(explicit?: string): string {
   const found = explicit ? resolve(explicit) : findConfig();
   if (!found)

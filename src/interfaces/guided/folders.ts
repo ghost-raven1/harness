@@ -6,6 +6,7 @@ import { selected } from '../ui.js';
 import { liveSelect } from './live-select.js';
 import { page } from './screen.js';
 
+/** Приводит вставленный из терминала путь к форме, пригодной для выбора папки. */
 export function pastedPath(value: string): string {
   const unquoted = value.trim().replace(/^(["'])(.*)\1$/, '$2');
   if (unquoted === '~') return homedir();

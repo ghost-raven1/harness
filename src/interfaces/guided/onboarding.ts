@@ -89,6 +89,7 @@ export async function onboarding(
   return { configFile, workspace, profile: profile.provider };
 }
 
+/** Загружает выбранное подключение и запрашивает недостающий ключ. */
 export async function unlockProfile(
   preferences: Preferences,
   keys: SessionKeys,

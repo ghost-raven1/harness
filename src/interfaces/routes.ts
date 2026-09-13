@@ -6,6 +6,7 @@ import { queryHistory } from '../sessions/history.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Application } from './application.js';
 import { runInputSchema } from '../runtime/engine.js';
+import { runMessageSchema } from '../runtime/messages.js';
 import { taskEvent } from './task-events.js';
 import { saveLesson } from './guided/knowledge-format.js';
 import { join } from 'node:path';
@@ -24,6 +25,7 @@ export const statusInputSchema = z
   })
   .strict();
 
+/** Собирает состояние задачи и независимые страницы событий и итогового ответа. */
 export async function runStatus(
   app: Application,
   runId: string,
@@ -39,6 +41,7 @@ export async function runStatus(
     deletedAt: run.deletedAt,
     sessionId: run.sessionId,
     status: run.status,
+    pendingMessages: run.userMessages?.filter((item) => !item.deliveredAt).length ?? 0,
     ...resultFields(run.result, resultCursor),
     error: run.error,
     pauseReason: run.pauseReason,
@@ -80,6 +83,7 @@ export async function dispatch(app: Application, method: string, input: unknown)
   return app.diagnostics ? observeCommand(app.diagnostics, method, execute) : execute();
 }
 
+/** Проверяет вход локальной команды и вызывает соответствующий сервис приложения. */
 async function dispatchCommand(app: Application, method: string, input: unknown): Promise<unknown> {
   if (method.startsWith('files.')) return fileCommand(app, method, input);
   if (method.startsWith('drafts.')) return draftCommand(app, method, input);
@@ -149,6 +153,8 @@ async function dispatchCommand(app: Application, method: string, input: unknown)
     }
     case 'runtime.run':
       return app.runtime.start(runInputSchema.parse(input));
+    case 'runtime.message':
+      return app.runtime.sendMessage(runMessageSchema.parse(input));
     case 'runtime.result': {
       const args = runIdSchema.extend({ cursor: resultCursorSchema.default(0) }).parse(input);
       return textPage(app.sessions.get(args.runId).result ?? '', args.cursor);
@@ -355,7 +361,7 @@ async function dispatchCommand(app: Application, method: string, input: unknown)
     case 'system.info':
       return {
         configFile: app.configFile,
-        version: '0.1.0',
+        version: '0.2.0',
         node: process.version,
         state: app.directory,
         activeRuns: app.sessions

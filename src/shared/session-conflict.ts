@@ -11,6 +11,7 @@ export class SessionChangedError extends Error {
   }
 }
 
+/** Передаёт через IPC код конфликта и идентификатор последнего этапа беседы. */
 export function sessionConflictData(
   error: unknown,
 ): { code: 'SESSION_CHANGED'; latestRunId: string } | undefined {

@@ -27,6 +27,7 @@ export async function savePreferences(directory: string, value: Preferences): Pr
   );
 }
 
+/** Отсутствие настроек запускает мастер; повреждённый файл требует явной перенастройки. */
 export async function readPreferences(directory: string): Promise<Preferences | undefined> {
   try {
     return schema.parse(JSON.parse(await readFile(join(directory, 'desktop.json'), 'utf8')));

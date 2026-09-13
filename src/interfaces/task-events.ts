@@ -17,6 +17,11 @@ export function taskEvent(event: JournalEvent): StatusView['events'][number] {
     ({ title, detail } = toolSummary(invocation));
   } else if (approval) detail = approval.tool;
   else if (event.type === 'run.failed') detail = event.state.error;
+  if (event.type === 'user.message_queued') {
+    title = 'Сообщение сохранено в очереди';
+    detail = typeof payload.text === 'string' ? payload.text : undefined;
+  }
+  if (event.type === 'user.message_delivered') title = 'Сообщение добавлено в контекст модели';
   const model =
     event.type === 'model.completed' && !payload.requestId ? agent?.messages.at(-1) : undefined;
   return {
@@ -24,7 +29,7 @@ export function taskEvent(event: JournalEvent): StatusView['events'][number] {
     at: event.at,
     type: event.type,
     payload: event.payload,
-    role: agent?.role,
+    role: event.type === 'user.message_queued' ? 'Вы' : agent?.role,
     title,
     detail: detail?.slice(0, 1000),
     ...(model?.role === 'assistant'

@@ -7,7 +7,7 @@ import { resultCursorSchema } from './result-pages.js';
 
 /** stdout принадлежит протоколу; подтверждения и управление опытом здесь не экспортируются. */
 export function createMcpServer(directory: string): McpServer {
-  const server = new McpServer({ name: 'modular-harness', version: '0.1.0' });
+  const server = new McpServer({ name: 'modular-harness', version: '0.2.0' });
   const call = async (method: string, args: unknown) => {
     try {
       const result = await rpc<Record<string, unknown>>(directory, method, args);
@@ -77,6 +77,7 @@ export function createMcpServer(directory: string): McpServer {
   );
   return server;
 }
+/** Подключает MCP-мост к stdio, оставляя stdout только для протокола. */
 export async function runMcp(directory: string): Promise<void> {
   const server = createMcpServer(directory);
   await server.connect(new StdioServerTransport());

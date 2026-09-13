@@ -1,10 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 export type JsonObject = Record<string, unknown>;
+/** Создаёт независимый идентификатор записи или запроса. */
 export const id = (): string => randomUUID();
+/** Возвращает глубокую копию состояния, исключая изменения хранилища через внешние ссылки. */
 export const clone = <T>(value: T): T => structuredClone(value);
+/** Извлекает текст ошибки, включая значения, выброшенные вне Error. */
 export const message = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
+/** Сериализует значения с устойчивым порядком ключей для сравнения и хеширования. */
 export function stable(value: unknown): string {
   if (Array.isArray(value)) return '[' + value.map(stable).join(',') + ']';
   if (value && typeof value === 'object') {
@@ -19,8 +23,10 @@ export function stable(value: unknown): string {
   }
   return JSON.stringify(value) ?? 'null';
 }
+/** Вычисляет SHA-256 устойчивого представления для привязки запросов к содержимому. */
 export const hash = (value: unknown): string =>
   createHash('sha256').update(stable(value)).digest('hex');
+/** Прерывает текущий шаг, если внешний сигнал уже отменён. */
 export function abort(signal?: AbortSignal): void {
   if (signal?.aborted) throw new Error('CANCELLED');
 }
@@ -30,6 +36,7 @@ export class Semaphore {
   private active = 0;
   private readonly queue: Array<() => void> = [];
   constructor(private readonly limit: number) {}
+  /** Ожидает свободное место и освобождает его после успеха, ошибки или отмены. */
   async use<T>(work: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     abort(signal);
     await new Promise<void>((resolve, reject) => {
@@ -59,6 +66,7 @@ export class Semaphore {
 
 export class Serial {
   private tail: Promise<unknown> = Promise.resolve();
+  /** Ставит работу после предыдущей, сохраняя работоспособность очереди при ошибках. */
   run<T>(work: () => Promise<T>): Promise<T> {
     const next = this.tail.then(work, work);
     this.tail = next.catch(() => undefined);
@@ -78,6 +86,7 @@ export function deadline(
   if (parent?.aborted) cancel();
   return {
     signal: controller.signal,
+    /** Удаляет таймер и связь с родительским сигналом после окончания операции. */
     close() {
       clearTimeout(timer);
       parent?.removeEventListener('abort', cancel);

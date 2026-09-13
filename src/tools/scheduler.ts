@@ -13,6 +13,7 @@ export class ToolScheduler {
   private readers = 0;
   private writer = false;
   constructor(private readonly readLimit: number) {}
+  /** Ставит операцию в общую очередь; отмена снимает ещё не запущенное задание. */
   schedule<T>(effect: 'read' | 'write', work: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const cancel = (): void => {
@@ -39,6 +40,7 @@ export class ToolScheduler {
       this.pump();
     });
   }
+  /** Запускает допустимую группу чтений либо одну запись, сохраняя порядок барьеров. */
   private pump(): void {
     if (this.writer) return;
     while (this.queue.length) {

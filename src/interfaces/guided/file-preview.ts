@@ -71,6 +71,7 @@ export async function showFilePreview(
   }
 }
 
+/** Позволяет выбрать изменение и восстановить файл после проверки текущего содержимого. */
 export async function restoreFile(context: CliContext, runId: string): Promise<void> {
   const changeId = selected(
     await liveSelect({

@@ -50,6 +50,7 @@ export class DataReset {
     private readonly scheduler: ToolScheduler,
   ) {}
 
+  /** Собирает выбранный состав очистки, блокирующие операции и токен подтверждения. */
   async preview(input: DataResetScope): Promise<DataResetPreview> {
     const scope = dataResetScopeSchema.parse(input);
     const runs = this.sessions.list(true),
@@ -215,6 +216,7 @@ export async function recoverDataResets(directory: string): Promise<void> {
   }
 }
 
+/** Возвращает одинаковую квитанцию первичного и повторного подтверждения сброса. */
 function resetResult(record: DataResetRecord) {
   return {
     reset: true,

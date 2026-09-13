@@ -27,9 +27,11 @@ export class RunOutputStore {
       for (const runId of runIds) this.records.delete(runId);
     });
   }
+  /** Формирует имя отдельного журнала опубликованного вывода задачи. */
   private path(runId: string): string {
     return join(this.directory, 'output', runId + '.jsonl');
   }
+  /** Загружает и проверяет последовательность событий перед помещением в кэш. */
   private async load(runId: string): Promise<OutputEvent[]> {
     if (!this.records.has(runId)) {
       const events = (await readJournal<unknown>(this.path(runId))).map((row, index) => {
@@ -41,6 +43,7 @@ export class RunOutputStore {
     }
     return this.records.get(runId)!;
   }
+  /** Возвращает копию страницы вывода и следующий курсор без полного чтения клиентом. */
   async page(
     runId: string,
     cursor: number,
@@ -52,6 +55,7 @@ export class RunOutputStore {
       return { events: structuredClone(events), cursor: next, hasMore: records.length > next };
     });
   }
+  /** Присваивает номера и фиксирует пачку до обновления кэша вывода. */
   append(runId: string, events: NewEvent[]): Promise<void> {
     return this.serial.run(async () => {
       const records = await this.load(runId);
@@ -60,6 +64,7 @@ export class RunOutputStore {
       records.push(...rows);
     });
   }
+  /** Открывает отдельную запись потока для запроса модели в выбранной роли. */
   async begin(runId: string, agentId: string, role: string): Promise<ModelOutputWriter> {
     const writer = new ModelOutputWriter(this, runId, agentId, role);
     await writer.start();
@@ -84,6 +89,7 @@ export class ModelOutputWriter {
     private readonly agentId: string,
     private readonly role: string,
   ) {}
+  /** Создаёт метаданные фрагмента, сохраняя связь с запросом и агентом. */
   private event(type: OutputEvent['type'], text?: string): NewEvent {
     return {
       at: new Date().toISOString(),
@@ -94,9 +100,11 @@ export class ModelOutputWriter {
       ...(text === undefined ? {} : { text }),
     };
   }
+  /** Записывает начало запроса до появления первых фрагментов ответа. */
   async start(): Promise<void> {
     await this.store.append(this.runId, [this.event('started')]);
   }
+  /** Накапливает опубликованные фрагменты с ограничением предпросмотра и отложенной записью. */
   progress = (event: ModelProgress): void => {
     if (this.closed) return;
     if (event.type === 'retry') {
@@ -131,12 +139,14 @@ export class ModelOutputWriter {
       });
     }, 150);
   };
+  /** Последовательно записывает накопленную пачку, отделяя её от новых фрагментов. */
   private flush(): Promise<void> {
     const batch = this.pending.splice(0);
     return this.serial.run(async () => {
       if (batch.length) await this.store.append(this.runId, batch);
     });
   }
+  /** Закрывает поток, дописывает остаток и сообщает об ошибке сохранения. */
   async finish(output?: ModelOutput): Promise<void> {
     if (output) {
       if (!this.seen.text && output.text) this.progress({ type: 'text', text: output.text });

@@ -18,6 +18,7 @@ interface Options {
   apiKey: boolean;
 }
 
+/** Собирает параметры подключения и создаёт конфигурацию проекта без сохранения самого ключа. */
 export async function initialize(
   context: CliContext,
   directory: string | undefined,

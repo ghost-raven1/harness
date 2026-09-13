@@ -36,6 +36,7 @@ export interface StatusView {
   sessionId: string;
   workspace: string;
   status: RunStatus;
+  pendingMessages?: number;
   profile: string;
   turns: number;
   iterations?: import('../runtime/iterations.js').IterationStatus['run'];

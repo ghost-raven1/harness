@@ -134,6 +134,7 @@ export function registerDashboard(program: Command, context: CliContext): void {
   });
 }
 
+/** Сохраняет выбранные модель и папку, только если действующий сервис их допускает. */
 function validSelection(preferences: Preferences | undefined, info: ServiceInfo): Preferences {
   return {
     configFile: info.configFile ?? preferences?.configFile ?? '',
@@ -148,6 +149,7 @@ function validSelection(preferences: Preferences | undefined, info: ServiceInfo)
   };
 }
 
+/** Обновляет главное меню и передаёт действия специализированным экранам. */
 async function desktop(
   context: CliContext,
   preferences: Preferences,

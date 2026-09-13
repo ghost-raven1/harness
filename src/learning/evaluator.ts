@@ -19,12 +19,14 @@ import {
 
 /** Проверяет обе версии по три раза, исполняя только тестовые инструменты. */
 export class HeldOutEvaluator implements LearningEvaluator {
+  /** Получает сохранённые источники, учёт запросов и политику контрольных инструментов. */
   constructor(
     private readonly learning: LearningStore,
     private readonly sessions: FileSessionStore,
     private readonly budget: LearningBudget,
     private readonly policy: PolicyService,
   ) {}
+  /** Продолжает совместимый отчёт и сравнивает обе версии на независимых контрольных случаях. */
   async evaluate(candidate: LearningCandidate): Promise<EvaluationReport> {
     const run = this.sessions.get(candidate.sourceRunId);
     const suite = run.config.value.learning.cases.filter(
@@ -81,6 +83,7 @@ export class HeldOutEvaluator implements LearningEvaluator {
     return report;
   }
 
+  /** Повторно использует результаты только при прежней базовой версии и том же наборе проверок. */
   private async prepareReport(
     candidateId: string,
     baselineVersion: string,
@@ -95,6 +98,7 @@ export class HeldOutEvaluator implements LearningEvaluator {
     return report;
   }
 
+  /** Фиксирует отдельную копию отчёта после каждого завершённого сравнения. */
   private async saveReport(report: EvaluationReport): Promise<void> {
     const snapshot = structuredClone(report);
     await this.learning.update((state) => {
@@ -102,6 +106,7 @@ export class HeldOutEvaluator implements LearningEvaluator {
     });
   }
 
+  /** Проверяет один вариант на доверенных заглушках без обращения к реальным инструментам. */
   private async runCase(
     candidate: LearningCandidate,
     test: EvaluationCase,
@@ -119,6 +124,7 @@ export class HeldOutEvaluator implements LearningEvaluator {
           schema: tool.schema,
           effect: tool.effect,
         },
+        /** Возвращает доверенный результат контрольного случая без внешних побочных эффектов. */
         async execute() {
           return tool.result;
         },

@@ -4,6 +4,7 @@ import type { CliContext } from '../types.js';
 import { diagnose } from '../diagnostics.js';
 import { note } from '../ui.js';
 
+/** Печатает результаты локальной проверки и возвращает код ошибки при неготовом сервисе. */
 export async function showDiagnostics(context: CliContext, file?: string): Promise<void> {
   const report = await diagnose(context.directory(), file);
   if (context.json() || !process.stdout.isTTY) context.output(report);
@@ -25,6 +26,7 @@ export async function showDiagnostics(context: CliContext, file?: string): Promi
   if (!report.ready) process.exitCode = 1;
 }
 
+/** Подключает диагностику с необязательным явным манифестом конфигурации. */
 export function registerDoctorCommand(program: Command, context: CliContext): void {
   program
     .command('doctor')

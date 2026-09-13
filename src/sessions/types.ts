@@ -63,6 +63,7 @@ export interface RunRecord {
   learningVersion: string;
   status: RunStatus;
   rootAgentId: string;
+  userMessages?: RunUserMessage[];
   agents: Record<string, AgentState>;
   invocations: Record<string, ToolInvocation>;
   approvals: Record<string, Approval>;
@@ -79,6 +80,14 @@ export interface RunRecord {
   deletedAt?: string;
   result?: string;
   error?: string;
+}
+/** Уточнение сохраняется отдельно до безопасного включения в историю корневого агента. */
+export interface RunUserMessage {
+  id: string;
+  requestKey: string;
+  content: string;
+  receivedAt: string;
+  deliveredAt?: string;
 }
 export interface JournalEvent {
   seq: number;

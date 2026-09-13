@@ -32,6 +32,7 @@ export async function writeResetRecord(directory: string, record: DataResetRecor
   await assertRealDirectory(join(directory, 'resets'));
   await atomicJson(join(directory, 'resets', record.previewToken + '.json'), schema.parse(record));
 }
+/** Читает маркер по проверенному токену и сверяет его содержимое с именем файла. */
 export async function readResetRecord(
   directory: string,
   token: string,
@@ -44,6 +45,7 @@ export async function readResetRecord(
   if (value.previewToken !== token) throw new Error('Повреждён маркер очистки данных.');
   return value;
 }
+/** Находит незавершённые намерения очистки для восстановления при старте. */
 export async function pendingResetRecords(directory: string): Promise<DataResetRecord[]> {
   await assertRealDirectory(join(directory, 'resets'));
   const records: DataResetRecord[] = [];
@@ -84,6 +86,7 @@ export async function lessonExportIds(directory: string): Promise<string[]> {
   }
   return ids.sort();
 }
+/** Удаляет только штатные имена экспортов выбранных уроков и синхронизирует каталог. */
 export async function removeLessonExports(directory: string, ids: string[]): Promise<void> {
   const parent = join(directory, 'exports');
   await assertRealDirectory(parent);
@@ -135,6 +138,7 @@ export async function removeTaskStorage(directory: string): Promise<void> {
     await rm(join(directory, folder), { recursive: true, force: true });
   await syncDirectory(directory);
 }
+/** Возвращает имена записей или пустой список для отсутствующего каталога. */
 export async function names(directory: string): Promise<string[]> {
   try {
     return await readdir(directory);

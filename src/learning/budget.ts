@@ -5,11 +5,13 @@ export class LearningYield extends Error {}
 /** Учитывает расход обучения и уступает модели пользовательским задачам. */
 export class LearningBudget {
   private readonly controller = new AbortController();
+  /** Использует общий учёт обучения и проверку занятости пользовательскими задачами. */
   constructor(
     private readonly store: LearningStore,
     private readonly provider: ModelProvider,
     private readonly busy: () => boolean,
   ) {}
+  /** Учитывает запрос до отправки и не выполняет автоматических платных повторов. */
   async generate(request: ModelRequest): Promise<ModelOutput> {
     const amount =
       Buffer.byteLength(JSON.stringify({ messages: request.messages, tools: request.tools })) +
@@ -29,6 +31,7 @@ export class LearningBudget {
       profile: { ...request.profile, retries: 0 },
     });
   }
+  /** Отменяет текущие запросы при остановке сервиса обучения. */
   close(): void {
     this.controller.abort();
   }

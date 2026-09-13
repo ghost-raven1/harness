@@ -98,48 +98,51 @@ it('исход задачи сохраняет только проверенны
   ]);
 });
 
-it('лог не сохраняет произвольные имена, тела, ключи и сообщения ошибок; успешные опросы пропускаются', async () => {
-  const log = new FileDiagnosticLog(await temporary());
-  await log.initialize();
-  await log.setEnabled(true);
-  const secret = 'fixture-secret-that-must-not-be-written';
-  await log.record({
-    type: 'command.succeeded',
-    method: secret,
-    durationMs: 5,
-    task: secret,
-    args: { apiKey: secret },
-    result: secret,
-    env: secret,
-    stderr: secret,
-  } as DiagnosticEvent);
-  await log.record({ type: secret } as unknown as DiagnosticEvent);
-  const result = { token: secret, text: secret };
-  expect(await observeCommand(log, 'runtime.run', async () => result)).toBe(result);
-  await observeCommand(log, 'runtime.status', async () => result);
-  await observeCommand(log, 'diagnostics.status', async () => result);
-  const error = Object.assign(new Error(secret), { code: secret });
-  await expect(
-    observeCommand(log, secret, async () => {
-      throw error;
-    }),
-  ).rejects.toBe(error);
-  const contents = await readFile(log.file, 'utf8');
-  expect(contents).not.toContain(secret);
-  const events = contents
-    .trim()
-    .split('\n')
-    .map((line) => JSON.parse(line));
-  expect(events).toHaveLength(3);
-  expect(events.map((event) => event.method)).toEqual(['unknown', 'runtime.run', 'unknown']);
-  expect(events.at(-1).code).toBe('COMMAND_FAILED');
-  for (const event of events)
-    expect(
-      Object.keys(event).every((key) =>
-        ['at', 'type', 'method', 'durationMs', 'code'].includes(key),
-      ),
-    ).toBe(true);
-});
+it.each(['runtime.run', 'runtime.message'])(
+  'лог %s не сохраняет содержимое запросов и ошибок; успешные опросы пропускаются',
+  async (method) => {
+    const log = new FileDiagnosticLog(await temporary());
+    await log.initialize();
+    await log.setEnabled(true);
+    const secret = 'fixture-secret-that-must-not-be-written';
+    await log.record({
+      type: 'command.succeeded',
+      method: secret,
+      durationMs: 5,
+      task: secret,
+      args: { apiKey: secret },
+      result: secret,
+      env: secret,
+      stderr: secret,
+    } as DiagnosticEvent);
+    await log.record({ type: secret } as unknown as DiagnosticEvent);
+    const result = { token: secret, text: secret };
+    expect(await observeCommand(log, method, async () => result)).toBe(result);
+    await observeCommand(log, 'runtime.status', async () => result);
+    await observeCommand(log, 'diagnostics.status', async () => result);
+    const error = Object.assign(new Error(secret), { code: secret });
+    await expect(
+      observeCommand(log, secret, async () => {
+        throw error;
+      }),
+    ).rejects.toBe(error);
+    const contents = await readFile(log.file, 'utf8');
+    expect(contents).not.toContain(secret);
+    const events = contents
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(events).toHaveLength(3);
+    expect(events.map((event) => event.method)).toEqual(['unknown', method, 'unknown']);
+    expect(events.at(-1).code).toBe('COMMAND_FAILED');
+    for (const event of events)
+      expect(
+        Object.keys(event).every((key) =>
+          ['at', 'type', 'method', 'durationMs', 'code'].includes(key),
+        ),
+      ).toBe(true);
+  },
+);
 
 it
   .skipIf(process.platform === 'win32')

@@ -10,6 +10,7 @@ export interface DiagnosticStatus {
 
 export const diagnosticMethods = [
   'runtime.run',
+  'runtime.message',
   'runtime.status',
   'runtime.task',
   'runtime.list',

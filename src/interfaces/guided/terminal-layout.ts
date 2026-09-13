@@ -35,6 +35,7 @@ export function boxLine(text: string, width: number): string {
   );
 }
 
+/** Рисует разделитель или край рамки, ограничивая подпись шириной терминала. */
 export function rule(
   width: number,
   label = '',
@@ -49,6 +50,7 @@ export function rule(
   );
 }
 
+/** Сопоставляет состояние с русской подписью и цветовым обозначением. */
 export function statusBadge(status: string): string {
   const label = ' ' + (labels[status] ?? status) + ' ';
   if (status === 'completed') return color.bgGreen(color.black(label));

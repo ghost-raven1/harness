@@ -18,6 +18,7 @@ export class LearningService {
   private maintenance = false;
   private readonly budget: LearningBudget;
   private readonly evaluator: HeldOutEvaluator;
+  /** Собирает извлечение и оценку уроков на общем хранилище и учёте запросов. */
   constructor(
     readonly store: LearningStore,
     private readonly sessions: FileSessionStore,
@@ -29,11 +30,12 @@ export class LearningService {
     this.budget = new LearningBudget(store, provider, busy);
     this.evaluator = new HeldOutEvaluator(store, sessions, this.budget, policy);
   }
+  /** Восстанавливает пропущенные задания после сбоя между завершением задачи и постановкой в очередь. */
   async initialize(): Promise<void> {
-    // Восстанавливает очередь, если процесс завершился между итогом запуска и созданием задания обучения.
     for (const run of this.sessions.list())
       if (['completed', 'failed'].includes(run.status)) await this.enqueue(run.id);
   }
+  /** Собирает подтверждённые исходы инструментов и создаёт по одному заданию на роль запуска. */
   async enqueue(runId: string): Promise<void> {
     this.assertAvailable();
     if (this.store.read().ignoredRunIds?.includes(runId)) return;
@@ -73,8 +75,10 @@ export class LearningService {
       }
     });
   }
+  /** Запускает фоновую обработку очереди, не удерживающую процесс после завершения работы. */
   start(): void {
     this.stopped = false;
+    /** Планирует следующий проход только после завершения текущей обработки. */
     const loop = async (): Promise<void> => {
       if (this.stopped) return;
       await this.processNext().catch(() => undefined);
@@ -87,12 +91,14 @@ export class LearningService {
     };
     void loop();
   }
+  /** Отменяет запрос обучения и дожидается завершения текущего задания. */
   async close(): Promise<void> {
     this.stopped = true;
     this.budget.close();
     if (this.timer) clearTimeout(this.timer);
     while (this.running) await new Promise((resolve) => setTimeout(resolve, 25));
   }
+  /** Обрабатывает первое готовое задание; пауза или занятость оставляют его для следующего прохода. */
   async processNext(): Promise<boolean> {
     if (
       this.running ||
@@ -181,6 +187,7 @@ export class LearningService {
       this.running = false;
     }
   }
+  /** Извлекает узкий урок из проверенных источников и сохраняет кандидата без публикации. */
   private async propose(job: LearningJob): Promise<LearningCandidate> {
     const run = this.sessions.get(job.runId);
     const observations = Object.values(this.store.read().evidence).filter(
@@ -236,6 +243,7 @@ export class LearningService {
     });
     return candidate;
   }
+  /** Завершает неудачную оценку, сохраняя приоритет уже записанного человеческого отзыва. */
   private reject(jobId: string, candidateId: string, reason: string): Promise<void> {
     return this.store.update((state) => {
       const candidate = state.candidates[candidateId]!;
@@ -246,6 +254,7 @@ export class LearningService {
       state.jobs.find((item) => item.id === jobId)!.status = 'inactive';
     });
   }
+  /** Сохраняет отзыв однократно: подтверждение ставит проверку в очередь, опровержение отзывает связанные уроки. */
   async feedback(
     runId: string,
     positive: boolean,
@@ -283,6 +292,7 @@ export class LearningService {
       }
     });
   }
+  /** Меняет паузу обучения, запрещая преждевременное продолжение до срока Retry-After. */
   pause(paused: boolean): Promise<void> {
     this.assertAvailable();
     return this.store.update((state) => {
@@ -298,6 +308,7 @@ export class LearningService {
       state.paused = paused;
     });
   }
+  /** Отзывает последний выпуск для новых задач, сохраняя закреплённые версии старых запусков. */
   rollback(reason: string): Promise<void> {
     this.assertAvailable();
     return this.store.update((state) => {
@@ -325,9 +336,11 @@ export class LearningService {
       this.maintenance = false;
     };
   }
+  /** Показывает, выполняется ли сейчас извлечение или оценка урока. */
   busy(): boolean {
     return this.running;
   }
+  /** Не допускает изменения обучения одновременно с удалением его источников. */
   private assertAvailable(): void {
     if (this.maintenance)
       throw new Error('Удаляется беседа. Повторите действие после завершения удаления.');

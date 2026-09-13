@@ -18,6 +18,8 @@ const names: Record<string, string> = {
   'run.paused': 'Задача приостановлена',
   'run.recovered': 'Восстановлена после перезапуска',
   'run.resumed': 'Задача продолжена',
+  'user.message_queued': 'Сообщение сохранено в очереди',
+  'user.message_delivered': 'Сообщение добавлено в контекст модели',
   'model.requested': 'Запрос к модели',
   'model.completed': 'Ответ модели получен',
   'tool.started': 'Выполнение инструмента',
@@ -53,6 +55,7 @@ export class TaskFeed {
   private readonly attempts = new Map<string, number>();
   status?: TaskView;
   revision = 0;
+  /** Объединяет новые страницы событий без повторов и обновляет состояние задачи. */
   update(status: TaskView): void {
     if (this.status?.result !== status.result || this.status?.status !== status.status)
       this.revision++;
@@ -68,6 +71,7 @@ export class TaskFeed {
       this.addOutput(event);
     }
   }
+  /** Очищает управляющие символы перед помещением записи в терминальную ленту. */
   private add(entry: FeedEntry): void {
     this.revision++;
     this.entries.set(entry.id, {
@@ -76,6 +80,7 @@ export class TaskFeed {
       role: terminalText(entry.role),
     });
   }
+  /** Преобразует событие журнала в читаемую запись и восстанавливает старые текстовые фрагменты. */
   private addEvent(event: StatusView['events'][number]): void {
     const data = (event.payload ?? {}) as Record<string, unknown>;
     const role = event.role ?? 'Harness',
@@ -115,6 +120,7 @@ export class TaskFeed {
         });
     }
   }
+  /** Разделяет потоковый вывод по запросу и попытке, сохраняя параллельные роли. */
   private addOutput(event: OutputEvent): void {
     if (event.type === 'text' || event.type === 'reasoning') {
       const key =
@@ -139,6 +145,7 @@ export class TaskFeed {
       });
     }
   }
+  /** Выбирает записи вкладки и возвращает их в порядке времени. */
   items(tab: FeedTab): FeedEntry[] {
     return [...this.entries.values()]
       .filter((entry) => tab === 'all' || tab === entry.kind)

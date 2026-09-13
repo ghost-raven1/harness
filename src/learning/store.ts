@@ -25,7 +25,9 @@ export class FileLearningStore implements LearningStore {
     jobs: [],
     daily: { date: '', tokens: 0 },
   };
+  /** Привязывает журнал и снимок обучения к каталогу состояния сервиса. */
   constructor(private readonly directory: string) {}
+  /** Восстанавливает последнее состояние из журнала, используя снимок лишь при его отсутствии. */
   async initialize(): Promise<void> {
     const events = await readJournal<{ seq: number; state: LearningState }>(
       join(this.directory, 'learning.jsonl'),
@@ -45,9 +47,11 @@ export class FileLearningStore implements LearningStore {
       this.state = stored;
     }
   }
+  /** Возвращает копию, которую читатель не может незаметно изменить в хранилище. */
   read(): LearningState {
     return clone(this.state);
   }
+  /** Последовательно фиксирует изменения в журнале до обновления зеркального снимка. */
   update(change: (state: LearningState) => void): Promise<void> {
     return this.serial.run(async () => {
       if (this.maintenance)
@@ -66,6 +70,7 @@ export class FileLearningStore implements LearningStore {
       await writeSnapshot(join(this.directory, 'learning.json'), next);
     });
   }
+  /** Блокирует новые изменения на время очистки и возвращает функцию снятия блокировки. */
   beginMaintenance(): Promise<() => void> {
     return this.serial.run(async () => {
       if (this.maintenance) throw new Error('Удаляется беседа. Дождитесь завершения удаления.');
@@ -110,6 +115,7 @@ export class FileLearningStore implements LearningStore {
       );
     });
   }
+  /** Заменяет историю очищенным состоянием, затем обновляет снимок и удаляет временные копии. */
   private async replace(next: LearningState, type: string): Promise<void> {
     await atomicText(
       join(this.directory, 'learning.jsonl'),
@@ -125,6 +131,7 @@ export class FileLearningStore implements LearningStore {
     await writeSnapshot(join(this.directory, 'learning.json'), next);
     await removeLearningTemps(this.directory);
   }
+  /** Выбирает применимые уроки из закреплённого выпуска, включая выпуск уже начатой задачи. */
   lessons(version: string, workspace: string, role: string, profile: string): string[] {
     const release = this.state.releases[version];
     if (!release) throw new Error('Unknown learning version: ' + version);

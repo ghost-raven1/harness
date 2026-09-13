@@ -4,6 +4,7 @@ import { liveSelect } from './live-select.js';
 import { readText } from './text-reader.js';
 import { terminalText } from './screen.js';
 
+/** Объясняет содержимое и ротацию диагностического файла по актуальному состоянию. */
 function details(status: DiagnosticStatus): string {
   return [
     status.enabled ? 'Запись включена.' : 'Запись выключена.',

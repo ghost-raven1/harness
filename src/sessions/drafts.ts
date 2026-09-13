@@ -13,6 +13,7 @@ export const draftScopeSchema = z
     profile: z.string().optional(),
     sessionId: z.string().uuid().optional(),
     expectedParentRunId: z.string().uuid().optional(),
+    messageRunId: z.string().uuid().optional(),
   })
   .strict();
 export type DraftScope = z.infer<typeof draftScopeSchema>;
@@ -43,18 +44,21 @@ export const draftUpdateSchema = draftLocationSchema.extend({
   state: z.enum(['editing', 'pending']).optional(),
 });
 
-/** Сервис записывает черновики через общий диспетчер; версия защищает от второго окна. */
+/** Сервис записывает черновики под блокировкой хранилища; версия защищает от второго окна. */
 export class DraftStore {
   constructor(private readonly sessions: FileSessionStore) {}
   private get directory(): string {
     return join(this.sessions.directory, 'drafts');
   }
+  /** Формирует путь по проверенным идентификаторам черновика и сессии. */
   private path(location: DraftLocation): string {
     const value = draftLocationSchema.parse(location);
     return join(this.directory, (value.sessionId ?? 'new') + '.' + value.id + '.json');
   }
+  /** Возвращает страницу черновиков только указанного назначения и проекта. */
   async list(scope: DraftScope, offset = 0): Promise<{ items: DraftSummary[]; total: number }> {
     draftScopeSchema.parse(scope);
+    this.assertMessageScope(scope);
     this.sessions.assertRequestAllowed('', scope.sessionId);
     await assertRealDirectory(this.directory);
     let names: string[];
@@ -75,6 +79,7 @@ export class DraftStore {
     items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id));
     return { items: items.slice(offset, offset + 20), total: items.length };
   }
+  /** Читает черновик и проверяет, что его беседа не удалена навсегда. */
   async get(location: DraftLocation): Promise<TaskDraft> {
     await assertRealDirectory(this.directory);
     const value = await optionalJson(this.path(location));
@@ -83,7 +88,9 @@ export class DraftStore {
     this.sessions.assertRequestAllowed(draft.requestKey, draft.scope.sessionId);
     return draft;
   }
+  /** Создаёт отдельный черновик с ключом, сохраняемым при повторной отправке. */
   async create(scope: DraftScope, text = '', requestKey = id()): Promise<TaskDraft> {
+    this.assertMessageScope(draftScopeSchema.parse(scope));
     this.sessions.assertRequestAllowed(requestKey, scope.sessionId);
     const draft = draftSchema.parse({
       schemaVersion: 1,
@@ -99,6 +106,7 @@ export class DraftStore {
     await atomicJson(this.path({ id: draft.id, sessionId: scope.sessionId }), draft);
     return draft;
   }
+  /** Сохраняет правку по ожидаемой ревизии; отправленный текст остаётся неизменным. */
   async update(input: z.infer<typeof draftUpdateSchema>): Promise<TaskDraft> {
     const { expectedRevision, text, state, ...location } = draftUpdateSchema.parse(input);
     const draft = await this.get(location);
@@ -123,6 +131,7 @@ export class DraftStore {
     await atomicJson(this.path(location), next);
     return next;
   }
+  /** Удаляет только прочитанную ревизию, сохраняя правки другого окна. */
   async remove(location: DraftLocation, expectedRevision: number): Promise<void> {
     const draft = await this.get(location);
     if (draft.revision !== expectedRevision)
@@ -137,6 +146,8 @@ export class DraftStore {
     parentRunId: string,
   ): Promise<TaskDraft> {
     const draft = await this.get(location);
+    if (draft.scope.messageRunId)
+      throw new Error('Сообщение активной задаче нельзя перенести в другой запуск.');
     if (draft.revision !== expectedRevision) throw new Error('Черновик изменён в другом окне.');
     if (this.sessions.list(true).some((run) => run.requestKey === draft.requestKey))
       throw new Error('Этот запрос уже принят. Проверьте отправку вместо создания новой задачи.');
@@ -150,6 +161,18 @@ export class DraftStore {
     const next = await this.create({ ...draft.scope, expectedParentRunId: parent.id }, draft.text);
     await this.remove(location, expectedRevision);
     return next;
+  }
+
+  /** Проверяет принадлежность уточнения конкретной задаче, беседе и рабочей папке. */
+  private assertMessageScope(scope: DraftScope): void {
+    if (!scope.messageRunId) return;
+    const run = this.sessions.get(scope.messageRunId);
+    if (
+      scope.expectedParentRunId ||
+      run.sessionId !== scope.sessionId ||
+      run.workspace !== scope.workspace
+    )
+      throw new Error('Черновик сообщения должен относиться к указанной задаче и её папке.');
   }
 }
 

@@ -20,6 +20,7 @@ export interface ToolExecutor {
 export class ToolRegistry {
   private readonly entries = new Map<string, { tool: ToolExecutor; validate: ValidateFunction }>();
   private readonly ajv = new Ajv({ allErrors: true, strict: false });
+  /** Регистрирует уникальное имя инструмента и компилирует валидатор его аргументов. */
   register(tool: ToolExecutor): void {
     if (this.entries.has(tool.definition.name))
       throw new Error('Duplicate tool: ' + tool.definition.name);
@@ -28,14 +29,17 @@ export class ToolRegistry {
       validate: this.ajv.compile(tool.definition.schema),
     });
   }
+  /** Возвращает схемы зарегистрированных инструментов для передачи модели. */
   definitions(): ToolDefinition[] {
     return [...this.entries.values()].map((entry) => entry.tool.definition);
   }
+  /** Возвращает исполнитель по точному имени; неизвестный инструмент отклоняется. */
   get(name: string): ToolExecutor {
     const entry = this.entries.get(name);
     if (!entry) throw new Error('Unknown tool: ' + name);
     return entry.tool;
   }
+  /** Проверяет аргументы по схеме инструмента и сообщает об ошибках до исполнения. */
   validate(name: string, args: unknown): void {
     const entry = this.entries.get(name);
     if (!entry) throw new Error('Unknown tool: ' + name);

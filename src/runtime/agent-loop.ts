@@ -19,6 +19,7 @@ import type { CoordinationPlan } from '../agents/planning.js';
 import { InvocationExecutor, UnknownOutcomeError } from './executor.js';
 import { IterationLimitError, iterationProgress } from './iterations.js';
 import { abort, message } from '../shared/primitives.js';
+import { deliverMessages, hasPendingMessages } from './messages.js';
 
 interface AgentLoopServices {
   store: FileSessionStore;
@@ -35,6 +36,7 @@ interface AgentLoopServices {
 /** Исполняет цикл одной роли: контекст, модель, инструменты и завершение хода. */
 export class AgentLoop {
   constructor(private readonly services: AgentLoopServices) {}
+  /** Выбирает инструменты, доступные роли с учётом всей цепочки полномочий. */
   private definitions(run: RunRecord, agent: AgentState): ToolDefinition[] {
     return [
       ...this.services.registry.definitions(),
@@ -44,16 +46,22 @@ export class AgentLoop {
       this.services.policy.canAdvertise(run.config.value, agent, tool.name),
     );
   }
+  /** Ведёт одну ветку до результата, сохраняя обмены и проверяя общие пределы. */
   async run(runId: string, agentId: string, signal: AbortSignal): Promise<void> {
     let forcedCompaction = false;
     while (true) {
       abort(signal);
       let run = this.services.store.get(runId);
       let agent = run.agents[agentId]!;
-      if (agent.status === 'completed') return;
+      const root = agentId === run.rootAgentId;
+      if (agent.status === 'completed' && !(root && hasPendingMessages(run))) return;
       if (agent.pending?.length) {
         await this.completePendingCalls(run, agent, signal);
         continue;
+      }
+      if (root) {
+        run = await deliverMessages(this.services.store, run);
+        agent = run.agents[agentId]!;
       }
       const planning = needsPlanning(run, agent);
       if (planning && run.coordination!.attempts >= 2)
@@ -140,6 +148,7 @@ export class AgentLoop {
         },
       );
       if (output.calls.length) continue;
+      if (root && hasPendingMessages(this.services.store.get(runId))) continue;
       const latest = this.services.store.get(runId).agents[agentId]!;
       const uncollected = latest.children.filter(
         (child) => !latest.collectedChildren.includes(child),
@@ -235,6 +244,7 @@ export class AgentLoop {
     );
   }
 
+  /** Закрывает всю пачку вызовов и добавляет результаты в историю в исходном порядке. */
   private async completePendingCalls(
     run: RunRecord,
     agent: AgentState,
@@ -289,6 +299,7 @@ export class AgentLoop {
     });
   }
 
+  /** Сохраняет сжатую историю и расход только после полного ответа провайдера. */
   private async compactContext(
     run: RunRecord,
     agent: AgentState,

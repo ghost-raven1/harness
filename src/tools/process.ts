@@ -11,6 +11,7 @@ interface CapturedOutput {
   truncated: boolean;
 }
 
+/** Добавляет вывод до установленного предела и отмечает потерянную часть. */
 function capture(output: CapturedOutput, chunk: string): void {
   const remaining = maxOutputCharacters - output.text.length;
   if (chunk.length > remaining) output.truncated = true;

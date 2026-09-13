@@ -15,6 +15,7 @@ export class ResourceNotFoundError extends Error {
   }
 }
 
+/** Отличает отсутствие конкретного вида записи от прочих ошибок. */
 export function isMissingResource(error: unknown, resource: MissingResource): boolean {
   return error instanceof ResourceNotFoundError && error.resource === resource;
 }
@@ -28,6 +29,7 @@ export function resourceErrorData(
     : undefined;
 }
 
+/** Восстанавливает только известную ошибку отсутствия записи из ответа IPC. */
 export function resourceErrorFromData(data: unknown): ResourceNotFoundError | undefined {
   if (!data || typeof data !== 'object') return undefined;
   const value = data as Record<string, unknown>;

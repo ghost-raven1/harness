@@ -30,6 +30,7 @@ export function decideEvaluation(
   suite: EvaluationCase[],
   results: EvaluationResult[],
 ): Pick<EvaluationReport, 'passed' | 'reason'> {
+  /** Считает успешные повторы одного случая для сравниваемого варианта. */
   const countPassed = (caseId: string, variant: EvaluationResult['variant']): number =>
     results.filter(
       (result) => result.caseId === caseId && result.variant === variant && result.passed,

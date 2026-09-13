@@ -34,11 +34,13 @@ export function iterationProgress(run: RunRecord) {
   return { limit, used, total: run.turns, remaining: Math.max(0, limit - used) };
 }
 
+/** Отклоняет предел, который не является положительным безопасным целым числом. */
 export function validateIterationLimit(limit: number): void {
   if (!limitSchema.safeParse(limit).success)
     throw new Error('Предел шагов должен быть положительным целым числом.');
 }
 
+/** Не позволяет перезаписать настройку, изменённую после открытия формы. */
 export function assertExpectedLimit(current: number, expected?: number): void {
   if (expected !== undefined && current !== expected)
     throw new Error('Предел шагов уже изменился. Откройте настройки заново.');
@@ -51,6 +53,7 @@ export class IterationSettings {
   constructor(directory: string) {
     this.path = join(directory, 'iteration-settings.json');
   }
+  /** Читает сохранённый предел или значение конфига; повреждение не маскируется значением по умолчанию. */
   private async read(fallback: number): Promise<number> {
     try {
       const saved = await optionalJson(this.path);
@@ -59,9 +62,11 @@ export class IterationSettings {
       throw new Error('Не удалось прочитать настройки шагов в iteration-settings.json.');
     }
   }
+  /** Возвращает предел новых запусков после ранее поставленных изменений. */
   defaultLimit(fallback: number): Promise<number> {
     return this.serial.run(() => this.read(fallback));
   }
+  /** Атомарно сохраняет предел после проверки ожидаемого прежнего значения. */
   setDefault(limit: number, fallback: number, expectedLimit?: number): Promise<void> {
     validateIterationLimit(limit);
     return this.serial.run(async () => {

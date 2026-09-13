@@ -11,6 +11,7 @@ export class SessionKeys {
   constructor(directory?: string) {
     if (directory) this.credentials = new CredentialStore(directory);
   }
+  /** При смене подключения не переносит введённый ключ между разными адресами API. */
   select(profile: Profile): void {
     const name = profile.apiKeyEnv;
     if (!name) return;
@@ -24,6 +25,7 @@ export class SessionKeys {
   }
   private readonly previous = new Map<string, string | undefined>();
 
+  /** Временно меняет ключ в окружении, сохраняя значение для восстановления при выходе. */
   set(name: string, value: string): void {
     if (!/^[a-z_][a-z0-9_]*$/i.test(name)) throw new Error('Некорректное имя переменной ключа');
     if (!this.previous.has(name)) this.previous.set(name, process.env[name]);
@@ -47,6 +49,7 @@ export class SessionKeys {
     };
   }
 
+  /** Восстанавливает исходное окружение и убирает введённые в этом окне ключи. */
   clear(): void {
     for (const [name, value] of this.previous) {
       if (value === undefined) delete process.env[name];
@@ -62,10 +65,12 @@ export class DesktopService {
   private owned?: Awaited<ReturnType<typeof serve>>;
   constructor(readonly directory: string) {}
 
+  /** Отличает собственный сервис от подключения к сервису другого окна. */
   get isOwner(): boolean {
     return !!this.owned;
   }
 
+  /** Считает работающие задачи только сервиса, принадлежащего этому окну. */
   activeCount(): number {
     return (
       this.owned?.app.sessions
@@ -74,6 +79,7 @@ export class DesktopService {
     );
   }
 
+  /** Присоединяется к существующему сервису; отсутствие сервиса разрешает первичную настройку. */
   async connect(): Promise<ServiceInfo | undefined> {
     try {
       return await rpc<ServiceInfo>(this.directory, 'system.info');
@@ -84,12 +90,14 @@ export class DesktopService {
     }
   }
 
+  /** Проверяет версию Node и запускает сервис выбранной конфигурации. */
   async start(configFile: string): Promise<ServiceInfo> {
     assertRuntime();
     this.owned = await serve(configFile, this.directory);
     return await rpc<ServiceInfo>(this.directory, 'system.info');
   }
 
+  /** Закрывает только собственный сервис; подключённое чужое окно остаётся работать. */
   async close(): Promise<void> {
     await this.owned?.close();
     this.owned = undefined;

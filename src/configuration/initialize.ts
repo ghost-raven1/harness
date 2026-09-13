@@ -27,6 +27,7 @@ export interface InitOptions {
 }
 const templates = fileURLToPath(new URL('../../config/', import.meta.url));
 
+/** Загружает и проверяет шаблоны профилей, добавляя локальный API и аккаунт Codex. */
 export async function defaultProfiles(): Promise<Record<string, Profile>> {
   const source = JSON.parse(await readFile(join(templates, 'profiles.json'), 'utf8')) as Record<
     string,
