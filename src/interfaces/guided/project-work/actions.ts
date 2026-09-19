@@ -11,6 +11,11 @@ import { manualProjectCheck, resolveProjectOperation } from './checks.js';
 import { confirmProject } from './confirm.js';
 import { submitProjectDraft, projectDraft } from './drafts.js';
 import { externalChangesText, projectTabs } from './format.js';
+import { editProjectPlan } from './editor.js';
+import { inspectPlanVersions } from './plan-history.js';
+import { browseProjectReports } from './reports.js';
+import { reviewProject } from './review.js';
+import { exportProject } from './export.js';
 
 /** Сообщение хранит адрес этапа и ключ запроса, даже если окно закрылось при отправке. */
 async function messageProject(context: CliContext, view: ProjectView): Promise<void> {
@@ -125,11 +130,18 @@ export async function projectAction(
   context: CliContext,
   view: ProjectView,
   action: string,
+  enhanced = false,
 ): Promise<boolean> {
   const ref = { projectId: view.projectId, expectedRevision: view.revision, requestKey: id() };
   if (action === 'plan') await requestPlan(context, view);
-  if (action === 'acceptPlan') await acceptPlan(context, view);
-  if (action === 'editPlan') await editPlanOption(context, view);
+  if (action === 'acceptPlan') await acceptPlan(context, view, enhanced);
+  if (action === 'editPlan')
+    await (enhanced ? editProjectPlan(context, view) : editPlanOption(context, view));
+  if (enhanced && action === 'reports') await browseProjectReports(context, view.projectId);
+  if (enhanced && action === 'review') await reviewProject(context, view.projectId);
+  if (enhanced && action === 'versions') await inspectPlanVersions(context, view.projectId);
+  if (enhanced && action === 'export') await exportProject(context, view.projectId);
+  if (enhanced && action === 'accept') await reviewProject(context, view.projectId, true);
   if (action === 'baseline') await editPlanOption(context, view, true);
   if (action === 'message') await messageProject(context, view);
   if (action === 'manualCheck') await manualProjectCheck(context, view);
@@ -156,6 +168,7 @@ export async function projectAction(
   )
     await context.request('projects.cancel', ref);
   if (
+    !enhanced &&
     action === 'accept' &&
     view.resultRevision &&
     (await confirmProject(

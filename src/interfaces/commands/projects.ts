@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { Command, InvalidArgumentError } from 'commander';
 import { projectPlanSchema } from '../../projects/schema.js';
 import type { CliContext } from '../types.js';
+import { registerProjectReadCommands } from './project-reports.js';
 
 interface MutationOptions {
   revision: number;
@@ -30,20 +31,24 @@ export function registerProjectCommands(program: Command, context: CliContext): 
   const projects = program
     .command('projects')
     .description('Проекты: цель, план, этапы и приёмка результата');
+  registerProjectReadCommands(projects, context, integer);
   projects
     .command('list')
     .description('Список проектов')
     .option('--query <text>', 'поиск', '')
     .option('--page <number>', 'страница, начиная с нуля', integer, 0)
     .option('--archived', 'включить архив', false)
-    .action(async (options: { query: string; page: number; archived: boolean }) =>
-      context.output(
-        await context.request('projects.list', {
-          query: options.query,
-          page: options.page,
-          includeArchived: options.archived,
-        }),
-      ),
+    .option('--attention', 'только проекты, требующие решения', false)
+    .action(
+      async (options: { query: string; page: number; archived: boolean; attention: boolean }) =>
+        context.output(
+          await context.request('projects.list', {
+            query: options.query,
+            page: options.page,
+            includeArchived: options.archived,
+            ...(options.attention ? { attentionOnly: true } : {}),
+          }),
+        ),
     );
   projects
     .command('show <projectId>')

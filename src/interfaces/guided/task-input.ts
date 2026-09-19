@@ -17,6 +17,8 @@ export interface TaskInputOptions {
   message: string;
   initialValue?: string;
   workspace?: string;
+  allowEmpty?: boolean;
+  submitLabel?: string;
   description?(): string;
   save(text: string): Promise<void>;
   refresh?(): Promise<unknown>;
@@ -29,7 +31,7 @@ export async function readTaskInput(options: TaskInputOptions): Promise<string |
       message: options.message,
       initialValue: options.initialValue,
       validate: (text) =>
-        !text.trim()
+        !text.trim() && !options.allowEmpty
           ? 'Опишите задачу своими словами'
           : text.length > taskTextLimit
             ? 'Не больше 100 000 символов'
@@ -97,7 +99,7 @@ export async function readTaskInput(options: TaskInputOptions): Promise<string |
         boxLine(
           discarding
             ? 'Ранее сохранённый черновик останется.'
-            : 'Enter — новая строка · Ctrl+S — отправить',
+            : 'Enter — новая строка · Ctrl+S — ' + (options.submitLabel ?? 'отправить'),
           width,
         ),
         boxLine(discarding ? 'Y / Д — выйти · Esc — остаться' : 'Esc — сохранить и выйти', width),
@@ -162,7 +164,7 @@ export async function readTaskInput(options: TaskInputOptions): Promise<string |
       };
       const finish = async (cancel: boolean): Promise<void> => {
         if (closing) return;
-        if (!cancel && !state.text.trim()) {
+        if (!cancel && !state.text.trim() && !options.allowEmpty) {
           state.error = 'Опишите задачу своими словами';
           render();
           return;
@@ -254,6 +256,12 @@ export function taskInputSaveMessage(error: unknown): string {
     /Local service|IPC response|ECONNREFUSED|ECONNRESET|EPIPE|ENOTCONN|socket.*closed/i.test(detail)
   )
     return 'Нет связи. Текст остаётся в этом окне.';
+  if (
+    /^(Введите целое число|Поле слишком длинное|Черновик превышает|Сократите сообщение)/.test(
+      detail,
+    )
+  )
+    return detail;
   if (/ENOSPC|EFBIG/i.test(detail)) return 'Не хватает места для черновика.';
   if (/EACCES|EPERM|EROFS/i.test(detail)) return 'Нет доступа к папке черновиков.';
   if (isMissingResource(error, 'draft')) return 'Черновик удалён в другом окне.';

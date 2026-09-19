@@ -7,6 +7,8 @@ import { page } from '../screen.js';
 import { confirmProject } from './confirm.js';
 import { planText } from './format.js';
 import { projectDraft, submitProjectDraft } from './drafts.js';
+import { readText } from '../text-reader.js';
+import { comparisonText } from './plan-history.js';
 
 /** Передаёт пожелания к плану обычным текстом с сохранением неподтверждённой отправки. */
 export async function requestPlan(context: CliContext, view: ProjectView): Promise<void> {
@@ -79,8 +81,28 @@ export async function editPlanOption(
     });
 }
 /** Фиксирует именно прочитанную версию плана; автоматическое исполнение начинается после подтверждения. */
-export async function acceptPlan(context: CliContext, view: ProjectView): Promise<void> {
+export async function acceptPlan(
+  context: CliContext,
+  view: ProjectView,
+  enhanced = false,
+): Promise<void> {
   if (!view.plan) return;
+  if (enhanced) {
+    const comparison = await context.request('projects.comparePlans', {
+      projectId: view.projectId,
+    });
+    if (
+      (await readText(
+        'Перед принятием плана',
+        [
+          { id: 'diff', label: 'Изменения', text: comparisonText(comparison) },
+          { id: 'plan', label: 'Полный план', text: planText(view.plan, view.roles) },
+        ],
+        { actionLabel: 'к подтверждению' },
+      )) !== 'action'
+    )
+      return;
+  }
   if (
     await confirmProject(
       context,

@@ -38,7 +38,11 @@ export function projectReader(context: CliContext, projectId: string) {
 }
 
 /** Полный проект и меню действий остаются живыми при работе второго окна. */
-export async function inspectProject(context: CliContext, projectId: string): Promise<void> {
+export async function inspectProject(
+  context: CliContext,
+  projectId: string,
+  enhanced = false,
+): Promise<void> {
   const load = projectReader(context, projectId);
   let notice = '';
   let view = await load();
@@ -78,15 +82,25 @@ export async function inspectProject(context: CliContext, projectId: string): Pr
                 ...view.allowedActions.map((value) => ({
                   value,
                   label:
-                    value === 'plan' && view.plan
-                      ? 'Попросить изменить план'
-                      : value === 'archive' && view.archivedAt
-                        ? 'Вернуть из архива'
-                        : labels[value],
+                    value === 'editPlan' && enhanced
+                      ? 'Редактировать план'
+                      : value === 'plan' && view.plan
+                        ? 'Попросить изменить план'
+                        : value === 'archive' && view.archivedAt
+                          ? 'Вернуть из архива'
+                          : labels[value],
                 })),
                 ...(view.reasonCode === 'BASELINE_FAILED' &&
                 view.allowedActions.includes('editPlan')
                   ? [{ value: 'baseline', label: 'Включить исправление исходных ошибок в план' }]
+                  : []),
+                ...(enhanced
+                  ? [
+                      { value: 'reports', label: 'Проверки · команды и полный вывод' },
+                      { value: 'review', label: 'Итог · ожидалось, получено, подтверждено' },
+                      { value: 'versions', label: 'Версии и сравнение планов' },
+                      { value: 'export', label: 'Экспорт результата и доказательств' },
+                    ]
                   : []),
                 ...(view.currentRunId || view.stages.some((stage) => stage.runId)
                   ? [{ value: 'logs', label: 'Журнал, мысли и ответ этапа' }]
@@ -103,7 +117,7 @@ export async function inspectProject(context: CliContext, projectId: string): Pr
         }
         notice = '';
         try {
-          if (await projectAction(context, view, action)) return;
+          if (await projectAction(context, await load(), action, enhanced)) return;
         } catch (error) {
           if (missing(error)) throw error;
           if (message(error) !== 'INTERACTIVE_CANCEL') notice = explainError(error);
