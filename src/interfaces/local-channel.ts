@@ -47,21 +47,36 @@ export async function privateDirectory(directory: string): Promise<void> {
     '$acl.AddAccessRule($rule)',
     'Set-Acl -LiteralPath $env:HARNESS_PRIVATE_DIRECTORY -AclObject $acl',
   ].join('; ');
-  await executeFile(
-    win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
-    [
-      '-NoLogo',
-      '-NoProfile',
-      '-NonInteractive',
-      '-EncodedCommand',
-      Buffer.from(script, 'utf16le').toString('base64'),
-    ],
-    {
-      env: { ...process.env, HARNESS_PRIVATE_DIRECTORY: directory },
-      windowsHide: true,
-      timeout: 15000,
-    },
-  );
+  const startedAt = Date.now();
+  try {
+    await executeFile(
+      win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+      [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-EncodedCommand',
+        Buffer.from(script, 'utf16le').toString('base64'),
+      ],
+      {
+        env: { ...process.env, HARNESS_PRIVATE_DIRECTORY: directory },
+        windowsHide: true,
+        timeout: 15000,
+      },
+    );
+  } catch (cause) {
+    const failure = cause as { code?: string | number | null; signal?: string; killed?: boolean };
+    const reason =
+      failure.killed && failure.code === null
+        ? 'Превышено время ожидания PowerShell (15000 мс).'
+        : 'PowerShell завершился с ошибкой.';
+    throw new Error(
+      `Не удалось подтвердить защиту каталога состояния Windows. ${reason} ` +
+        `Код завершения: ${failure.code ?? 'нет'}; сигнал: ${failure.signal ?? 'нет'}; ` +
+        `длительность: ${Math.max(0, Date.now() - startedAt)} мс.`,
+      { cause },
+    );
+  }
 }
 
 /** Создаёт токен доступа к именованному каналу Windows; Unix использует права сокета. */
