@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { projectRunLinkSchema } from './project-run.js';
 import { configSchema } from '../configuration/schema.js';
 import type { JournalEvent, RunRecord } from './types.js';
 
@@ -49,6 +50,7 @@ export const invocationSchema = z
     error: text.optional(),
     startedAt: text,
     finishedAt: text.optional(),
+    exitCode: z.number().int().nullable().optional(),
   })
   .passthrough();
 export const approvalSchema = z
@@ -86,6 +88,13 @@ export const runRecordSchema = z
     requestKey: text,
     requestHash: text,
     parentRunId: text.optional(),
+    project: projectRunLinkSchema.optional(),
+    projectChecks: z.array(toolCallSchema).optional(),
+    projectDependencies: z
+      .array(z.object({ runId: text.min(1), title: text, artifactId: text.optional() }))
+      .optional(),
+    projectContextReady: z.boolean().optional(),
+    pauseRequested: z.boolean().optional(),
     workspace: text,
     profile: text,
     config: z.object({ hash: text, value: configSchema }),
@@ -106,7 +115,7 @@ export const runRecordSchema = z
     deletedAt: text.optional(),
     result: text.optional(),
     error: text.optional(),
-    pauseReason: z.enum(['iterations', 'provider']).optional(),
+    pauseReason: z.enum(['iterations', 'provider', 'project']).optional(),
     providerPause: z
       .object({ kind: z.enum(['rate_limit', 'quota']), retryAt: text.optional() })
       .optional(),

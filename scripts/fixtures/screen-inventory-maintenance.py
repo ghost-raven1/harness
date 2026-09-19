@@ -48,7 +48,7 @@ def reset_data(session):
     sentinel.write_text('Файл пользователя должен сохраниться.')
     session.setting('Очистка данных')
     session.capture('reset-picker', 'Что очистить?', True)
-    terminal.open_label('Задачи, история и знания')
+    terminal.open_label('Проекты, задачи, история и знания')
     session.capture('reset-decline', 'Удалить выбранные данные навсегда?', True)
     terminal.send('\r')
     session.capture('reset-declined', 'Что очистить?', True)
@@ -59,8 +59,8 @@ def reset_data(session):
 
     for scope, label, tasks_left, lessons_left in [
         ('learning', 'Накопленные знания', 1, 0),
-        ('tasks', 'Задачи и история', 0, 8),
-        ('all', 'Задачи, история и знания', 0, 0),
+        ('tasks', 'Проекты, задачи и история', 0, 8),
+        ('all', 'Проекты, задачи, история и знания', 0, 0),
     ]:
         if scope == 'tasks':
             fixture.request('inventory', {'kind': 'learning', 'runId': source})
@@ -81,13 +81,13 @@ def reset_data(session):
 
     active = session.start('Работающая задача')
     session.setting('Очистка данных')
-    terminal.open_label('Задачи и история')
+    terminal.open_label('Проекты, задачи и история')
     session.capture('reset-blocked', 'Очистка пока недоступна', True)
     fixture.call('runtime.cancel', {'runId': active})
     session.capture('reset-unblocked-live', 'Теперь очистка доступна.', True)
     terminal.send('\x1b')
     terminal.wait_text('Что очистить?')
-    terminal.open_label('Задачи и история')
+    terminal.open_label('Проекты, задачи и история')
     session.capture('reset-before-drift', 'Удалить выбранные данные навсегда?', True)
     added = session.start('Задача другого клиента')
     fixture.request('complete', {'runId': added})

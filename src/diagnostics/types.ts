@@ -11,6 +11,23 @@ export interface DiagnosticStatus {
 }
 
 export const diagnosticMethods = [
+  'projects.list',
+  'projects.detail',
+  'projects.create',
+  'projects.plan',
+  'projects.editPlan',
+  'projects.acceptPlan',
+  'projects.pause',
+  'projects.resume',
+  'projects.cancel',
+  'projects.message',
+  'projects.manualCheck',
+  'projects.recheck',
+  'projects.accept',
+  'projects.archive',
+  'projects.resolve',
+  'projects.purgePreview',
+  'projects.purge',
   'runtime.run',
   'runtime.message',
   'runtime.status',

@@ -36,7 +36,8 @@ export async function settings(
             'В работе: ' +
             (current.activeRuns ?? 0) +
             ' · Разрешения: ' +
-            (current.pendingApprovals ?? 0),
+            (current.pendingApprovals ?? 0) +
+            (current.activeProjects ? '\nПроектов в работе: ' + current.activeProjects : ''),
           message: 'Настройки',
           options: [
             {
@@ -44,7 +45,7 @@ export async function settings(
               label: 'Подключить другую модель',
               hint: 'без повторной настройки проекта',
             },
-            { value: 'recent', label: 'Недавние проекты' },
+            { value: 'recent', label: 'Недавние папки' },
             { value: 'profile', label: 'Выбрать модель или папку из настроек проекта' },
             { value: 'key', label: 'Ключ API', hint: 'заменить ключ и выбрать способ хранения' },
             { value: 'project', label: 'Настроить другой проект или подключение' },

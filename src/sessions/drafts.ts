@@ -14,6 +14,9 @@ export const draftScopeSchema = z
     sessionId: z.string().uuid().optional(),
     expectedParentRunId: z.string().uuid().optional(),
     messageRunId: z.string().uuid().optional(),
+    purpose: z.enum(['project.goal', 'project.plan', 'project.message']).optional(),
+    projectId: z.string().uuid().optional(),
+    stageId: z.string().min(1).max(200).optional(),
   })
   .strict();
 export type DraftScope = z.infer<typeof draftScopeSchema>;
@@ -33,6 +36,7 @@ const draftSchema = z
     revision: z.number().int().nonnegative(),
     text: z.string().max(taskTextLimit),
     state: z.enum(['editing', 'pending']),
+    expectedProjectRevision: z.number().int().nonnegative().safe().optional(),
     updatedAt: z.string(),
   })
   .strict();
@@ -42,6 +46,7 @@ export const draftUpdateSchema = draftLocationSchema.extend({
   expectedRevision: z.number().int().nonnegative(),
   text: z.string().max(taskTextLimit).optional(),
   state: z.enum(['editing', 'pending']).optional(),
+  expectedProjectRevision: z.number().int().nonnegative().safe().optional(),
 });
 
 /** Сервис записывает черновики под блокировкой хранилища; версия защищает от второго окна. */
@@ -108,13 +113,17 @@ export class DraftStore {
   }
   /** Сохраняет правку по ожидаемой ревизии; отправленный текст остаётся неизменным. */
   async update(input: z.infer<typeof draftUpdateSchema>): Promise<TaskDraft> {
-    const { expectedRevision, text, state, ...location } = draftUpdateSchema.parse(input);
+    const { expectedRevision, text, state, expectedProjectRevision, ...location } =
+      draftUpdateSchema.parse(input);
     const draft = await this.get(location);
     if (draft.revision !== expectedRevision)
       throw new Error('Черновик изменён в другом окне. Откройте сохранённую версию заново.');
     if (
       draft.state === 'pending' &&
-      ((text !== undefined && text !== draft.text) || state === 'editing')
+      ((text !== undefined && text !== draft.text) ||
+        state === 'editing' ||
+        (expectedProjectRevision !== undefined &&
+          expectedProjectRevision !== draft.expectedProjectRevision))
     )
       throw new Error(
         'Запрос уже отправлялся. Сначала проверьте его повторной отправкой с тем же ключом.',
@@ -123,6 +132,7 @@ export class DraftStore {
       ...draft,
       text: text ?? draft.text,
       state: state ?? draft.state,
+      ...(expectedProjectRevision === undefined ? {} : { expectedProjectRevision }),
       revision: draft.revision + 1,
       updatedAt: new Date().toISOString(),
     };
@@ -146,7 +156,7 @@ export class DraftStore {
     parentRunId: string,
   ): Promise<TaskDraft> {
     const draft = await this.get(location);
-    if (draft.scope.messageRunId)
+    if (draft.scope.messageRunId || draft.scope.purpose)
       throw new Error('Сообщение активной задаче нельзя перенести в другой запуск.');
     if (draft.revision !== expectedRevision) throw new Error('Черновик изменён в другом окне.');
     if (this.sessions.catalog(true).some((run) => run.requestKey === draft.requestKey))
@@ -165,6 +175,17 @@ export class DraftStore {
 
   /** Проверяет принадлежность уточнения конкретной задаче, беседе и рабочей папке. */
   private assertMessageScope(scope: DraftScope): void {
+    if (scope.purpose || scope.projectId || scope.stageId) {
+      if (
+        !scope.purpose ||
+        scope.sessionId ||
+        scope.expectedParentRunId ||
+        scope.messageRunId ||
+        (scope.purpose !== 'project.goal' && !scope.projectId) ||
+        (scope.purpose === 'project.message' ? !scope.stageId : !!scope.stageId)
+      )
+        throw new Error('Черновик проекта должен относиться к своей цели, плану или этапу.');
+    }
     if (!scope.messageRunId) return;
     const run = this.sessions.catalog(true).find((item) => item.id === scope.messageRunId);
     if (!run) throw new ResourceNotFoundError('task');

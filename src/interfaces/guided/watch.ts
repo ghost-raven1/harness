@@ -61,7 +61,7 @@ export function simpleResult(status: StatusView): void {
 export async function followRun(
   context: CliContext,
   runId: string,
-  options: { inspect?: boolean } = {},
+  options: { inspect?: boolean; projectManaged?: boolean } = {},
 ): Promise<StatusView | undefined> {
   let cursor = 0,
     outputCursor = 0;
@@ -112,6 +112,11 @@ export async function followRun(
         stopKeys();
       }
       if (action === 'back') return undefined;
+      if (
+        (options.projectManaged || status.project) &&
+        (action === 'cancel' || action === 'message')
+      )
+        return status;
       if (action === 'cancel' && !status.deletedAt && !status.recoveryRequired) {
         await context.request('runtime.cancel', { runId });
         status = await context.request('runtime.task', { runId, cursor, outputCursor });

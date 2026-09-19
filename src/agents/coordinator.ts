@@ -3,6 +3,7 @@ import type { ToolCall } from '../providers/types.js';
 import { UnknownOutcomeError } from '../runtime/executor.js';
 import { abort, id, message } from '../shared/primitives.js';
 import { checkDelegation, newAgent } from './service.js';
+import { RunPausedError } from '../shared/run-pause.js';
 
 type ExecuteAgent = (runId: string, agentId: string, signal: AbortSignal) => Promise<void>;
 
@@ -43,6 +44,7 @@ export class AgentCoordinator {
     if (signal.aborted) cancel();
     const task = this.executeAgent(runId, agentId, controller.signal)
       .catch(async (error) => {
+        if (error instanceof RunPausedError) throw error;
         controller.abort();
         const descendants: string[] = [];
         /** Собирает потомков, остановки которых нужно дождаться до фиксации ошибки. */

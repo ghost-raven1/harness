@@ -70,12 +70,17 @@ export class DesktopService {
     return !!this.owned;
   }
 
-  /** Считает работающие задачи только сервиса, принадлежащего этому окну. */
+  /** Учитывает проекты между этапами, когда отдельного работающего запуска ещё нет. */
   activeCount(): number {
     return (
-      this.owned?.app.sessions
+      (this.owned?.app.sessions
         .catalog()
-        .filter((run) => ['running', 'awaiting_approval'].includes(run.status)).length ?? 0
+        .filter((run) => !run.project && ['running', 'awaiting_approval'].includes(run.status))
+        .length ?? 0) +
+      (this.owned?.app.projects?.store
+        .catalog(true)
+        .filter((project) => ['running', 'planning', 'pausing'].includes(project.status)).length ??
+        0)
     );
   }
 

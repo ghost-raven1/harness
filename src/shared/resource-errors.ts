@@ -1,4 +1,4 @@
-export type MissingResource = 'task' | 'lesson' | 'draft';
+export type MissingResource = 'task' | 'lesson' | 'draft' | 'project';
 
 /** Отсутствие записи отличается от временной недоступности локального сервиса. */
 export class ResourceNotFoundError extends Error {
@@ -9,7 +9,9 @@ export class ResourceNotFoundError extends Error {
         ? 'Unknown run'
         : resource === 'draft'
           ? 'Черновик удалён в другом окне. Вернитесь к выбору задачи.'
-          : 'Урок уже удалён. Вернитесь к списку знаний.',
+          : resource === 'project'
+            ? 'Проект удалён в другом окне. Вернитесь к списку проектов.'
+            : 'Урок уже удалён. Вернитесь к списку знаний.',
     );
     this.name = 'ResourceNotFoundError';
   }
@@ -34,7 +36,10 @@ export function resourceErrorFromData(data: unknown): ResourceNotFoundError | un
   if (!data || typeof data !== 'object') return undefined;
   const value = data as Record<string, unknown>;
   return value.code === 'RESOURCE_NOT_FOUND' &&
-    (value.resource === 'task' || value.resource === 'lesson' || value.resource === 'draft')
+    (value.resource === 'task' ||
+      value.resource === 'lesson' ||
+      value.resource === 'draft' ||
+      value.resource === 'project')
     ? new ResourceNotFoundError(value.resource)
     : undefined;
 }

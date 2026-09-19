@@ -9,6 +9,7 @@ import { learningPurgePlan } from '../learning/purge.js';
 import type { ToolScheduler } from '../tools/scheduler.js';
 import { hash } from '../shared/primitives.js';
 import { ResourceNotFoundError } from '../shared/resource-errors.js';
+import type { ProjectPurge } from './project-purge.js';
 import {
   readPurgeRecords,
   removeRunFiles,
@@ -39,6 +40,7 @@ export class SessionPurge {
     private readonly learningStore: FileLearningStore,
     private readonly runtime: HarnessRuntime,
     private readonly scheduler: ToolScheduler,
+    private readonly projects?: Pick<ProjectPurge, 'usesLearning' | 'serialize' | 'recoveryError'>,
   ) {}
 
   /** Вычисляет состав удаления, причины блокировки и привязанный к данным токен. */
@@ -48,6 +50,7 @@ export class SessionPurge {
     const all = this.sessions.catalog(true);
     const blockers: string[] = [];
     if (this.sessions.recoveryError) blockers.push(this.sessions.recoveryError);
+    if (this.projects?.recoveryError) blockers.push(this.projects.recoveryError);
     const linked = await linkedPurgeDirectories(this.sessions.directory);
     if (linked.length)
       blockers.push(
@@ -76,6 +79,10 @@ export class SessionPurge {
     )
       blockers.push(
         'Другая задача на паузе использует эти знания. Сначала продолжите или остановите её.',
+      );
+    if (await this.projects?.usesLearning(selection.affectedVersions))
+      blockers.push(
+        'Незавершённый проект использует эти знания. Сначала завершите или отмените проект.',
       );
     let artifacts = 0,
       backups = 0,
@@ -114,84 +121,86 @@ export class SessionPurge {
     const previous = this.sessions.purgeRecord(runId);
     if (previous?.complete && previous.previewToken === previewToken)
       return { purged: true, sessionId: previous.sessionId, runs: previous.runIds.length };
-    return this.scheduler.schedule('write', async () => {
-      const queued = this.sessions.purgeRecord(runId);
-      if (queued?.complete && queued.previewToken === previewToken)
-        return { purged: true, sessionId: queued.sessionId, runs: queued.runIds.length };
-      const unlockSessions = await this.sessions.beginMaintenance(() => {
-        // Проверка выполняется после ранее начатой записи, до блокировки работающих задач.
-        if (
-          this.runtime.busy() ||
-          this.sessions
-            .catalog(true)
-            .some((run) => ['running', 'awaiting_approval'].includes(run.status))
-        )
-          throw new ApplicationError(
-            'TASK_BUSY',
-            'Сначала остановите работающие задачи и дождитесь их остановки.',
-          );
+    const perform = () =>
+      this.scheduler.schedule('write', async () => {
+        const queued = this.sessions.purgeRecord(runId);
+        if (queued?.complete && queued.previewToken === previewToken)
+          return { purged: true, sessionId: queued.sessionId, runs: queued.runIds.length };
+        const unlockSessions = await this.sessions.beginMaintenance(() => {
+          // Проверка выполняется после ранее начатой записи, до блокировки работающих задач.
+          if (
+            this.runtime.busy() ||
+            this.sessions
+              .catalog(true)
+              .some((run) => ['running', 'awaiting_approval'].includes(run.status))
+          )
+            throw new ApplicationError(
+              'TASK_BUSY',
+              'Сначала остановите работающие задачи и дождитесь их остановки.',
+            );
+        });
+        let unlockLearning: (() => void) | undefined, unlockStore: (() => void) | undefined;
+        let intentStarted = false,
+          complete = false;
+        try {
+          unlockLearning = this.learning.beginMaintenance();
+          unlockStore = await this.learningStore.beginMaintenance();
+          const preview = await this.preview(runId);
+          if (!preview.available) {
+            const unsafe = (await linkedPurgeDirectories(this.sessions.directory)).length > 0;
+            const unknown = this.plan(runId).runs.some((run) => run.unknownOutcome);
+            throw new ApplicationError(
+              unsafe || this.sessions.recoveryError || this.projects?.recoveryError
+                ? 'STORAGE_UNAVAILABLE'
+                : unknown
+                  ? 'UNKNOWN_OUTCOME'
+                  : 'TASK_BUSY',
+              preview.blockers.join('\n'),
+            );
+          }
+          if (preview.previewToken !== previewToken)
+            throw new ApplicationError(
+              'STALE_PREVIEW',
+              'Состав беседы или знаний изменился. Откройте предпросмотр удаления заново.',
+            );
+          const { runs, selection } = this.plan(runId);
+          const record: PurgeRecord = {
+            schemaVersion: 1,
+            sessionId: preview.sessionId,
+            runIds: preview.runIds,
+            requestDigests: runs.map((run) => hash(run.requestKey)),
+            candidateIds: selection.candidateIds,
+            evidenceIds: selection.evidenceIds,
+            reportIds: selection.reportIds,
+            previewToken,
+            complete: false,
+          };
+          // Даже неясный исход записи маркера запрещает новые изменения до восстановления.
+          intentStarted = true;
+          await this.sessions.recordPurge(record);
+          await this.learningStore.purge(record);
+          await this.sessions.purgeFiles(record);
+          record.complete = true;
+          await this.sessions.recordPurge(record);
+          complete = true;
+          return { purged: true, sessionId: preview.sessionId, runs: preview.runs };
+        } catch (error) {
+          if (intentStarted)
+            throw new ApplicationError(
+              'STORAGE_UNAVAILABLE',
+              'Удаление прервалось. Перезапустите локальный сервис: очистка продолжится автоматически.',
+              { cause: error },
+            );
+          throw error;
+        } finally {
+          if (!intentStarted || complete) {
+            unlockStore?.();
+            unlockLearning?.();
+            unlockSessions();
+          }
+        }
       });
-      let unlockLearning: (() => void) | undefined, unlockStore: (() => void) | undefined;
-      let intentStarted = false,
-        complete = false;
-      try {
-        unlockLearning = this.learning.beginMaintenance();
-        unlockStore = await this.learningStore.beginMaintenance();
-        const preview = await this.preview(runId);
-        if (!preview.available) {
-          const unsafe = (await linkedPurgeDirectories(this.sessions.directory)).length > 0;
-          const unknown = this.plan(runId).runs.some((run) => run.unknownOutcome);
-          throw new ApplicationError(
-            unsafe || this.sessions.recoveryError
-              ? 'STORAGE_UNAVAILABLE'
-              : unknown
-                ? 'UNKNOWN_OUTCOME'
-                : 'TASK_BUSY',
-            preview.blockers.join('\n'),
-          );
-        }
-        if (preview.previewToken !== previewToken)
-          throw new ApplicationError(
-            'STALE_PREVIEW',
-            'Состав беседы или знаний изменился. Откройте предпросмотр удаления заново.',
-          );
-        const { runs, selection } = this.plan(runId);
-        const record: PurgeRecord = {
-          schemaVersion: 1,
-          sessionId: preview.sessionId,
-          runIds: preview.runIds,
-          requestDigests: runs.map((run) => hash(run.requestKey)),
-          candidateIds: selection.candidateIds,
-          evidenceIds: selection.evidenceIds,
-          reportIds: selection.reportIds,
-          previewToken,
-          complete: false,
-        };
-        // Даже неясный исход записи маркера запрещает новые изменения до восстановления.
-        intentStarted = true;
-        await this.sessions.recordPurge(record);
-        await this.learningStore.purge(record);
-        await this.sessions.purgeFiles(record);
-        record.complete = true;
-        await this.sessions.recordPurge(record);
-        complete = true;
-        return { purged: true, sessionId: preview.sessionId, runs: preview.runs };
-      } catch (error) {
-        if (intentStarted)
-          throw new ApplicationError(
-            'STORAGE_UNAVAILABLE',
-            'Удаление прервалось. Перезапустите локальный сервис: очистка продолжится автоматически.',
-            { cause: error },
-          );
-        throw error;
-      } finally {
-        if (!intentStarted || complete) {
-          unlockStore?.();
-          unlockLearning?.();
-          unlockSessions();
-        }
-      }
-    });
+    return this.projects ? this.projects.serialize(perform) : perform();
   }
 
   /** Выбирает все этапы беседы и связанные с ними знания. */
@@ -200,6 +209,11 @@ export class SessionPurge {
     if (!entry) throw new ResourceNotFoundError('task');
     const sessionId = entry.sessionId;
     const runs = this.sessions.catalog(true).filter((run) => run.sessionId === sessionId);
+    if (runs.some((run) => run.project))
+      throw new ApplicationError(
+        'PROJECT_MANAGED',
+        'Этап принадлежит проекту. Удалите проект целиком на его экране.',
+      );
     const state = this.learningStore.read();
     return {
       runs,

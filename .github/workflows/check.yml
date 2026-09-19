@@ -99,6 +99,17 @@ jobs:
           }
           trap collect_core_pty EXIT
           "$RUNNER_TEMP/harness-pty-python/bin/python" scripts/playtest-core.py --node "$(command -v node)" 2>&1 | tee "$CI_LOG_DIR/core-pty.log"
+      - name: Проекты в двух PTY 48×24 и 80×24
+        if: runner.os == 'Linux'
+        env:
+          PYTHONUNBUFFERED: '1'
+        run: |
+          mkdir -p releases/project-playtest
+          collect_project_pty() {
+            cp -R releases/project-playtest "$CI_LOG_DIR/"
+          }
+          trap collect_project_pty EXIT
+          "$RUNNER_TEMP/harness-pty-python/bin/python" scripts/playtest-projects.py --node "$(command -v node)" --output releases/project-playtest/frames.json 2>&1 | tee "$CI_LOG_DIR/projects-pty.log"
       - name: Логи и свежие отчёты
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

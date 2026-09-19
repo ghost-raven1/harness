@@ -6,16 +6,16 @@ import { readText } from './text-reader.js';
 import { explainError } from './errors.js';
 
 const labels: Record<DataResetScope, string> = {
-  tasks: 'Задачи и история',
+  tasks: 'Проекты, задачи и история',
   learning: 'Накопленные знания',
-  all: 'Задачи, история и знания',
+  all: 'Проекты, задачи, история и знания',
 };
 const retained: Record<DataResetScope, string> = {
   tasks:
     'Знания и их доказательства сохранятся. Доказательства могут содержать фрагменты прежних задач.',
   learning:
     'История задач сохранится, включая уже использованные в ней знания. Новые задачи начнут без накопленного опыта.',
-  all: 'Будут удалены все задачи, история, знания и их доказательства.',
+  all: 'Будут удалены все проекты, задачи, история, знания и их доказательства.',
 };
 
 /** Сначала выбирается состав очистки; удаление доступно только после отдельного подтверждения. */
@@ -35,6 +35,8 @@ export async function resetData(context: CliContext, scope?: DataResetScope): Pr
           summary:
             'Переписок: ' +
             current.sessions +
+            '\nПроектов: ' +
+            (current.projects ?? 0) +
             '\nУроков: ' +
             current.lessons +
             '\nНастройки и файлы проектов сохранятся.',
@@ -87,6 +89,7 @@ export async function confirmDataReset(
         'Настройки, подключения и файлы проектов сохранятся.',
         retained[scope],
         '',
+        'Проектов: ' + (preview.projects ?? 0),
         'Переписок: ' + preview.sessions + ' · этапов: ' + preview.tasks,
         'Уроков: ' + preview.lessons + ' · источников: ' + preview.evidence,
         'Заданий обучения: ' + preview.jobs,

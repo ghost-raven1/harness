@@ -23,10 +23,12 @@ export async function fileCommand(
       .extend({ offset: z.number().int().nonnegative().default(0) })
       .strict()
       .parse(input);
+    assertStandalone(app, args.runId);
     return files.previewRestore(args.runId, args.changeId, args.offset);
   }
   if (method === 'files.previewResolution') {
     const args = selection.strict().parse(input);
+    assertStandalone(app, args.runId);
     return files.previewResolution(args.runId, args.changeId);
   }
   if (method === 'files.restore' || method === 'files.resolveRestore') {
@@ -38,9 +40,11 @@ export async function fileCommand(
             .strict()
             .parse(input)
         : { ...restore.strict().parse(input), result: undefined };
+    assertStandalone(app, args.runId);
     if (app.runtime.busy())
       throw new ApplicationError('TASK_BUSY', 'Сначала завершите работающие задачи.');
     await app.scheduler.schedule('write', async () => {
+      assertStandalone(app, args.runId);
       if (app.runtime.busy())
         throw new ApplicationError(
           'TASK_BUSY',
@@ -53,4 +57,13 @@ export async function fileCommand(
     return method === 'files.resolveRestore' ? { resolved: true } : { restored: true };
   }
   throw new Error('Неизвестная команда файлов.');
+}
+
+/** Изменения этапа восстанавливает только проектный сценарий с проверкой всей рабочей папки. */
+function assertStandalone(app: Application, runId: string): void {
+  if (app.sessions.catalog(true).find((run) => run.id === runId)?.project)
+    throw new ApplicationError(
+      'PROJECT_MANAGED',
+      'Файлы изменены этапом проекта. Откройте проект для проверки результата.',
+    );
 }

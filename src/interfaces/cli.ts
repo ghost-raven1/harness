@@ -15,6 +15,7 @@ import { registerDoctorCommand } from './commands/doctor.js';
 import { registerDashboard } from './commands/dashboard.js';
 import { registerMaintenanceCommands } from './commands/maintenance.js';
 import { registerMessageCommand } from './commands/message.js';
+import { registerProjectCommands } from './commands/projects.js';
 import { message } from '../shared/primitives.js';
 import { applicationErrorData } from '../shared/application-error.js';
 import { resourceErrorData } from '../shared/resource-errors.js';
@@ -76,6 +77,7 @@ export function createCli(): Command {
   registerDoctorCommand(program, context);
   registerRunCommands(program, context);
   registerMessageCommand(program, context);
+  registerProjectCommands(program, context);
   registerLearningCommands(program, context);
   registerMaintenanceCommands(program, context);
   program

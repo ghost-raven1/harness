@@ -9,10 +9,11 @@ import { isMissingResource } from '../../shared/resource-errors.js';
 
 /** Уточнение адресуется текущему запуску и не создаёт новый этап беседы. */
 export function canMessageTask(
-  status: Pick<StatusView, 'status' | 'deletedAt' | 'recoveryRequired'>,
+  status: Pick<StatusView, 'status' | 'deletedAt' | 'recoveryRequired' | 'project'>,
 ): boolean {
   return (
     !status.recoveryRequired &&
+    !status.project &&
     !status.deletedAt &&
     ['running', 'awaiting_approval', 'paused'].includes(status.status)
   );

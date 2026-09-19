@@ -15,6 +15,7 @@ const draftSchema = z.object({
   revision: count,
   text: z.string().max(taskTextLimit),
   state: z.enum(['editing', 'pending']),
+  expectedProjectRevision: count.optional(),
   updatedAt: z.string(),
 });
 const summarySchema = draftSchema.omit({ text: true }).extend({ preview: z.string() });

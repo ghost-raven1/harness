@@ -21,8 +21,14 @@ export async function systemCommand(
               app.runtime.visibleStatus(run.id, run.status),
             ),
           ).length,
+        activeProjects:
+          app.projects?.store
+            .catalog(true)
+            .filter((project) => ['running', 'planning', 'pausing'].includes(project.status))
+            .length ?? 0,
+        projectCount: app.projects?.store.catalog().length ?? 0,
         pendingApprovals: app.sessions.recoveryError ? 0 : app.approvals.pending().length,
-        recoveryError: app.sessions.recoveryError,
+        recoveryError: app.sessions.recoveryError ?? app.projects?.store.recoveryError,
         learningVersion: app.learning.store.read().activeVersion,
         knowledgeCount: Object.keys(app.learning.store.read().candidates).length,
         workspaces: app.config.value.workspaces,

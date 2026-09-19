@@ -21,6 +21,9 @@ import { HarnessRuntime } from '../runtime/engine.js';
 import { SessionPurge, recoverPurges } from './session-purge.js';
 import { DataReset, recoverDataResets } from './data-reset.js';
 import { FileDiagnosticLog } from '../diagnostics/file-log.js';
+import { ProjectPurge, recoverProjectPurges } from './project-purge.js';
+import { createProjects } from './projects.js';
+import type { ProjectService } from '../projects/service.js';
 
 const CONFIG = Symbol('CONFIG'),
   MODEL = Symbol('MODEL');
@@ -41,6 +44,7 @@ export interface Application {
   purge: SessionPurge;
   reset: DataReset;
   diagnostics: FileDiagnosticLog;
+  projects: ProjectService;
   close(): Promise<void>;
 }
 /** Собирает модули через Nest; тесты могут заменить только модельный транспорт. */
@@ -52,10 +56,12 @@ export async function createApplication(
   const diagnostics = new FileDiagnosticLog(directory);
   await diagnostics.initialize();
   const config = await loadConfig(configFile);
+  let projects: ProjectService | undefined;
   let startupFailure: unknown;
   try {
     await recoverPurges(directory);
     await recoverDataResets(directory);
+    await recoverProjectPurges(directory);
   } catch (error) {
     startupFailure = error;
   }
@@ -174,7 +180,7 @@ export async function createApplication(
               config.value,
               runtime.usage.provider(model),
               policy,
-              () => runtime.busy(),
+              () => runtime.busy() || !!projects?.busy(),
             ),
         },
       ],
@@ -187,10 +193,29 @@ export async function createApplication(
     const status = runtime.store.get(runId).status;
     if (status === 'completed' || status === 'failed')
       await diagnostics.record({ type: 'task.finished', runId, status });
-    await learning.enqueue(runId);
+    if (!runtime.store.get(runId).project) await learning.enqueue(runId);
   });
   const learningFailure = nest.get(FileLearningStore).recoveryError;
   if (learningFailure) runtime.store.requireRecovery(learningFailure);
+  projects = await createProjects({
+    directory,
+    configFile,
+    runtime,
+    sessions: nest.get(FileSessionStore),
+    learning,
+    registry: nest.get(ToolRegistry),
+  });
+  const projectPurge = new ProjectPurge({
+    projects: projects.store,
+    sessions: nest.get(FileSessionStore),
+    learning,
+    learningStore: nest.get(FileLearningStore),
+    runtime,
+    scheduler: nest.get(ToolScheduler),
+    busy: () => projects!.busy(),
+    serialize: (work) => projects!.coordinator.serial.run(work),
+  });
+  projects.maintenance = projectPurge;
   if (!runtime.store.recoveryError) await learning.initialize();
   await diagnostics.record({ type: 'service.started' });
   let closing: Promise<void> | undefined;
@@ -202,6 +227,7 @@ export async function createApplication(
     runtime,
     learning,
     diagnostics,
+    projects,
     sessions: nest.get(FileSessionStore),
     drafts: new DraftStore(nest.get(FileSessionStore)),
     approvals: nest.get(FileApprovalService),
@@ -213,6 +239,7 @@ export async function createApplication(
       nest.get(FileLearningStore),
       runtime,
       nest.get(ToolScheduler),
+      projectPurge,
     ),
     reset: new DataReset(
       nest.get(FileSessionStore),
@@ -220,6 +247,7 @@ export async function createApplication(
       nest.get(FileLearningStore),
       runtime,
       nest.get(ToolScheduler),
+      projectPurge,
     ),
     /** Останавливает задачи и обучение, затем закрывает MCP, контейнер и журнал диагностики. */
     close() {
@@ -227,6 +255,7 @@ export async function createApplication(
         const errors: unknown[] = [];
         // Каждый ресурс закрывается даже при отказе журнала предыдущего модуля.
         for (const stop of [
+          () => projects!.close(),
           () => runtime.close(),
           () => learning.close(),
           () => nest.get(McpClientService).close(),

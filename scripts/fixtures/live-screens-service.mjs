@@ -13,6 +13,7 @@ const { createApplication } = await moduleAt('interfaces/application.js');
 const { dispatch } = await moduleAt('interfaces/routes.js');
 const { acquireLock, socketPath } = await moduleAt('interfaces/ipc.js');
 const { resourceErrorData } = await moduleAt('shared/resource-errors.js');
+const { applicationErrorData } = await moduleAt('shared/application-error.js');
 const waiting = new Set();
 const release = await acquireLock(directory);
 const app = await createApplication(config, directory, {
@@ -72,7 +73,7 @@ function server(handle, tracked = false) {
                 error: {
                   code: -32000,
                   message: String(error?.message ?? error),
-                  data: resourceErrorData(error),
+                  data: applicationErrorData(error) ?? resourceErrorData(error),
                 },
               }) + '\n',
             );

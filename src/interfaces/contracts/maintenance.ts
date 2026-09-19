@@ -32,6 +32,7 @@ const resetPreview = z.object({
   ...counts,
   scope,
   tasks: count,
+  projects: count.default(0),
   sessions: count,
   jobs: count,
 });

@@ -4,6 +4,7 @@ import { queryCatalogHistory } from '../../sessions/history.js';
 import { dataResetScopeSchema } from '../data-reset-records.js';
 import { taskPreview } from '../result-pages.js';
 import { runIdSchema } from './task-status.js';
+import { ApplicationError } from '../../shared/application-error.js';
 
 /** Выполняет команды группы history через сервисы приложения. */
 export async function historyCommand(
@@ -65,6 +66,11 @@ export async function historyCommand(
     }
     case 'runtime.delete': {
       const args = runIdSchema.parse(input);
+      if (app.sessions.catalog(true).find((run) => run.id === args.runId)?.project)
+        throw new ApplicationError(
+          'PROJECT_MANAGED',
+          'Этап принадлежит проекту. Уберите из списка весь проект на его экране.',
+        );
       await app.sessions.delete(args.runId);
       return { deleted: true };
     }

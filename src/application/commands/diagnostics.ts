@@ -10,11 +10,20 @@ export async function diagnosticsCommand(
 ): Promise<unknown> {
   switch (method) {
     case 'diagnostics.verifyHistory':
-      return app.sessions.verifyHistory((work) =>
-        app.nest.get(FileLearningStore).withReadBarrier(work),
+      return app.projects.coordinator.serial.run(() =>
+        app.sessions.verifyHistory((work) => app.nest.get(FileLearningStore).withReadBarrier(work)),
       );
     case 'diagnostics.rebuildIndex':
-      return app.sessions.rebuildIndex();
+      return app.projects.coordinator.serial.run(async () => {
+        const tasks = await app.sessions.rebuildIndex(),
+          projects = await app.projects.store.rebuildIndex();
+        return {
+          ...tasks,
+          rebuilt: tasks.rebuilt + projects.rebuilt,
+          skipped: tasks.skipped + projects.skipped,
+          issues: [...tasks.issues, ...projects.issues],
+        };
+      });
     case 'diagnostics.status':
       return app.diagnostics.status();
     case 'diagnostics.configure': {

@@ -7,6 +7,13 @@ export function explainError(error: unknown, context?: 'configuration'): string 
   const text = message(error);
   const code = applicationErrorData(error)?.code;
   const explanations = {
+    PROJECT_MANAGED:
+      'Этой задачей управляет проект. Откройте «Проекты» и выберите действие в карточке проекта.',
+    PROJECT_CONFLICT:
+      'Проект изменился в другом окне. Откройте его карточку ещё раз и повторите действие.',
+    PROJECT_CHANGED:
+      'Файлы проекта изменились после проверки. Просмотрите изменения и повторите проверку результата.',
+    INVALID_PLAN: 'План не прошёл проверку: ' + text,
     TASK_BUSY: 'Задача ещё работает или останавливается. Дождитесь остановки и повторите действие.',
     STALE_PREVIEW:
       'Данные изменились после просмотра. Откройте предпросмотр ещё раз и подтвердите актуальный состав.',

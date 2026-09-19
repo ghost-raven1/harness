@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { atomicJson, optionalJson, syncDirectory, assertRealDirectory } from '../sessions/files.js';
 import type { PurgeRecord } from '../sessions/purge-records.js';
+import { projectPurgeRecordSchema } from '../projects/purge-records.js';
 
 export const dataResetScopeSchema = z.enum(['tasks', 'learning', 'all']);
 export type DataResetScope = z.infer<typeof dataResetScopeSchema>;
@@ -21,6 +22,7 @@ const schema = z
     previewToken: digest,
     complete: z.boolean(),
     sessions: z.array(session),
+    projects: z.array(projectPurgeRecordSchema).optional(),
     learningRunIds: z.array(z.string().uuid()),
     exportIds: z.array(z.string().regex(/^[a-zA-Z0-9_-]+$/)),
   })
@@ -115,11 +117,15 @@ const taskDirectories = [
   'drafts',
   'indexes',
   'search',
+  'project-records',
+  'project-index',
+  'project-artifacts',
 ] as const;
 interface StorageEntry {
   path: string;
   size: number;
   modified: number;
+  changed: number;
 }
 
 /** Включает оставшиеся после аварии файлы, которых уже нет в индексе сессий; ссылки не обходит. */
@@ -130,7 +136,13 @@ export async function taskStorageInventory(directory: string): Promise<StorageEn
       info = await lstat(path);
     if (info.isDirectory()) {
       for (const name of await names(path)) await visit(relative + '/' + name);
-    } else result.push({ path: relative, size: info.size, modified: info.mtimeMs });
+    } else
+      result.push({
+        path: relative,
+        size: info.size,
+        modified: info.mtimeMs,
+        changed: info.ctimeMs,
+      });
   };
   for (const folder of taskDirectories) {
     await assertRealDirectory(join(directory, folder));

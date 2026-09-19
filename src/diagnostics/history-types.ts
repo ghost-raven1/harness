@@ -14,7 +14,7 @@ export const historyIssueCodeSchema = z.enum([
 
 export const historyIssueSchema = z.object({
   code: historyIssueCodeSchema,
-  kind: z.enum(['run', 'output', 'learning', 'storage']),
+  kind: z.enum(['run', 'output', 'learning', 'project', 'storage']),
   runId: z.string().uuid().optional(),
   record: z.number().int().positive().optional(),
 });
@@ -29,6 +29,7 @@ export const historyVerificationSchema = z.object({
     runs: z.number().int().nonnegative(),
     outputs: z.number().int().nonnegative(),
     learning: z.number().int().nonnegative(),
+    projects: z.number().int().nonnegative().optional(),
     unresolvedOperations: z.number().int().nonnegative(),
   }),
   issues: z.array(historyIssueSchema),

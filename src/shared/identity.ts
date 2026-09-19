@@ -41,6 +41,7 @@ export function applicationIdentity() {
       'protocol-negotiation',
       'history-verification',
       'derived-indexes',
+      'projects-v1',
     ],
   };
 }

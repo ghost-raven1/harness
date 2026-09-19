@@ -9,6 +9,10 @@ export const applicationErrorCodeSchema = z.enum([
   'INVALID_REQUEST',
   'INVALID_RESPONSE',
   'UNKNOWN_COMMAND',
+  'PROJECT_MANAGED',
+  'PROJECT_CONFLICT',
+  'PROJECT_CHANGED',
+  'INVALID_PLAN',
 ]);
 export type ApplicationErrorCode = z.infer<typeof applicationErrorCodeSchema>;
 

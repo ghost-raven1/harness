@@ -146,13 +146,13 @@ def main():
             try:
                 terminal.expect('Чем займёмся?')
                 screens['main-90x45'] = terminal.visible(BRAND)
-                terminal.choose(3)
+                terminal.open_label('Как пользоваться')
                 terminal.expect('Продолжить')
                 screens['help-90x45'] = terminal.visible('Как пользоваться', ['Чем займёмся?'])
                 terminal.choose()
                 terminal.expect('Чем займёмся?')
                 terminal.resize(48, 24)
-                terminal.choose(2)
+                terminal.open_label('Настройки')
                 terminal.expect('Расход токенов')
                 screens['settings-48x24'] = terminal.visible(BRAND, ['Чем займёмся?'])
                 terminal.visible('Настройки')
@@ -167,7 +167,7 @@ def main():
                 terminal.visible('Esc — назад')
                 terminal.send('\x1b')
                 terminal.expect('Чем займёмся?')
-                terminal.choose(2)
+                terminal.open_label('Настройки')
                 terminal.expect('Расход токенов')
                 terminal.open_label('Где находятся настройки и история')
                 terminal.expect('Продолжить')
@@ -176,11 +176,11 @@ def main():
                 terminal.visible('← Назад')
                 terminal.choose()
                 terminal.expect('Чем займёмся?')
-                terminal.choose(2)
+                terminal.open_label('Настройки')
                 terminal.expect('Расход токенов')
                 terminal.choose(-1)
                 terminal.expect('Чем займёмся?')
-                terminal.choose(3)
+                terminal.open_label('Как пользоваться')
                 terminal.expect('Продолжить')
                 screens['help-48x24'] = terminal.visible(BRAND, ['Чем займёмся?'])
                 terminal.visible('Как пользоваться')
@@ -191,7 +191,7 @@ def main():
                                'data-files-48x24', 'help-48x24'])
 
                 terminal.resize(90, 45)
-                terminal.choose()
+                terminal.open_label('Новая задача')
                 terminal.expect('Что нужно сделать?')
                 terminal.visible('Рабочая папка этой задачи')
                 terminal.visible_path(workspace)
@@ -253,7 +253,7 @@ def main():
                         if exit_name == 'attached-escape-exit':
                             attached.send('\x1b')
                         else:
-                            attached.choose(-1)
+                            attached.open_label('Выход')
                         screens[exit_name] = attached.farewell(0)
                         assert 'Сервис продолжает работать' in screens[exit_name], screens[exit_name]
                         assert int((state / 'daemon.lock').read_text()) == terminal.pid
@@ -263,7 +263,7 @@ def main():
                         attached.close()
                     checks.append(exit_name + '-keeps-service')
 
-                terminal.choose(-1)
+                terminal.open_label('Выход')
                 screens['owner-exit'] = terminal.farewell(0)
                 assert 'История сохранена. Сервис остановлен.' in screens['owner-exit'], screens['owner-exit']
                 assert_released(state, address)
@@ -278,7 +278,7 @@ def main():
             terminal = Terminal(node, state, workspace, 48, 24)
             try:
                 terminal.expect('Чем займёмся?')
-                terminal.choose(1)
+                terminal.open_label('Мои задачи')
                 terminal.expect('Мои задачи · страница')
                 terminal.visible('Проверка каталога')
                 terminal.choose(-1)

@@ -11,6 +11,7 @@
   "coordination": "auto",
   "defaultProfile": "qwen",
   "workspaces": [".."],
+  "projects": { "maxCorrections": 2 },
   "limits": {
     "agents": 4,
     "depth": 2,

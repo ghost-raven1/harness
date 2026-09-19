@@ -14,6 +14,7 @@ export interface RunCatalogEntry {
   requestKey: string;
   requestHash: string;
   parentRunId?: string;
+  project?: import('./project-run.js').ProjectRunLink;
   workspace: string;
   profile: string;
   task: string;

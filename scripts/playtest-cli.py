@@ -128,6 +128,34 @@ class Terminal:
             self.send(DOWN if steps > 0 else UP)
         self.send('\r')
 
+    def screen(self):
+        import fcntl
+        import struct
+        import termios
+        import pyte
+        while select.select([self.fd], [], [], 0.05)[0]:
+            try:
+                self.raw += os.read(self.fd, 65536)
+            except OSError:
+                break
+        rows, columns, _, _ = struct.unpack('HHHH', fcntl.ioctl(self.fd, termios.TIOCGWINSZ, b'\0' * 8))
+        screen = pyte.Screen(columns, rows)
+        pyte.Stream(screen).feed(self.raw.decode('utf8', 'replace'))
+        return '\n'.join(line.rstrip() for line in screen.display)
+
+    def select_label(self, label):
+        self.send('\x1b[H')
+        for _ in range(40):
+            frame = self.screen()
+            if any(label in line for line in frame.splitlines() if re.match(r'^\s*│?\s*● ', line)):
+                return
+            self.send(DOWN)
+        raise AssertionError('Пункт не найден: ' + label + '\n' + self.screen())
+
+    def open_label(self, label):
+        self.select_label(label)
+        self.send('\r')
+
     def finish(self):
         until = time.monotonic() + 15
         while time.monotonic() < until:
@@ -202,7 +230,7 @@ def main():
             terminal.expect('Выберите модель для задач')
             terminal.choose()
             terminal.expect('Чем займёмся?')
-            terminal.choose()
+            terminal.open_label('Новая задача')
             terminal.expect('Что нужно сделать?')
             terminal.send('Первая проверка: запиши playtest.txt\x13')
             terminal.expect('После: playtest.txt')
@@ -236,11 +264,11 @@ def main():
             terminal.expect('Что дальше?')
             terminal.choose(-1)
             terminal.expect('Чем займёмся?')
-            terminal.choose()
+            terminal.open_label('Новая задача')
             terminal.expect('Что нужно сделать?')
             terminal.send('\x1b')
             terminal.expect('Чем займёмся?')
-            terminal.choose(-1)
+            terminal.open_label('Выход')
             terminal.expect('История сохранена.')
             terminal.finish()
             screens.append(terminal.text)
@@ -261,7 +289,7 @@ def main():
             terminal.expect('Сохранить ключ в защищённом')
             terminal.choose()
             terminal.expect('Чем займёмся?')
-            terminal.choose(1)
+            terminal.open_label('Мои задачи')
             terminal.expect('Мои задачи · страница')
             terminal.choose(2)
             terminal.expect('Слова из задачи, ответа')
@@ -273,7 +301,7 @@ def main():
             terminal.expect('Что дальше?')
             terminal.choose(-1)
             terminal.expect('Чем займёмся?')
-            terminal.choose()
+            terminal.open_label('Новая задача')
             terminal.expect('Сохранённые черновики')
             terminal.choose()
             terminal.expect('Продолжить ввод')
@@ -286,14 +314,14 @@ def main():
             terminal.expect('Что дальше?')
             terminal.choose(-1)
             terminal.expect('Чем займёмся?')
-            terminal.choose()
+            terminal.open_label('Новая задача')
             terminal.expect('Что нужно сделать?')
             terminal.send('Медленная задача для выхода\x13')
             terminal.expect('Esc — назад')
             terminal.send('\x1b')
             terminal.expect('Чем займёмся?')
-            terminal.choose(-1)
-            terminal.expect('Остановить работающие задачи и закрыть')
+            terminal.open_label('Выход')
+            terminal.expect('Приостановить работу и закрыть')
             terminal.send('\x1b[D\r')
             terminal.expect('История сохранена.')
             terminal.finish()

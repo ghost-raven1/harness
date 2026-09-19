@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { runInputSchema } from '../../runtime/run-factory.js';
 import { runMessageSchema } from '../../runtime/messages.js';
+import { projectRunLinkSchema } from '../../sessions/project-run.js';
 import {
   command,
   count,
@@ -23,6 +24,7 @@ export const statusInputSchema = runId.extend({
 export const statusSchema = z
   .object({
     runId: z.string(),
+    project: projectRunLinkSchema.optional(),
     task: z.string().optional(),
     createdAt: z.string().optional(),
     deletedAt: z.string().optional(),
@@ -40,7 +42,7 @@ export const statusSchema = z
     resultLength: count.optional(),
     resultPage: resultPageSchema.optional(),
     error: z.string().optional(),
-    pauseReason: z.enum(['iterations', 'provider']).optional(),
+    pauseReason: z.enum(['iterations', 'provider', 'project']).optional(),
     providerPause: z
       .object({ kind: z.enum(['rate_limit', 'quota']), retryAt: z.string().optional() })
       .optional(),

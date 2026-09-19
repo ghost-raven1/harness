@@ -21,6 +21,8 @@ import { InvocationExecutor, UnknownOutcomeError } from './executor.js';
 import { IterationLimitError, iterationProgress } from './iterations.js';
 import { abort, message } from '../shared/primitives.js';
 import { deliverMessages, hasPendingMessages } from './messages.js';
+import { planningToolAllowed } from '../sessions/project-run.js';
+import { RunPausedError } from '../shared/run-pause.js';
 
 interface AgentLoopServices {
   store: SessionStore;
@@ -32,6 +34,7 @@ interface AgentLoopServices {
   agents: AgentCoordinator;
   providerFor(runId: string): ModelProvider;
   stopRun(runId: string, reason?: Error): void;
+  checkpoint?(runId: string): void;
 }
 
 /** Исполняет цикл одной роли: контекст, модель, инструменты и завершение хода. */
@@ -42,9 +45,11 @@ export class AgentLoop {
     return [
       ...this.services.registry.definitions(),
       ...configuredControlDefinitions(run.config.value),
-    ].filter((tool) =>
-      // Ограничения аргументов повторно проверяются для конкретного вызова.
-      this.services.policy.canAdvertise(run.config.value, agent, tool.name),
+    ].filter(
+      (tool) =>
+        // Ограничения аргументов повторно проверяются для конкретного вызова.
+        (run.project?.kind !== 'planning' || planningToolAllowed(tool.name)) &&
+        this.services.policy.canAdvertise(run.config.value, agent, tool.name),
     );
   }
   /** Ведёт одну ветку до результата, сохраняя обмены и проверяя общие пределы. */
@@ -52,6 +57,7 @@ export class AgentLoop {
     let forcedCompaction = false;
     while (true) {
       abort(signal);
+      this.services.checkpoint?.(runId);
       let run = this.services.store.get(runId);
       let agent = run.agents[agentId]!;
       const root = agentId === run.rootAgentId;
@@ -75,6 +81,7 @@ export class AgentLoop {
         { agentId, profile: this.services.context.profile(run, agent).id },
         (state) => {
           abort(signal);
+          this.services.checkpoint?.(runId);
           const progress = iterationProgress(state);
           if (progress.used >= progress.limit) {
             const error = new IterationLimitError(progress.limit);
@@ -91,6 +98,9 @@ export class AgentLoop {
       }
       this.services.context.assertFits(run, agent, tools);
       const messages = this.services.context.build(run, agent, tools);
+      if (run.project?.kind === 'planning')
+        messages[0]!.content +=
+          '\n\nPROJECT PLANNING: inspect files with read-only tools. Return the requested proposal as JSON text. Do not execute the plan or delegate work.';
       if (planning) messages[0]!.content += '\n\n' + planningInstruction(run);
       const { profile } = this.services.context.profile(run, agent);
       if (estimate(messages) + estimate(tools) > profile.contextTokens - profile.outputTokens)
@@ -276,7 +286,7 @@ export class AgentLoop {
           // Отмену ожидающих вызовов фиксирует исполнитель, чтобы у каждого ID остался результат.
           return await (effect ? batch.schedule(effect, execute) : execute());
         } catch (error) {
-          this.services.stopRun(runId);
+          if (!(error instanceof RunPausedError)) this.services.stopRun(runId);
           throw error;
         }
       }),

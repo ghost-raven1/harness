@@ -20,6 +20,8 @@ export interface ServiceInfo {
   defaultProfile: string;
   tools: string[];
   activeRuns?: number;
+  activeProjects?: number;
+  projectCount?: number;
   recoveryError?: string;
   pendingApprovals?: number;
   learningVersion?: string;
@@ -34,6 +36,7 @@ export interface ServiceInfo {
 }
 
 export interface StatusView {
+  project?: import('../sessions/project-run.js').ProjectRunLink;
   runId: string;
   task?: string;
   createdAt?: string;

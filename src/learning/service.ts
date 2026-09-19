@@ -13,6 +13,11 @@ import { isNegativeFeedback, revokeCandidates, withdrawConfirmations } from './f
 
 /** Обрабатывает один урок за раз и публикует только подтверждённые оценкой изменения. */
 export class LearningService {
+  private projectAccepted: (projectId: string) => boolean = () => false;
+  /** Приёмка проекта проверяется через прикладной порт, без зависимости от проектного модуля. */
+  setProjectAcceptance(check: (projectId: string) => boolean): void {
+    this.projectAccepted = check;
+  }
   private running = false;
   private timer?: ReturnType<typeof setTimeout>;
   private stopped = false;
@@ -34,7 +39,11 @@ export class LearningService {
   /** Восстанавливает пропущенные задания после сбоя между завершением задачи и постановкой в очередь. */
   async initialize(): Promise<void> {
     for (const run of this.sessions.catalog())
-      if (run.learningEnabled && ['completed', 'failed'].includes(run.status))
+      if (
+        run.learningEnabled &&
+        ['completed', 'failed'].includes(run.status) &&
+        (!run.project || this.projectAccepted(run.project.projectId))
+      )
         await this.enqueue(run.id);
   }
   /** Собирает подтверждённые исходы инструментов и создаёт по одному заданию на роль запуска. */
@@ -42,6 +51,11 @@ export class LearningService {
     this.assertAvailable();
     if (this.store.read().ignoredRunIds?.includes(runId)) return;
     const run = await this.sessions.load(runId);
+    if (
+      run.project &&
+      (run.project.kind === 'planning' || !this.projectAccepted(run.project.projectId))
+    )
+      return;
     if (!run.config.value.learning.enabled) return;
     await this.store.update((state) => {
       const roles = new Set<string>();
@@ -265,6 +279,11 @@ export class LearningService {
   ): Promise<void> {
     this.assertAvailable();
     const run = await this.sessions.load(runId);
+    if (
+      run.project &&
+      (run.project.kind === 'planning' || !this.projectAccepted(run.project.projectId))
+    )
+      throw new Error('Обратная связь по этапам доступна после приёмки проекта.');
     const feedbackId = hash({ runId, positive, text, candidateId });
     const role = run.agents[run.rootAgentId]!.role;
     await this.store.update((state) => {

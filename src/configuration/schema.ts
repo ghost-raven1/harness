@@ -132,6 +132,10 @@ export const configSchema = z
     defaultRole: z.string(),
     coordination: z.enum(['auto', 'manual']).default('auto'),
     defaultProfile: z.string(),
+    projects: z
+      .object({ maxCorrections: z.number().int().min(0).max(10) })
+      .strict()
+      .optional(),
     profiles: z.record(profileSchema),
     roles: z.record(roleSchema),
     policy: z.object({ default: decisionSchema, rules: z.array(permission) }).strict(),

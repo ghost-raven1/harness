@@ -4,7 +4,9 @@ import type { ToolRegistry } from '../tools/registry.js';
 import type { ToolScheduler } from '../tools/scheduler.js';
 import type { FileApprovalService, PolicyService } from '../policy/service.js';
 import type { ToolCall } from '../providers/types.js';
-import type { ToolInvocation } from '../sessions/types.js';
+import type { ToolInvocation, RunRecord } from '../sessions/types.js';
+import { planningToolAllowed } from '../sessions/project-run.js';
+import { RunPausedError } from '../shared/run-pause.js';
 import { abort, deadline, message } from '../shared/primitives.js';
 import { delegateSchema, awaitSchema, handoffSchema } from '../agents/service.js';
 import { ToolOutcomeUnknownError } from '../tools/errors.js';
@@ -23,8 +25,19 @@ export type ControlHandler = (
   args: Record<string, unknown>,
   signal: AbortSignal,
 ) => Promise<unknown>;
+/** Пауза и владение папкой проверяются у границы начала эффекта. */
+export interface ExecutionControl {
+  checkpoint(runId: string): void;
+  waitingSignal(runId: string, signal: AbortSignal): AbortSignal;
+  assertWrite(run: RunRecord): void;
+}
 /** Проверяет вызов, записывает начало до эффекта и сохраняет результат с исходным ID. */
 export class InvocationExecutor {
+  private control: ExecutionControl = {
+    checkpoint: () => undefined,
+    waitingSignal: (_runId, signal) => signal,
+    assertWrite: () => undefined,
+  };
   constructor(
     private readonly store: SessionStore,
     private readonly registry: ToolRegistry,
@@ -32,6 +45,10 @@ export class InvocationExecutor {
     private readonly policy: PolicyService,
     private readonly approvals: FileApprovalService,
   ) {}
+  /** Подключает жизненный цикл runtime, оставляя исполнитель независимым от проектов. */
+  setExecutionControl(control: ExecutionControl): void {
+    this.control = control;
+  }
   /** Проверяет схему, права и сохранённый исход перед выполнением одного вызова. */
   async execute(
     runId: string,
@@ -53,6 +70,26 @@ export class InvocationExecutor {
     let started = false;
     try {
       abort(signal);
+      this.control.checkpoint(runId);
+      if (run.project?.kind === 'planning' && !planningToolAllowed(call.name))
+        return this.finish(runId, agentId, call, effect, 'denied', {
+          error: 'PLANNING_READ_ONLY',
+          tool: call.name,
+        });
+      if (
+        run.project?.kind === 'checks' &&
+        (call.name !== 'process.exec' ||
+          !run.projectChecks?.some(
+            (check) =>
+              check.id === call.id &&
+              check.name === call.name &&
+              check.arguments === call.arguments,
+          ))
+      )
+        return this.finish(runId, agentId, call, effect, 'denied', {
+          error: 'CHECK_NOT_CONFIGURED',
+          tool: call.name,
+        });
       let args: unknown = JSON.parse(call.arguments);
       if (isControl) {
         if (call.name === 'agents.delegate') args = delegateSchema.parse(args);
@@ -75,7 +112,15 @@ export class InvocationExecutor {
           error: 'POLICY_DENIED',
           tool: call.name,
         });
-      if (decision === 'ask' && !(await this.approvals.request(runId, agentId, call, signal))) {
+      if (
+        decision === 'ask' &&
+        !(await this.approvals.request(
+          runId,
+          agentId,
+          call,
+          this.control.waitingSignal(runId, signal),
+        ))
+      ) {
         return this.finish(runId, agentId, call, effect, 'denied', {
           error: 'HUMAN_DENIED',
           tool: call.name,
@@ -83,12 +128,16 @@ export class InvocationExecutor {
       }
       const work = async (): Promise<string> => {
         abort(signal);
+        this.control.checkpoint(runId);
+        if (effect === 'write') this.control.assertWrite(this.store.get(runId));
         await this.store.mutate(
           runId,
           'tool.started',
           { agentId, tool: call.name, invocationId: key },
           (state) => {
             abort(signal);
+            this.control.checkpoint(runId);
+            if (effect === 'write') this.control.assertWrite(state);
             if (decision === 'ask') this.approvals.consume(state, agentId, call);
             state.invocations[key] = {
               id: key,
@@ -156,9 +205,24 @@ export class InvocationExecutor {
       };
       return isControl
         ? await work()
-        : await this.scheduler.schedule(effect as 'read' | 'write', work, signal);
+        : await this.scheduler.schedule(
+            effect as 'read' | 'write',
+            work,
+            this.control.waitingSignal(runId, signal),
+          );
     } catch (error) {
       if (error instanceof UnknownOutcomeError) throw error;
+      if (
+        error instanceof RunPausedError ||
+        (!started && !signal.aborted && this.store.get(runId).pauseRequested)
+      ) {
+        // agents.await только ожидает: его незавершённую запись можно повторить без нового эффекта.
+        if (started && call.name === 'agents.await')
+          await this.store.mutate(runId, 'tool.deferred', { invocationId: key }, (state) => {
+            delete state.invocations[key];
+          });
+        throw new RunPausedError();
+      }
       if (started && effect === 'write' && signal.aborted) {
         return this.markUnknown(runId, agentId, call, error);
       }
@@ -246,6 +310,14 @@ export class InvocationExecutor {
           result,
           startedAt: state.invocations[key]?.startedAt ?? new Date().toISOString(),
           finishedAt: new Date().toISOString(),
+          ...(call.name === 'process.exec' &&
+          value &&
+          typeof value === 'object' &&
+          'exitCode' in value &&
+          (value.exitCode === null ||
+            (typeof value.exitCode === 'number' && Number.isInteger(value.exitCode)))
+            ? { exitCode: value.exitCode as number | null }
+            : {}),
         };
         const current = state.agents[agentId]!;
         if (

@@ -2,7 +2,6 @@ import { ApplicationError } from '../shared/application-error.js';
 import { UsageLedger } from './usage.js';
 import {
   IterationSettings,
-  IterationLimitError,
   iterationProgress,
   validateIterationLimit,
   assertExpectedLimit,
@@ -12,11 +11,6 @@ import type { ConfigSnapshot } from '../configuration/schema.js';
 import type { SessionStore } from '../sessions/ports.js';
 import type { RunRecord, RunStatus } from '../sessions/types.js';
 import { requiresOutcomeReview } from '../sessions/invocations.js';
-import {
-  assertKnownSessionOutcomes,
-  missingSessionCorrections,
-  sessionCorrections,
-} from '../sessions/continuation.js';
 import type { LearningStore } from '../learning/types.js';
 import type { ModelProvider } from '../providers/types.js';
 import { ProviderError } from '../providers/errors.js';
@@ -24,14 +18,22 @@ import type { ToolRegistry } from '../tools/registry.js';
 import type { PolicyService } from '../policy/service.js';
 import type { ContextService } from '../context/service.js';
 import type { InvocationExecutor } from './executor.js';
-import { UnknownOutcomeError } from './executor.js';
 import { AgentCoordinator } from '../agents/coordinator.js';
 import { AgentLoop } from './agent-loop.js';
-import { RunFactory, serviceFingerprint, type RunInput } from './run-factory.js';
-import { abort, message, Serial } from '../shared/primitives.js';
-import { RunInbox, hasPendingMessages, type RunMessageInput } from './messages.js';
-
-class PendingMessagesError extends Error {}
+import { RunFactory, type RunInput } from './run-factory.js';
+import { Serial } from '../shared/primitives.js';
+import { RunInbox, type RunMessageInput } from './messages.js';
+import { realpath } from 'node:fs/promises';
+import { RuntimeExecutions } from './executions.js';
+import { CheckLoop } from './check-loop.js';
+import { RunPausedError } from '../shared/run-pause.js';
+import { prepareResume } from './resume.js';
+import type {
+  ProjectRunPort,
+  ProjectRunStart,
+  RunSettled,
+  WorkspaceAccess,
+} from '../sessions/project-run.js';
 
 export { runInputSchema, type RunInput } from './run-factory.js';
 
@@ -53,21 +55,19 @@ export class HarnessRuntime {
   private readonly lifecycle = new Serial();
   private closing?: Promise<void>;
   private readonly failures = new Map<string, unknown>();
-  private readonly executions = new Map<
-    string,
-    {
-      controller: AbortController;
-      done: Promise<void>;
-      cancelRequested: boolean;
-      stopReason?: Error;
-    }
-  >();
+  private readonly executions: RuntimeExecutions;
   readonly usage: UsageLedger;
   private readonly iterations: IterationSettings;
   private readonly agents: AgentCoordinator;
   private readonly loop: AgentLoop;
   private readonly factory: RunFactory;
   private readonly inbox: RunInbox;
+  private readonly capability = Symbol('project-runtime');
+  private readonly settled = new Set<(event: RunSettled) => void>();
+  private access: WorkspaceAccess = {
+    reserve: () => () => undefined,
+    assertWrite: () => undefined,
+  };
   readonly store: SessionStore;
   private readonly initialConfig: ConfigSnapshot;
   /** Вызывается после остановки дерева; по умолчанию завершение не запускает дополнительные действия. */
@@ -89,14 +89,46 @@ export class HarnessRuntime {
     this.agents = new AgentCoordinator(services.store, (runId, agentId, signal) =>
       this.loop.run(runId, agentId, signal),
     );
+    const checks = new CheckLoop(services.store, services.executor, (runId) =>
+      this.executions.checkpoint(runId),
+    );
+    this.executions = new RuntimeExecutions({
+      store: services.store,
+      agents: this.agents,
+      failures: this.failures,
+      executeRoot: (runId, signal) =>
+        services.store.get(runId).project?.kind === 'checks'
+          ? checks.run(runId, signal)
+          : this.loop.run(runId, services.store.get(runId).rootAgentId, signal),
+      terminal: (runId) => this.terminal(runId),
+      settled: (runId) => this.notifySettled(runId),
+    });
+    services.executor.setExecutionControl({
+      checkpoint: (runId) => this.executions.checkpoint(runId),
+      waitingSignal: (runId, signal) => this.executions.waitingSignal(runId, signal),
+      assertWrite: (run) => this.access.assertWrite(run),
+    });
     this.loop = new AgentLoop({
       ...services,
       agents: this.agents,
+      checkpoint: (runId) => this.executions.checkpoint(runId),
       providerFor: (runId) => ({
         generate: async (request) => {
           try {
-            return await this.usage.provider(services.provider, runId).generate(request);
+            this.executions.checkpoint(runId);
+            return await this.usage.provider(services.provider, runId).generate({
+              ...request,
+              signal: this.executions.waitingSignal(
+                runId,
+                request.signal ?? new AbortController().signal,
+              ),
+            });
           } catch (error) {
+            if (
+              !this.executions.get(runId)?.controller.signal.aborted &&
+              this.store.get(runId).pauseRequested
+            )
+              throw new RunPausedError();
             if (error instanceof ProviderError && error.limit) {
               const execution = this.executions.get(runId);
               if (execution) {
@@ -121,6 +153,101 @@ export class HarnessRuntime {
   /** Назначает обработчик завершения для диагностики и очереди обучения. */
   onTerminal(listener: (runId: string) => Promise<void>): void {
     this.terminal = listener;
+  }
+  /** Подключает общий учёт владения папками, не связывая runtime с модулем проектов. */
+  setWorkspaceAccess(access: WorkspaceAccess): void {
+    this.access = access;
+  }
+
+  /** Возвращает внутренние операции с правом управления проектными запусками. */
+  projectRuns(): ProjectRunPort {
+    return {
+      start: (input) => this.startProject(input),
+      inspect: async (runId) => this.view(runId, await this.store.load(runId)),
+      find: (requestKey) => this.store.catalog(true).find((run) => run.requestKey === requestKey),
+      busy: (runId) => this.busy(runId),
+      pause: (runId) => this.pauseProject(runId),
+      resume: (runId) => this.resume(runId, this.capability),
+      cancel: (runId) => this.cancel(runId, this.capability),
+      sendMessage: (input) => this.sendMessage(input, this.capability),
+      resolve: (input) =>
+        this.resolveInvocation(
+          input.runId,
+          input.invocationId,
+          input.result,
+          input.succeeded,
+          this.capability,
+        ),
+      subscribeSettled: (listener) => {
+        this.settled.add(listener);
+        return () => {
+          this.settled.delete(listener);
+        };
+      },
+    };
+  }
+  /** Уведомляет наблюдателей после освобождения исполнителя; их сбой не меняет журнал. */
+  private notifySettled(runId: string): void {
+    const entry = this.store.catalog(true).find((run) => run.id === runId);
+    if (!entry?.project) return;
+    const event: RunSettled = {
+      runId,
+      link: entry.project,
+      status: this.visibleStatus(runId, entry.status),
+      seq: entry.seq,
+      recoveryRequired: !!this.store.recoveryError,
+    };
+    for (const listener of this.settled) {
+      try {
+        listener(event);
+      } catch {
+        /* Наблюдатель перечитает журнал при следующей сверке. */
+      }
+    }
+  }
+  /** Запрещает обход проектного оркестратора обычными командами задачи. */
+  private assertManaged(run: RunRecord, capability?: symbol): void {
+    if (run.project && capability !== this.capability)
+      throw new ApplicationError(
+        'PROJECT_MANAGED',
+        'Этой задачей управляет проект. Откройте его для продолжения.',
+      );
+  }
+  /** Создаёт проектный запуск и передаёт резервирование папки исполнителю. */
+  private startProject(input: ProjectRunStart) {
+    this.assertOpen();
+    const pinned = structuredClone(input);
+    return this.lifecycle.run(async () => {
+      const { run, created, release } = await this.factory.createPinned(pinned, (scope) =>
+        this.access.reserve(scope),
+      );
+      if (created) {
+        try {
+          this.executions.launch(run.id, release);
+        } catch (error) {
+          release?.();
+          throw error;
+        }
+      }
+      return { runId: run.id, sessionId: run.sessionId };
+    });
+  }
+  /** Просит все ветки остановиться на безопасной границе и ждёт начатых эффектов. */
+  private async pauseProject(runId: string): Promise<void> {
+    const { done } = await this.lifecycle.run(async () => {
+      const run = await this.store.load(runId);
+      if (!run.project)
+        throw new ApplicationError('PROJECT_MANAGED', 'Задача не принадлежит проекту.');
+      const execution = this.executions.get(runId);
+      if (!execution || ['completed', 'failed', 'cancelled', 'paused'].includes(run.status))
+        return { done: execution?.done };
+      await this.store.mutate(runId, 'run.pause_requested', {}, (state) => {
+        state.pauseRequested = true;
+      });
+      execution.pause.abort();
+      return { done: execution.done };
+    });
+    await done;
   }
   /** Показывает незавершённое исполнение выбранной задачи или всего сервиса, включая остановку. */
   busy(runId?: string): boolean {
@@ -148,105 +275,38 @@ export class HarnessRuntime {
   async start(input: RunInput): Promise<{ runId: string; sessionId: string }> {
     this.assertOpen();
     return this.lifecycle.run(async () => {
-      const { run, created } = await this.factory.create(input);
-      if (created) this.launch(run.id);
+      const { run, created, release } = await this.factory.create(input, (scope) =>
+        this.access.reserve(scope),
+      );
+      if (created) {
+        try {
+          this.executions.launch(run.id, release);
+        } catch (error) {
+          release?.();
+          throw error;
+        }
+      }
       return { runId: run.id, sessionId: run.sessionId };
     });
   }
 
   /** Сохраняет уточнение для следующего шага текущего запуска. */
-  sendMessage(input: RunMessageInput) {
+  async sendMessage(input: RunMessageInput, capability?: symbol) {
+    const run = await this.store.load(input.runId);
+    this.assertManaged(run, capability);
+    if (run.project?.kind === 'checks')
+      throw new ApplicationError(
+        'PROJECT_MANAGED',
+        'Детерминированная проверка не принимает уточнения модели.',
+      );
     return this.inbox.send(input);
   }
 
-  /** Запускает корень и координирует финализацию, паузы и остановку дочерних веток. */
-  private launch(runId: string): void {
-    if (this.executions.has(runId))
-      throw new ApplicationError('TASK_BUSY', 'Run already executing');
-    this.store.pin(runId);
-    const controller = new AbortController();
-    const done = Promise.resolve()
-      .then(async () => {
-        try {
-          while (true) {
-            await this.loop.run(runId, this.store.get(runId).rootAgentId, controller.signal);
-            abort(controller.signal);
-            try {
-              await this.store.mutate(runId, 'run.completed', {}, (run) => {
-                abort(controller.signal);
-                // Приём сообщения и финализация используют один журнал: принятое уточнение не теряется.
-                if (hasPendingMessages(run)) throw new PendingMessagesError();
-                run.status = 'completed';
-                run.result = run.agents[run.rootAgentId]!.result;
-              });
-              break;
-            } catch (error) {
-              if (!(error instanceof PendingMessagesError)) throw error;
-            }
-          }
-        } catch (caught) {
-          const error = this.executions.get(runId)?.stopReason ?? caught;
-          const providerPause = error instanceof ProviderError ? error.limit : undefined;
-          const paused =
-            error instanceof UnknownOutcomeError ||
-            error instanceof IterationLimitError ||
-            !!providerPause;
-          controller.abort();
-          if (
-            !this.executions.get(runId)?.cancelRequested &&
-            this.store.get(runId).status !== 'cancelled'
-          )
-            await this.store.mutate(
-              runId,
-              paused ? 'run.paused' : 'run.failed',
-              { error: message(error) },
-              (run) => {
-                run.status = paused ? 'paused' : 'failed';
-                run.error = message(error);
-                if (error instanceof IterationLimitError) run.pauseReason = 'iterations';
-                else if (providerPause) run.pauseReason = 'provider';
-                else delete run.pauseReason;
-                if (providerPause) run.providerPause = providerPause;
-                else delete run.providerPause;
-                if (run.status === 'failed') run.agents[run.rootAgentId]!.status = 'failed';
-              },
-            );
-        } finally {
-          await this.agents.waitForRun(runId);
-          await this.store.recoverInterrupted(runId);
-          if (['completed', 'failed'].includes(this.store.get(runId).status)) {
-            try {
-              await this.terminal(runId);
-            } catch {
-              /* Сбой обучения не меняет результат пользовательской задачи. */
-            }
-          }
-        }
-      })
-      .catch((error: unknown) => {
-        // Сохранённая пауза уже защищена проверкой неизвестных операций при продолжении.
-        // Полностью блокируем запись, только если журнал всё ещё обещает активное исполнение.
-        if (['running', 'awaiting_approval'].includes(this.store.get(runId).status)) {
-          this.failures.set(runId, error);
-          this.store.requireRecovery(error);
-          for (const execution of this.executions.values()) execution.controller.abort();
-        }
-        throw error;
-      })
-      .finally(() => {
-        this.agents.forgetRun(runId);
-        this.executions.delete(runId);
-        this.store.unpin(runId);
-      });
-    this.executions.set(runId, { controller, done, cancelRequested: false });
-    // CLI может только опрашивать статус. Отказ диска не должен стать необработанным rejection;
-    // явный wait по-прежнему ожидает исходный promise и получает ошибку.
-    void done.catch(() => undefined);
-  }
   /** Отменяет всё дерево и дожидается остановки активной работы. */
-  async cancel(runId: string): Promise<void> {
+  async cancel(runId: string, capability?: symbol): Promise<void> {
     const { done } = await this.lifecycle.run(async () => {
       const run = await this.store.load(runId);
+      this.assertManaged(run, capability);
       const execution = this.executions.get(runId);
       // Итоговый статус записывается раньше остановки исполнителей и завершающего обработчика.
       if (['completed', 'failed', 'cancelled'].includes(run.status))
@@ -261,85 +321,42 @@ export class HarnessRuntime {
         for (const agent of Object.values(state.agents))
           if (['running', 'waiting'].includes(agent.status)) agent.status = 'cancelled';
       });
+      if (!execution) this.notifySettled(runId);
       return { done: execution?.done };
     });
     // Долгий инструмент или обучение не удерживают очередь команд остальных задач.
     await done;
   }
   /** Продолжает приостановленный запуск после разрешения неизвестных исходов. */
-  async resume(runId: string): Promise<void> {
+  async resume(runId: string, capability?: symbol): Promise<void> {
     this.assertOpen();
-    return this.lifecycle.run(() => this.resumeStopped(runId));
+    return this.lifecycle.run(() => this.resumeStopped(runId, capability));
   }
   /** Сохраняет продолжение и регистрирует цикл до обработки следующей команды отмены. */
-  private async resumeStopped(runId: string): Promise<void> {
+  private async resumeStopped(runId: string, capability?: symbol): Promise<void> {
     this.store.assertWritable();
     if (this.executions.has(runId)) throw new ApplicationError('TASK_BUSY', 'Run still stopping');
     const previous = await this.store.load(runId);
-    const sessionRuns = this.store
-      .catalog(true)
-      .filter((run) => run.sessionId === previous.sessionId);
-    const revision = this.store.sessionRevision(previous.sessionId);
-    const corrections = await sessionCorrections(this.store, sessionRuns);
-    if (
-      serviceFingerprint(previous.config.value) !== serviceFingerprint(this.initialConfig.value)
-    ) {
-      throw new Error(
-        'Resume requires the original MCP, concurrency and learning service settings',
+    this.assertManaged(previous, capability);
+    if (Object.values(previous.invocations).some(requiresOutcomeReview))
+      throw new ApplicationError('UNKNOWN_OUTCOME', 'Resolve unknown invocations before resuming');
+    if (previous.fileChanges?.some((change) => change.status === 'restoring'))
+      throw new ApplicationError(
+        'UNKNOWN_OUTCOME',
+        'Сначала проверьте результат прерванного восстановления файла.',
       );
+    const workspace = await realpath(previous.workspace);
+    if (workspace !== previous.workspace)
+      throw new ApplicationError('PROJECT_CHANGED', 'Рабочая папка задачи изменилась.');
+    const release = this.access.reserve({ workspace, projectId: previous.project?.projectId });
+    try {
+      await prepareResume(this.store, previous, this.initialConfig);
+      this.agents.forgetRun(runId);
+      this.executions.launch(runId, release);
+    } catch (error) {
+      release();
+      throw error;
     }
-    await this.store.mutate(runId, 'run.resumed', {}, (state) => {
-      if (state.status !== 'paused') throw new Error('Only paused runs can be resumed');
-      if (Object.values(state.invocations).some(requiresOutcomeReview))
-        throw new ApplicationError(
-          'UNKNOWN_OUTCOME',
-          'Resolve unknown invocations before resuming',
-        );
-      if (state.fileChanges?.some((change) => change.status === 'restoring'))
-        throw new ApplicationError(
-          'UNKNOWN_OUTCOME',
-          'Сначала проверьте результат прерванного восстановления файла.',
-        );
-      if (revision !== this.store.sessionRevision(state.sessionId))
-        throw new ApplicationError(
-          'STALE_PREVIEW',
-          'Состояние беседы изменилось. Повторите продолжение.',
-        );
-      assertKnownSessionOutcomes(sessionRuns);
-      if (state.providerPause?.retryAt && Date.parse(state.providerPause.retryAt) > Date.now())
-        throw new Error(
-          'Провайдер просит подождать до ' +
-            state.providerPause.retryAt +
-            '. Затем продолжите задачу.',
-        );
-      state.status = 'running';
-      delete state.providerPause;
-      state.iterationLimit ??= state.config.value.limits.turns;
-      state.iterationStart = state.turns;
-      delete state.pauseReason;
-      delete state.error;
-      for (const agent of Object.values(state.agents))
-        if (agent.status !== 'completed' && agent.status !== 'failed') {
-          let parent = agent.parentId ? state.agents[agent.parentId] : undefined;
-          while (parent && !['completed', 'failed'].includes(parent.status))
-            parent = parent.parentId ? state.agents[parent.parentId] : undefined;
-          if (parent) {
-            // Завершённая ветка не запустит потомков повторно через agents.await.
-            agent.status = 'cancelled';
-            continue;
-          }
-          // Сводка дополняется отдельно: pending-вызовы ещё не имеют сообщений с результатами.
-          const missing = missingSessionCorrections(corrections, agent);
-          if (missing.length)
-            agent.summary = [agent.summary, ...missing.map((item) => item.content)]
-              .filter(Boolean)
-              .join('\n\n');
-          agent.status = 'running';
-          delete agent.error;
-        }
-    });
-    this.agents.forgetRun(runId);
-    this.launch(runId);
   }
   /** Возвращает предел новых задач и остаток текущей порции выбранного запуска. */
   async iterationStatus(runId?: string): Promise<IterationStatus> {
@@ -358,6 +375,7 @@ export class HarnessRuntime {
       pausedByLimit: run.status === 'paused' && run.pauseReason === 'iterations',
       editable:
         !this.store.recoveryError &&
+        !run.project &&
         !run.deletedAt &&
         run.status === 'paused' &&
         !this.executions.has(runId),
@@ -376,6 +394,7 @@ export class HarnessRuntime {
       return;
     }
     await this.store.mutate(runId, 'run.iteration_limit_changed', { limit }, (run) => {
+      this.assertManaged(run);
       if (run.deletedAt) throw new Error('Скрытая задача доступна только для просмотра.');
       if (run.status !== 'paused' || this.executions.has(runId))
         throw new ApplicationError(
@@ -393,8 +412,10 @@ export class HarnessRuntime {
     invocationId: string,
     result: string,
     succeeded: boolean,
+    capability?: symbol,
   ): Promise<void> {
     await this.store.mutate(runId, 'tool.human_resolved', { invocationId }, (state) => {
+      this.assertManaged(state, capability);
       if (this.executions.has(runId))
         throw new ApplicationError(
           'TASK_BUSY',
@@ -423,7 +444,7 @@ export class HarnessRuntime {
       .then(async (executions) => {
         // Ошибка записи отмены не означает, что инструменты уже прекратили работу.
         const results = await Promise.allSettled([
-          ...executions.map(([runId]) => this.cancel(runId)),
+          ...executions.map(([runId]) => this.cancel(runId, this.capability)),
           ...executions.map(([, execution]) => execution.done),
         ]);
         const errors = results.filter((result) => result.status === 'rejected');

@@ -1,3 +1,4 @@
+import { ProjectStore } from '../../projects/store.js';
 import type { Command } from 'commander';
 import * as prompts from '@clack/prompts';
 import type { CliContext } from '../types.js';
@@ -41,7 +42,16 @@ async function historyAction(
     if (!rebuild) return await verifyHistory(context.directory());
     const sessions = new FileSessionStore(context.directory());
     await sessions.initialize({ recover: false });
-    return await sessions.rebuildIndex();
+    const projects = new ProjectStore(context.directory());
+    await projects.initialize(false);
+    const taskReport = await sessions.rebuildIndex(),
+      projectReport = await projects.rebuildIndex();
+    return {
+      ...taskReport,
+      rebuilt: taskReport.rebuilt + projectReport.rebuilt,
+      skipped: taskReport.skipped + projectReport.skipped,
+      issues: [...taskReport.issues, ...projectReport.issues],
+    };
   } finally {
     await release();
   }

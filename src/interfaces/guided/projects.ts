@@ -16,7 +16,7 @@ export async function changeProject(
   host: DesktopService,
   keys: SessionKeys,
 ): Promise<void> {
-  page(kind === 'recent' ? 'Недавние проекты' : 'Подключение модели');
+  page(kind === 'recent' ? 'Недавние папки' : 'Подключение модели');
   if (!host.isOwner || host.activeCount()) {
     prompts.log.info(
       host.isOwner
@@ -35,9 +35,9 @@ export async function changeProject(
         JSON.stringify([project.configFile, project.workspace]);
       const key = selected(
         await liveSelect({
-          title: 'Недавние проекты',
+          title: 'Недавние папки',
           load: async () => ({
-            message: 'Недавние проекты',
+            message: 'Недавние папки',
             options: [
               ...(await recentProjects(host.directory)).map((project) => ({
                 value: projectKey(project),
@@ -54,7 +54,7 @@ export async function changeProject(
         (project) => projectKey(project) === key,
       );
       if (!chosen) return;
-      page('Подключение проекта');
+      page('Подключение папки');
       next = { ...chosen };
       const config = await loadConfig(next.configFile);
       if (!config.value.workspaces.some((root) => isWithin(root, next.workspace)))

@@ -164,7 +164,7 @@ def run_case(node, api, root, width, height, review):
     terminal = Terminal(node, state, workspace, width, height)
     try:
         terminal.expect('Чем займёмся?')
-        terminal.choose()
+        terminal.open_label('Новая задача')
         terminal.expect('Что нужно сделать?')
         terminal.send('Проверка читаемости ' + case + '\x13')
         terminal.until(controls.listed)
@@ -199,7 +199,7 @@ def run_case(node, api, root, width, height, review):
 
         terminal.send('\x1b')
         terminal.expect('Чем займёмся?')
-        terminal.choose(1)
+        terminal.open_label('Мои задачи')
         terminal.expect('Мои задачи · страница')
         terminal.choose()
         terminal.expect('Строка 129')
@@ -217,7 +217,7 @@ def run_case(node, api, root, width, height, review):
         terminal.expect('Мои задачи · страница')
         terminal.send('\x1b')
         terminal.expect('Чем займёмся?')
-        terminal.choose(-1)
+        terminal.open_label('Выход')
         terminal.expect('История сохранена.')
         terminal.finish()
         assert not (state / 'daemon.lock').exists(), 'Не освобождена блокировка сервиса'

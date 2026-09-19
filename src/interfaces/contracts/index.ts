@@ -5,6 +5,7 @@ import { learningCommands } from './learning.js';
 import { draftCommands } from './drafts.js';
 import { maintenanceCommands } from './maintenance.js';
 import { systemCommands } from './system.js';
+import { projectCommands } from './projects.js';
 
 export const commands = {
   ...taskCommands,
@@ -12,6 +13,7 @@ export const commands = {
   ...draftCommands,
   ...maintenanceCommands,
   ...systemCommands,
+  ...projectCommands,
 };
 export type CommandName = keyof typeof commands;
 export type CommandInput<M extends CommandName> = z.input<(typeof commands)[M]['params']>;

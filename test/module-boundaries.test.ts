@@ -79,3 +79,13 @@ test('прикладные команды не импортируют транс
   const edges = await dependencies(resolve(sourceRoot, 'application'));
   expect(edges.filter((edge) => edge.target.startsWith('interfaces/'))).toEqual([]);
 });
+
+/** Проекты координируют порт запусков, а ядро не зависит от проектной машины состояний. */
+test('проекты и runtime не образуют обратную зависимость', async () => {
+  const runtime = await dependencies(resolve(sourceRoot, 'runtime'));
+  expect(runtime.filter((edge) => edge.target.startsWith('projects/'))).toEqual([]);
+  const projects = await dependencies(resolve(sourceRoot, 'projects'));
+  expect(
+    projects.filter((edge) => /^(runtime|application|interfaces)\//.test(edge.target)),
+  ).toEqual([]);
+});

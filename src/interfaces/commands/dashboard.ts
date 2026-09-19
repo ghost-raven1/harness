@@ -19,6 +19,7 @@ import { liveSelect } from '../guided/live-select.js';
 import { liveConfirm } from '../guided/live-confirm.js';
 import { workspaceLine } from '../guided/task-layout.js';
 import { learningVersionLabel } from '../guided/learning-labels.js';
+import { browseProjects } from '../guided/project-work/list.js';
 
 /** Обычный запуск включает сервис и рабочий стол в одном окне. */
 export function registerDashboard(program: Command, context: CliContext): void {
@@ -183,6 +184,7 @@ async function desktop(
               (current.activeRuns ?? 0) +
               ' · Разрешения: ' +
               (current.pendingApprovals ?? 0),
+            current.activeProjects ? 'Проектов в работе: ' + current.activeProjects : undefined,
             'Уроков в базе: ' +
               (current.knowledgeCount ?? 0) +
               '\n' +
@@ -197,6 +199,9 @@ async function desktop(
               ? [{ value: 'run', label: 'Новая задача', hint: 'опишите, что нужно сделать' }]
               : []),
             { value: 'tasks', label: 'Мои задачи', hint: 'ответы, продолжение и разрешения' },
+            ...(current.capabilities?.includes('projects-v1')
+              ? [{ value: 'projects', label: 'Проекты', hint: 'цель, план и проверенные этапы' }]
+              : []),
             { value: 'settings', label: 'Настройки' },
             { value: 'help', label: 'Как пользоваться', hint: 'примеры и подсказки' },
             { value: 'knowledge', label: 'База знаний', hint: 'уроки, доказательства и проверки' },
@@ -213,8 +218,8 @@ async function desktop(
           const confirm = selected(
             await liveConfirm({
               title: 'Выход из Harness',
-              message: 'Остановить работающие задачи и закрыть окно?',
-              body: 'При выходе сервис этого окна завершит работающие задачи. История сохранится.',
+              message: 'Приостановить работу и закрыть окно?',
+              body: 'Сервис этого окна остановит задачи и приостановит проекты. История сохранится; проекты можно продолжить при следующем запуске.',
               active: 'Остановить и выйти',
               inactive: 'Вернуться',
               load: async () => ({
@@ -244,6 +249,7 @@ async function desktop(
         await newTask(context, preferences);
       }
       if (action === 'tasks') await chooseTask(context, preferences);
+      if (action === 'projects') await browseProjects(context, preferences);
       if (action === 'knowledge') await browseKnowledge(context);
       if (action === 'help') {
         page('Как пользоваться');

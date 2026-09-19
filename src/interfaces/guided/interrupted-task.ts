@@ -18,7 +18,16 @@ export function hasInterruptedOperations(status: StatusView): boolean {
 }
 
 /** Фиксирует проверенный человеком результат; самостоятельного запуска работы здесь нет. */
-export async function checkInterrupted(context: CliContext, status: StatusView): Promise<boolean> {
+export async function checkInterrupted(
+  context: CliContext,
+  status: StatusView,
+  resolve?: (input: {
+    runId: string;
+    invocationId: string;
+    result: string;
+    succeeded: boolean;
+  }) => Promise<void>,
+): Promise<boolean> {
   for (const invocation of status.unknownInvocations) {
     let outcome: 'later' | 'success' | 'failed';
     while (true) {
@@ -112,13 +121,16 @@ export async function checkInterrupted(context: CliContext, status: StatusView):
     const current = await context.request('runtime.status', { runId: status.runId });
     if (!['paused', 'cancelled', 'failed'].includes(current.status)) return false;
     if (!current.unknownInvocations.some((item) => item.id === invocation.id)) continue;
-    await context.request('runtime.resolve', {
+    const resolution = {
       runId: status.runId,
       invocationId: invocation.id,
       result,
       succeeded: outcome === 'success',
-    });
+    };
+    if (resolve) await resolve(resolution);
+    else await context.request('runtime.resolve', resolution);
   }
+  if (resolve) return true;
   return reviewRestorations(
     context,
     await context.request('runtime.status', { runId: status.runId }),

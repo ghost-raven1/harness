@@ -19,6 +19,10 @@ const manifestSchema = z
     defaultProfile: z.string(),
     workspaces: z.array(z.string()),
     limits: z.record(z.number()).optional(),
+    projects: z
+      .object({ maxCorrections: z.number().int().min(0).max(10) })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -51,6 +55,7 @@ export async function loadConfig(file: string): Promise<ConfigSnapshot> {
     coordination: manifest.coordination,
     defaultProfile: manifest.defaultProfile,
     limits: manifest.limits,
+    ...(manifest.projects ? { projects: manifest.projects } : {}),
     workspaces: await Promise.all(manifest.workspaces.map((path) => realpath(resolve(root, path)))),
   });
   if (!value.roles[value.defaultRole] || !value.profiles[value.defaultProfile])

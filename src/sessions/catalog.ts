@@ -7,6 +7,7 @@ import { requiresOutcomeReview } from './invocations.js';
 import type { RunRecord } from './types.js';
 import type { RunCatalogEntry } from './ports.js';
 import { approvalSchema } from './validation.js';
+import { projectRunLinkSchema } from './project-run.js';
 
 export const catalogEntrySchema = z.object({
   id: z.string(),
@@ -14,6 +15,7 @@ export const catalogEntrySchema = z.object({
   requestKey: z.string(),
   requestHash: z.string(),
   parentRunId: z.string().optional(),
+  project: projectRunLinkSchema.optional(),
   workspace: z.string(),
   profile: z.string(),
   task: z.string(),
@@ -43,6 +45,7 @@ export function catalogEntry(run: RunRecord, seq: number): RunCatalogEntry {
     requestKey: run.requestKey,
     requestHash: run.requestHash,
     parentRunId: run.parentRunId,
+    project: run.project,
     workspace: run.workspace,
     profile: run.profile,
     task: run.agents[run.rootAgentId]!.task.slice(0, 1000),

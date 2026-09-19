@@ -9,9 +9,13 @@ import { approvalsCommand } from './approvals.js';
 import { learningCommand } from './learning.js';
 import { diagnosticsCommand } from './diagnostics.js';
 import { systemCommand } from './system.js';
+import { projectsCommand } from './projects.js';
 
 /** В режиме диагностики команды не меняют задачи, разрешения, черновики и настройки исполнения. */
 const readOnlyCommands = new Set([
+  'projects.list',
+  'projects.detail',
+  'projects.purgePreview',
   'system.info',
   'runtime.list',
   'runtime.history',
@@ -41,8 +45,9 @@ export { runStatus, statusInputSchema } from './task-status.js';
 /** Выбирает прикладной обработчик; внешний транспорт отвечает за кодирование сообщений. */
 export async function dispatch(app: Application, method: string, input: unknown): Promise<unknown> {
   const execute = () => {
-    if (app.sessions?.recoveryError && !readOnlyCommands.has(method))
-      throw new ApplicationError('STORAGE_UNAVAILABLE', app.sessions.recoveryError);
+    const recoveryError = app.sessions?.recoveryError ?? app.projects?.store.recoveryError;
+    if (recoveryError && !readOnlyCommands.has(method))
+      throw new ApplicationError('STORAGE_UNAVAILABLE', recoveryError);
     return dispatchCommand(app, method, input);
   };
   return app.diagnostics ? observeCommand(app.diagnostics, method, execute) : execute();
@@ -50,6 +55,7 @@ export async function dispatch(app: Application, method: string, input: unknown)
 
 /** Маршрутизация не содержит файловых операций и логики жизненного цикла задачи. */
 function dispatchCommand(app: Application, method: string, input: unknown): Promise<unknown> {
+  if (method.startsWith('projects.')) return projectsCommand(app, method, input);
   if (method.startsWith('files.')) return fileCommand(app, method, input);
   if (method.startsWith('drafts.')) return draftCommand(app, method, input);
   if (

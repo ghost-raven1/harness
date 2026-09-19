@@ -19,6 +19,7 @@ const schema = z
   })
   .strict();
 export type PurgeRecord = z.infer<typeof schema>;
+export const purgeRecordSchema = schema;
 
 /** Маркеры не содержат текста задачи; они запрещают повторное исполнение удалённого запроса. */
 export async function readPurgeRecords(directory: string): Promise<PurgeRecord[]> {
@@ -91,6 +92,10 @@ export async function linkedPurgeDirectories(directory: string): Promise<string[
     'purged',
     'resets',
     'drafts',
+    'project-records',
+    'project-index',
+    'project-artifacts',
+    'project-purges',
   ]) {
     try {
       if ((await lstat(join(directory, folder))).isSymbolicLink()) linked.push(folder);

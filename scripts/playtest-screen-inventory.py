@@ -180,8 +180,8 @@ class Session:
 
 def connection(session):
     terminal = session.terminal
-    session.setting('Недавние проекты')
-    session.capture('recent-projects', 'Недавние проекты', True)
+    session.setting('Недавние папки')
+    session.capture('recent-projects', 'Недавние папки', True)
     terminal.send('\r')
     session.capture('project-switched', 'Подключение выбрано для новых задач')
     session.info_back()
@@ -222,7 +222,7 @@ def settings(session):
     terminal = session.terminal
     for label, title, expected in [
         ('Подключить другую модель', 'attached-model', 'Сервис работает в другом окне'),
-        ('Недавние проекты', 'attached-recent', 'Сервис работает в другом окне'),
+        ('Недавние папки', 'attached-recent', 'Сервис работает в другом окне'),
         ('Ключ API', 'attached-key', 'Ключ задаётся в окне'),
         ('Настроить другой проект', 'attached-project', 'Сервис открыт в другом окне'),
     ]:

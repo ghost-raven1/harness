@@ -44,10 +44,11 @@ export function taskFrame(
   const header = taskHeader(status, geometry.width, height, tab);
   const writable =
     !!status &&
+    !status.project &&
     !status.recoveryRequired &&
     !status.deletedAt &&
     ['running', 'awaiting_approval', 'paused'].includes(status.status);
-  const footer = taskFooter(geometry.width, active, writable);
+  const footer = taskFooter(geometry.width, active && !status?.project, writable);
   if (notice)
     footer.unshift(
       ...wrapAnsi(notice, geometry.content, { hard: true, trim: false })

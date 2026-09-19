@@ -28,6 +28,7 @@ export async function runStatus(
     createdAt: run.createdAt,
     deletedAt: run.deletedAt,
     sessionId: run.sessionId,
+    project: run.project,
     status: run.status,
     recoveryRequired: run.recoveryRequired,
     pendingMessages: run.userMessages?.filter((item) => !item.deliveredAt).length ?? 0,

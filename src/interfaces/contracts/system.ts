@@ -17,6 +17,8 @@ export const serviceInfoSchema = z
     defaultProfile: z.string(),
     tools: z.array(z.string()),
     activeRuns: count.optional(),
+    activeProjects: count.optional(),
+    projectCount: count.optional(),
     recoveryError: z.string().optional(),
     pendingApprovals: count.optional(),
     learningVersion: z.string().optional(),

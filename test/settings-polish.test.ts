@@ -81,7 +81,7 @@ it.each([
 
 it('объясняет, в каком окне переключить модель, и ждёт возврата', async () => {
   await changeProject('recent', preferences, host(false), keys);
-  expect(page).toHaveBeenCalledWith('Недавние проекты');
+  expect(page).toHaveBeenCalledWith('Недавние папки');
   expect(prompts.log.info).toHaveBeenCalledWith(expect.stringContaining('в другом окне'));
   expect(backFromPage).toHaveBeenCalledOnce();
   expect(prompts.select).not.toHaveBeenCalled();

@@ -6,6 +6,9 @@ import { validateJournalEvent } from '../sessions/validation.js';
 import { outputEventSchema } from '../sessions/output.js';
 import { validateLearningState } from '../learning/state-schema.js';
 import { readPurgeRecords } from '../sessions/purge-records.js';
+import { validateProjectEvent } from '../projects/validation.js';
+import { readProjectPurgeRecords } from '../projects/purge-records.js';
+import type { ProjectRecord } from '../projects/types.js';
 import type { RunRecord } from '../sessions/types.js';
 import {
   historyIssueCodeSchema,
@@ -18,7 +21,7 @@ const learningEventSchema = z.object({
   state: z.unknown(),
 });
 
-type RunLinks = Pick<RunRecord, 'sessionId' | 'workspace' | 'parentRunId'> & {
+type RunLinks = Pick<RunRecord, 'sessionId' | 'workspace' | 'parentRunId' | 'project'> & {
   agents: Set<string>;
 };
 
@@ -31,7 +34,8 @@ function issueCode(error: unknown): HistoryIssue['code'] {
     return 'JOURNAL_INVALID_RECORD';
   if (
     error instanceof Error &&
-    ['JOURNAL_INVALID_REFERENCE', 'LEARNING_INVALID_REFERENCE'].includes(error.message)
+    (['JOURNAL_INVALID_REFERENCE', 'LEARNING_INVALID_REFERENCE'].includes(error.message) ||
+      /^PROJECT_INVALID_.*REFERENCE$/.test(error.message))
   )
     return 'HISTORY_INVALID_LINK';
   if (error instanceof Error && error.message === 'JOURNAL_INVALID_SEQUENCE')
@@ -158,11 +162,73 @@ export async function verifyHistory(directory: string): Promise<HistoryVerificat
         sessionId: latest.sessionId,
         workspace: latest.workspace,
         parentRunId: latest.parentRunId,
+        project: latest.project,
         agents: new Set(Object.keys(latest.agents)),
       });
     } catch (error) {
       recordIssue(error, 'run', next, runId);
     }
+  }
+
+  const projects = new Set<string>();
+  const projectRequests = new Set<string>();
+  let purgedProjects = new Set<string>();
+  try {
+    purgedProjects = new Set(
+      (await readProjectPurgeRecords(directory)).map((record) => record.projectId),
+    );
+  } catch (error) {
+    recordIssue(error, 'storage');
+  }
+  for (const name of await names('project-records')) {
+    const projectId = name.slice(0, -6);
+    if (purgedProjects.has(projectId)) continue;
+    let next = 1,
+      latest: ProjectRecord | undefined;
+    report.counts.journals++;
+    try {
+      const path = join(directory, 'project-records', name);
+      if (!(await safePath(path, false))) continue;
+      for await (const row of scanJournal<unknown>(path)) {
+        assertVersion(row.value);
+        assertSequence(row.value, next);
+        latest = validateProjectEvent(row.value, next, projectId).state;
+        report.counts.records++;
+        next++;
+      }
+      if (!latest) throw new Error('Empty project journal');
+      if (projectRequests.has(latest.requestKey))
+        recordIssue({ code: 'HISTORY_INVALID_LINK' }, 'project', next - 1);
+      projectRequests.add(latest.requestKey);
+      projects.add(projectId);
+      for (const stage of Object.values(latest.stages)) {
+        if (!stage.runId) continue;
+        const run = runs.get(stage.runId);
+        if (
+          !run ||
+          run.sessionId !== stage.sessionId ||
+          run.project?.kind !== 'stage' ||
+          run.project.stageId !== stage.stageId
+        )
+          recordIssue({ code: 'HISTORY_INVALID_LINK' }, 'project', next - 1);
+      }
+      report.counts.projects = (report.counts.projects ?? 0) + 1;
+      for (const runId of latest.runIds) {
+        const run = runs.get(runId);
+        if (!run || run.project?.projectId !== projectId || run.workspace !== latest.workspace)
+          recordIssue({ code: 'HISTORY_INVALID_LINK' }, 'project', next - 1);
+      }
+    } catch (error) {
+      recordIssue(error, 'project', next);
+    }
+  }
+  for (const [runId, run] of runs) {
+    if (
+      run.project &&
+      !purgedProjects.has(run.project.projectId) &&
+      !projects.has(run.project.projectId)
+    )
+      recordIssue({ code: 'HISTORY_INVALID_LINK' }, 'project', undefined, runId);
   }
 
   for (const [runId, run] of runs) {

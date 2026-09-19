@@ -326,10 +326,22 @@ it('экспорт и удаление используют одну очере�
         release = resolve;
       }),
   );
+  let enqueued!: () => void;
+  const admitted = new Promise<void>((resolve) => {
+    enqueued = resolve;
+  });
+  const schedule = item.app.scheduler.schedule.bind(item.app.scheduler);
+  vi.spyOn(item.app.scheduler, 'schedule').mockImplementationOnce((effect, work, signal) => {
+    const queued = schedule(effect, work, signal);
+    enqueued();
+    return queued;
+  });
   const removing = dispatch(item.app, 'runtime.purge', {
     runId: item.first.runId,
     previewToken: plan.previewToken,
   });
+  // Проектная очередь берётся раньше диспетчера; проверяем порядок уже поставленных операций.
+  await admitted;
   const lateExport = expect(dispatch(item.app, 'learning.export', { id })).rejects.toThrow(
     'Урок уже удалён',
   );

@@ -36,6 +36,7 @@ export interface ToolInvocation {
   error?: string;
   startedAt: string;
   finishedAt?: string;
+  exitCode?: number | null;
 }
 export interface Approval {
   id: string;
@@ -56,6 +57,11 @@ export interface RunRecord {
   requestKey: string;
   requestHash: string;
   parentRunId?: string;
+  project?: import('./project-run.js').ProjectRunLink;
+  projectChecks?: ToolCall[];
+  projectDependencies?: Array<{ runId: string; title: string; artifactId?: string }>;
+  projectContextReady?: boolean;
+  pauseRequested?: boolean;
   coordination?: import('../agents/planning.js').CoordinationState;
   workspace: string;
   profile: string;
@@ -72,7 +78,7 @@ export interface RunRecord {
   turns: number;
   iterationLimit?: number;
   iterationStart?: number;
-  pauseReason?: 'iterations' | 'provider';
+  pauseReason?: 'iterations' | 'provider' | 'project';
   providerPause?: { kind: 'rate_limit' | 'quota'; retryAt?: string };
   handoffs: number;
   usage: { input: number; output: number };

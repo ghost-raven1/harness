@@ -22,6 +22,7 @@ import { showRemovedTask } from './task-removed.js';
 import { saveAnswer } from './answer-export.js';
 import { completeResult } from '../result-client.js';
 import { canMessageTask, writeTaskMessage } from './task-message.js';
+import { inspectProject } from './project-work/detail.js';
 export { saveAnswer } from './answer-export.js';
 
 /** Повторный вопрос остаётся в той же сессии; новая задача всегда получает отдельную историю. */
@@ -189,6 +190,13 @@ export async function chooseTask(
 
 /** Показывает действия, допустимые для текущего состояния и режима скрытой задачи. */
 function taskActionOptions(status: StatusView) {
+  if (status.project)
+    return [
+      { value: 'project', label: 'Открыть проект', hint: 'пауза, уточнения и приёмка' },
+      { value: 'history', label: 'Журнал, мысли и полный ответ' },
+      { value: 'details', label: 'Технические подробности' },
+      { value: 'archive', label: '← К списку задач' },
+    ];
   const readOnly = !!status.deletedAt || !!status.recoveryRequired;
   const active = ['running', 'awaiting_approval', 'paused'].includes(status.status);
   return [
@@ -277,6 +285,10 @@ async function taskActions(
       if (action === 'archive') return 'archive';
       if (action === 'back') return menuStatus.deletedAt ? 'archive' : undefined;
       const status = await context.request('runtime.status', { runId });
+      if (action === 'project' && status.project) {
+        await inspectProject(context, status.project.projectId);
+        return 'archive';
+      }
       if (!taskActionOptions(status).some((option) => option.value === action)) {
         notice = 'Состояние изменилось в другом окне. Выберите актуальное действие.';
         continue;
