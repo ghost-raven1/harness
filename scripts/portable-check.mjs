@@ -56,11 +56,18 @@ export function portableEnvironment(root, guard) {
 export function windowsLauncher(launcher, args) {
   const systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT;
   if (!systemRoot) throw new Error('SystemRoot нужен для проверки Windows launcher.');
+  // В код попадают только индексы: аргументы не исполняются и не требуют загрузки JSON-cmdlets.
+  const env = { HARNESS_PORTABLE_LAUNCHER: launcher };
+  const values = args.map((value, index) => {
+    const key = 'HARNESS_PORTABLE_ARG_' + index;
+    env[key] = value;
+    return `[string][Environment]::GetEnvironmentVariable('${key}')`;
+  });
   const command = [
     "$ErrorActionPreference = 'Stop'",
-    '$OutputEncoding = New-Object System.Text.UTF8Encoding($false)',
+    '$OutputEncoding = [System.Text.UTF8Encoding]::new($false)',
     '[Console]::OutputEncoding = $OutputEncoding',
-    '$launcherArgs = @(ConvertFrom-Json -InputObject $env:HARNESS_PORTABLE_ARGS)',
+    '$launcherArgs = @(' + values.join(', ') + ')',
     '& $env:HARNESS_PORTABLE_LAUNCHER @launcherArgs',
     'exit $LASTEXITCODE',
   ].join('\n');
@@ -73,7 +80,7 @@ export function windowsLauncher(launcher, args) {
       '-EncodedCommand',
       Buffer.from(command, 'utf16le').toString('base64'),
     ],
-    env: { HARNESS_PORTABLE_LAUNCHER: launcher, HARNESS_PORTABLE_ARGS: JSON.stringify(args) },
+    env,
   };
 }
 

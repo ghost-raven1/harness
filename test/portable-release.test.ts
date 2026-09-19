@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { zipSync } from 'fflate';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { temporary } from './helpers.js';
 
 const files = await import(pathToFileURL(resolve('scripts/portable-files.mjs')).href);
@@ -170,6 +170,34 @@ test.skipIf(process.platform === 'win32')(
   },
 );
 
+test('Windows launcher не загружает cmdlets и не вставляет аргументы в PowerShell-код', () => {
+  vi.stubEnv('SystemRoot', 'C:\\Windows');
+  try {
+    const launcher = "C:\\Harness O'Brian\\Запустить.cmd";
+    const args = ['--state', "папка '$HOME'; $(throw 'INJECTION') `текст`", '--json'];
+    const command = check.windowsLauncher(launcher, args);
+    const script = Buffer.from(command.args.at(-1), 'base64').toString('utf16le');
+    expect(script).not.toMatch(/New-Object|ConvertFrom-Json|INJECTION|O'Brian/);
+    expect(script).toContain('[System.Text.UTF8Encoding]::new($false)');
+    expect(command.env).toEqual({
+      HARNESS_PORTABLE_LAUNCHER: launcher,
+      HARNESS_PORTABLE_ARG_0: args[0],
+      HARNESS_PORTABLE_ARG_1: args[1],
+      HARNESS_PORTABLE_ARG_2: args[2],
+    });
+    for (const index of args.keys())
+      expect(script).toContain(
+        `[string][Environment]::GetEnvironmentVariable('HARNESS_PORTABLE_ARG_${index}')`,
+      );
+    const empty = check.windowsLauncher(launcher, []);
+    expect(Buffer.from(empty.args.at(-1), 'base64').toString('utf16le')).toContain(
+      '$launcherArgs = @()',
+    );
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});
+
 test.skipIf(process.platform !== 'win32')(
   'Windows launcher сохраняет Unicode и argv без cmd /c escaping',
   async () => {
@@ -182,10 +210,13 @@ test.skipIf(process.platform !== 'win32')(
       'console.log(JSON.stringify(process.argv.slice(2)));',
     );
     await content.writeLaunchers(root, '0.6.1', content.portableTarget('win32', 'x64'));
-    const args = ['--state', 'папка [данные] с пробелами', '--json', 'mcp-config'];
+    const args = ['--state', "папка O'Brian [данные] $HOME `текст` ;", '--json', 'mcp-config'];
     const command = check.windowsLauncher(join(root, 'Запустить Harness.cmd'), args);
     const result = await execute(command.executable, command.args, {
-      env: { ...process.env, PATH: '', ...command.env },
+      env: {
+        ...check.portableEnvironment(root, resolve('scripts/portable-offline.mjs')),
+        ...command.env,
+      },
       timeout: 10000,
       windowsHide: true,
     });
