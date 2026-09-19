@@ -1,6 +1,7 @@
 import type { TaskView, StatusView } from '../types.js';
 import type { OutputEvent } from '../../sessions/output.js';
 import { terminalText } from './screen.js';
+import { TaskWork } from './task-work.js';
 
 export type FeedTab = 'all' | 'log' | 'reasoning' | 'text';
 export interface FeedEntry {
@@ -51,6 +52,7 @@ const names: Record<string, string> = {
 
 /** Собирает курсорные страницы без дублей, сохраняя отдельные потоки параллельных ролей. */
 export class TaskFeed {
+  readonly work = new TaskWork();
   private readonly entries = new Map<string, FeedEntry>();
   private readonly seenEvents = new Set<number>();
   private readonly seenOutput = new Set<number>();
@@ -70,11 +72,13 @@ export class TaskFeed {
     for (const event of status.events) {
       if (this.seenEvents.has(event.seq)) continue;
       this.seenEvents.add(event.seq);
+      this.work.event(event);
       this.addEvent(event);
     }
     for (const event of status.output.events) {
       if (this.seenOutput.has(event.seq)) continue;
       this.seenOutput.add(event.seq);
+      this.work.output(event);
       this.addOutput(event);
     }
   }

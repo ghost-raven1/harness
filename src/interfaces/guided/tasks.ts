@@ -3,6 +3,7 @@ import { manageBudget } from './budget.js';
 import { showIterationSettings } from './iterations.js';
 import * as prompts from '@clack/prompts';
 import type { CliContext, StatusView } from '../types.js';
+import { taskWork } from './task-work.js';
 import { labels, note, selected } from '../ui.js';
 import { followRun } from './watch.js';
 import { page, terminalText } from './screen.js';
@@ -82,6 +83,11 @@ export async function chooseTask(
         load: async () => {
           const history = await loadHistory();
           return {
+            activity: history.active.some((run) => run.status === 'running')
+              ? { kind: 'busy' as const, label: 'Задачи выполняются' }
+              : history.active.some((run) => run.status === 'awaiting_approval')
+                ? { kind: 'waiting' as const, label: 'Есть задачи, которым нужно разрешение' }
+                : undefined,
             summary:
               [
                 query ? 'Поиск: ' + terminalText(query) : undefined,
@@ -273,6 +279,7 @@ async function taskActions(
             const status = await context.request('runtime.status', { runId });
             menuStatus = status;
             return {
+              activity: taskWork(status),
               message: 'Что дальше?',
               summary: taskSummary(status, undefined, undefined, previousNotice),
               summaryTitle: 'Состояние задачи',

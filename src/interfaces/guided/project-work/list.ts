@@ -13,6 +13,7 @@ import { projectStatusLabels } from './format.js';
 import { prepareProject } from './setup.js';
 import { openProjectDecision } from './attention.js';
 import type { ProjectSummary } from '../../../projects/types.js';
+import type { WorkIndicator } from '../work-indicator.js';
 
 /** Сохраняет цель до запроса к модели; действия начнутся только после принятия плана. */
 async function createProject(context: CliContext, preferences: Preferences): Promise<void> {
@@ -65,6 +66,14 @@ export async function browseProjects(context: CliContext, preferences: Preferenc
         pageIndex = list.page;
         items = list.items;
         return {
+          activity: info.recoveryError
+            ? { kind: 'error' as const, label: 'Хранилище требует проверки' }
+            : info.activeProjects
+              ? ({
+                  kind: 'busy',
+                  label: `Проектов в работе: ${info.activeProjects}`,
+                } satisfies WorkIndicator)
+              : undefined,
           summaryTitle: 'От цели до проверенного результата',
           summary: [
             notice,

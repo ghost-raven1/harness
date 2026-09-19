@@ -15,9 +15,11 @@ const { acquireLock, socketPath } = await moduleAt('interfaces/ipc.js');
 const { resourceErrorData } = await moduleAt('shared/resource-errors.js');
 const { applicationErrorData } = await moduleAt('shared/application-error.js');
 const waiting = new Set();
+let modelRequests = 0;
 const release = await acquireLock(directory);
 const app = await createApplication(config, directory, {
   generate(request) {
+    modelRequests++;
     return new Promise((complete, reject) => {
       if (request.signal?.aborted) return reject(request.signal.reason);
       const entry = { request, complete };
@@ -178,6 +180,31 @@ async function fileTool(runId, name, args) {
   return JSON.parse(result.content);
 }
 
+/** Команда остаётся активной до файла-сигнала; PTY наблюдает настоящий исполнитель и его журнал. */
+async function slowCommand(runId) {
+  const entry = await pendingRequest(runId);
+  waiting.delete(entry);
+  entry.complete({
+    text: '',
+    calls: [
+      {
+        id: randomUUID(),
+        name: 'process.exec',
+        arguments: JSON.stringify({
+          command: process.execPath,
+          args: [
+            '-e',
+            "const fs=require('node:fs'); fs.writeFileSync('tool-started',String(process.pid)); const timer=setInterval(()=>{if(fs.existsSync('tool-release')){clearInterval(timer); console.log('TOOL_DONE');}},50);",
+          ],
+        }),
+      },
+    ],
+    finish: 'tools',
+    usage: { input: 10, output: 5 },
+  });
+  return { requested: true };
+}
+
 async function complete(runId, operation, text) {
   const entry = await pendingRequest(runId);
   const run = app.sessions.get(runId);
@@ -284,6 +311,14 @@ const control = server(async (method, params) => {
   if (method === 'planRoles') return planRoles(params.runId, params.tasks);
   if (method === 'answerAgent') return answerAgent(params.runId, params.agentId, params.text);
   if (method === 'fileTool') return fileTool(params.runId, params.name, params.args);
+  if (method === 'slowCommand') return slowCommand(params.runId);
+  if (method === 'stream') {
+    if (typeof params.text !== 'string' || params.text.length > 64000)
+      throw new Error('Некорректная проверочная порция потока');
+    const entry = await pendingRequest(params.runId);
+    entry.request.onProgress?.({ type: 'text', text: params.text });
+    return { sent: true };
+  }
   if (method === 'loseNextRunReply') {
     droppedReplies.add('runtime.run');
     return { scheduled: true };
@@ -306,7 +341,7 @@ const control = server(async (method, params) => {
     return { scheduled: true };
   }
   if (method === 'learning') return learning(params);
-  if (method === 'metrics') return { counts, recent };
+  if (method === 'metrics') return { counts, recent, modelRequests };
   if (method === 'connection') {
     if (params.available) await listen(ui, uiAddress);
     else await disconnect();

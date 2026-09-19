@@ -5,6 +5,7 @@ import { TaskFeed, type FeedTab } from './task-feed.js';
 import { contentRows, contentWindow, type ContentRow } from './task-content.js';
 import { taskGeometry, taskHeader, taskFooter, taskTabs } from './task-chrome.js';
 import { boxLine, rule } from './terminal-layout.js';
+import { workLine } from './work-indicator.js';
 export type ViewKey =
   | 'back'
   | 'cancel'
@@ -58,7 +59,9 @@ export function taskFrame(
     );
   const room = Math.max(1, height - header.length - footer.length - 3);
   const visible = contentWindow(lines, room, offset, geometry.content);
-  const hint = connectionLost ? 'Нет связи · повторяем подключение' : '';
+  const hint = connectionLost
+    ? 'Нет связи · повторяем подключение'
+    : workLine(feed.work.view(status), geometry.width - 4);
   return [
     ...header,
     rule(geometry.width, color.bold(taskTabs.find((item) => item.id === tab)!.title), 'top'),

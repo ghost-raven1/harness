@@ -8,6 +8,7 @@ import { note } from '../ui.js';
 import { page, terminalText } from './screen.js';
 import { boxLine, rule, menuWidth, menuSummaryRoom } from './terminal-layout.js';
 import { startRefresh } from './live-refresh.js';
+import { animateWork, workLine, type WorkIndicator } from './work-indicator.js';
 
 export interface LiveOption<T> {
   value: T;
@@ -15,6 +16,7 @@ export interface LiveOption<T> {
   hint?: string;
 }
 export interface LiveMenu<T> {
+  activity?: WorkIndicator;
   message: string;
   options: LiveOption<T>[];
   summary?: string;
@@ -84,7 +86,7 @@ export function menuFrame<T>(
   }
   heading.push(rule(width, menu.message));
   const footer = [
-    rule(width, error ? 'Нет связи · повторяем подключение' : ''),
+    rule(width, error ? 'Нет связи · повторяем подключение' : workLine(menu.activity, width - 4)),
     boxLine('↑↓ — выбор · Enter — открыть · Esc — назад', width),
     rule(width, '', 'bottom'),
   ];
@@ -173,6 +175,7 @@ export async function liveSelect<T extends string | number>(
   process.stdin.setRawMode(true);
   process.stdin.resume();
   process.stdout.on('resize', render);
+  const stopAnimation = animateWork(() => !error && menu.activity?.kind === 'busy', render);
   let handle!: (_text: string, key: Key) => void;
   try {
     return await new Promise<T | symbol>((resolve, reject) => {
@@ -212,6 +215,7 @@ export async function liveSelect<T extends string | number>(
     });
   } finally {
     stop();
+    stopAnimation();
     process.stdin.off('keypress', handle);
     process.stdout.off('resize', render);
     process.stdin.setRawMode(raw);

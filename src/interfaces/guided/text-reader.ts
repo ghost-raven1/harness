@@ -7,6 +7,7 @@ import { page, terminalText } from './screen.js';
 import { boxLine, rule, menuWidth } from './terminal-layout.js';
 import { startRefresh } from './live-refresh.js';
 import { explainError } from './errors.js';
+import { animateWork, workLine, type WorkIndicator } from './work-indicator.js';
 
 export interface TextTab {
   id: string;
@@ -14,6 +15,7 @@ export interface TextTab {
   text: string;
 }
 export interface ReaderOptions {
+  activity?: WorkIndicator;
   subtitle?: string;
   notice?: string;
   actionLabel?: string;
@@ -22,6 +24,7 @@ export interface ReaderOptions {
 }
 
 export interface ReaderSnapshot {
+  activity?: WorkIndicator;
   tabs: TextTab[];
   subtitle?: string;
   notice?: string;
@@ -64,6 +67,11 @@ export class ReaderState {
     return this.snapshot.actionLabel;
   }
 
+  /** Ошибка обновления останавливает анимацию устаревшего состояния. */
+  get working(): boolean {
+    return !this.error && this.snapshot.activity?.kind === 'busy';
+  }
+
   /** Переключает вкладки и прокрутку с учётом режима следования за концом текста. */
   key(key: Pick<Key, 'name' | 'shift'>): void {
     const tabs = this.snapshot.tabs;
@@ -100,6 +108,7 @@ export class ReaderState {
     );
     const view = {
       ...options,
+      activity: this.error ? undefined : this.snapshot.activity,
       subtitle,
       notice: this.error ?? notice,
       actionLabel: this.actionLabel ?? options.actionLabel,
@@ -135,7 +144,7 @@ export function readerFrame(
     rule(width, '[H] ' + brandName, 'top'),
     boxLine(color.bold(terminalText(title)), width),
     ...(options.subtitle ? [boxLine(terminalText(options.subtitle), width)] : []),
-    rule(width),
+    rule(width, workLine(options.activity, width - 4)),
     boxLine(
       tabs
         .map((item, index) =>
@@ -199,7 +208,12 @@ export async function readText(
   const draw = createLogUpdate(process.stdout);
   const raw = process.stdin.isRaw,
     wasFlowing = process.stdin.readableFlowing === true;
-  const state = new ReaderState({ tabs, subtitle: options.subtitle, notice: options.notice });
+  const state = new ReaderState({
+    tabs,
+    subtitle: options.subtitle,
+    notice: options.notice,
+    activity: options.activity,
+  });
   const render = (): void => {
     draw(
       state.frame(
@@ -216,6 +230,7 @@ export async function readText(
   process.stdout.on('resize', render);
   let handle!: (_text: string, key: Key) => void;
   let stopRefresh = (): void => undefined;
+  const stopAnimation = animateWork(() => state.working, render);
   try {
     return await new Promise<'back' | 'action'>((resolve, reject) => {
       handle = (_text, key) => {
@@ -243,6 +258,7 @@ export async function readText(
     });
   } finally {
     stopRefresh();
+    stopAnimation();
     process.stdin.off('keypress', handle);
     process.stdout.off('resize', render);
     process.stdin.setRawMode(raw);

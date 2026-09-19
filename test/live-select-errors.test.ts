@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { liveSelect } from '../src/interfaces/guided/live-select.js';
+import { readText } from '../src/interfaces/guided/text-reader.js';
 import { isMissingResource, ResourceNotFoundError } from '../src/shared/resource-errors.js';
 
 const drawing = vi.hoisted(() => ({ draw: Object.assign(vi.fn(), { done: vi.fn() }) }));
@@ -81,5 +82,44 @@ it('обычный разрыв связи сохраняет переподкл
   expect(drawing.draw.mock.calls.at(-1)![0]).not.toContain('Нет связи');
   process.stdin.emit('keypress', '', { name: 'return' });
   expect(await running).toBe('answer');
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('анимация меню не добавляет запросов, сохраняет выбор и прекращается после выхода', async () => {
+  const load = vi.fn().mockResolvedValue({
+    ...menu,
+    activity: { kind: 'busy', label: 'Ожидаю ответ модели' },
+    options: [...menu.options, { value: 'back', label: 'Назад' }],
+  });
+  const running = liveSelect({ ...options, load });
+  await vi.waitFor(() => expect(drawing.draw).toHaveBeenCalled());
+  process.stdin.emit('keypress', '', { name: 'down' });
+  const initial = drawing.draw.mock.calls.at(-1)![0];
+  await vi.advanceTimersByTimeAsync(750);
+  expect(load).toHaveBeenCalledOnce();
+  expect(drawing.draw.mock.calls.at(-1)![0]).not.toBe(initial);
+  expect(drawing.draw.mock.calls.at(-1)![0]).toContain('● Назад');
+  process.stdin.emit('keypress', '', { name: 'return' });
+  expect(await running).toBe('back');
+  const count = drawing.draw.mock.calls.length;
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(drawing.draw).toHaveBeenCalledTimes(count);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('анимация reader не опрашивает данные чаще и освобождает таймеры по Esc', async () => {
+  const snapshot = {
+    tabs: [{ id: 'text', label: 'Журнал', text: 'Тест выполняется' }],
+    activity: { kind: 'busy' as const, label: 'Выполняю проверочную команду' },
+  };
+  const load = vi.fn().mockResolvedValue(snapshot);
+  const running = readText('Проверка', snapshot.tabs, { ...snapshot, load });
+  await vi.waitFor(() => expect(drawing.draw).toHaveBeenCalled());
+  const count = drawing.draw.mock.calls.length;
+  await vi.advanceTimersByTimeAsync(750);
+  expect(load).not.toHaveBeenCalled();
+  expect(drawing.draw.mock.calls.length).toBeGreaterThan(count);
+  process.stdin.emit('keypress', '', { name: 'escape' });
+  expect(await running).toBe('back');
   expect(vi.getTimerCount()).toBe(0);
 });

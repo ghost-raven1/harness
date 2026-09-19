@@ -171,6 +171,18 @@ async function desktop(
       load: async () => {
         const current = await context.request('system.info');
         return {
+          activity: current.recoveryError
+            ? { kind: 'error' as const, label: 'Сбой записи · только просмотр' }
+            : (current.activeRuns ?? 0) > 0 || (current.activeProjects ?? 0) > 0
+              ? {
+                  kind:
+                    (current.pendingApprovals ?? 0) > 0 ? ('waiting' as const) : ('busy' as const),
+                  label:
+                    (current.pendingApprovals ?? 0) > 0
+                      ? 'Нужно ваше разрешение'
+                      : 'Harness выполняет задачи',
+                }
+              : undefined,
           summary: [
             notice,
             serviceCompatibility(current),

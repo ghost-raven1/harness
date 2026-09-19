@@ -7,6 +7,7 @@ import { liveSelect } from '../live-select.js';
 import { explainError } from '../errors.js';
 import { projectSummary, projectTabs } from './format.js';
 import { projectAction } from './actions.js';
+import { projectWork } from './activity.js';
 
 const labels: Record<ProjectView['allowedActions'][number], string> = {
   plan: 'Предложить план',
@@ -51,12 +52,14 @@ export async function inspectProject(
   while (true) {
     try {
       const result = await readText('Проект · ' + view.title, projectTabs(view), {
+        activity: projectWork(view),
         subtitle: projectSummary(view),
         actionLabel: 'Действия',
         exitOnError: missing,
         load: async () => {
           view = await load();
           return {
+            activity: projectWork(view),
             tabs: projectTabs(view),
             subtitle: projectSummary(view),
             actionLabel: 'Действия',
@@ -73,6 +76,7 @@ export async function inspectProject(
           load: async () => {
             view = await load();
             return {
+              activity: projectWork(view),
               summary: [projectSummary(view), view.reason, notice].filter(Boolean).join('\n'),
               message: 'Что дальше?',
               options: [

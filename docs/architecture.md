@@ -1,4 +1,4 @@
-# Устройство Harness 0.6.0
+# Устройство Harness 0.6.1
 
 Сохранение исходников и сравнение выделены из координатора: `ProjectChangeContentStore` отвечает за проверенные копии, `ProjectChangeRecorder` — за границы выполнения, `ProjectChangeService` и один worker — за чтение и diff. Демо использует те же runtime и IPC с отдельным подготовленным провайдером. [Контракты и ограничения 0.6.0](project-changes.md).
 

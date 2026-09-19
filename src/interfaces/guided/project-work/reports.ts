@@ -6,6 +6,7 @@ import { readText } from '../text-reader.js';
 import { followRun } from '../watch.js';
 import { checkCommand } from './format.js';
 import { projectChoice, projectField } from './form-input.js';
+import type { WorkIndicator } from '../work-indicator.js';
 
 export const checkLabels: Record<EvidenceCheck['state'], string> = {
   not_run: 'Не запускалась',
@@ -68,6 +69,10 @@ export async function inspectProjectCheck(
       stderr = results[1]!;
     pages = { stdout, stderr };
     return {
+      activity:
+        stdout.state === 'running'
+          ? ({ kind: 'busy', label: 'Выполняю проверочную команду' } satisfies WorkIndicator)
+          : undefined,
       tabs: [
         {
           id: 'command',
@@ -95,8 +100,11 @@ export async function inspectProjectCheck(
   while (true) {
     const snapshot = await load();
     if (
-      (await readText(check.title, snapshot.tabs, { actionLabel: snapshot.actionLabel, load })) ===
-      'back'
+      (await readText(check.title, snapshot.tabs, {
+        actionLabel: snapshot.actionLabel,
+        activity: snapshot.activity,
+        load,
+      })) === 'back'
     )
       return;
     const choice = await liveSelect({
