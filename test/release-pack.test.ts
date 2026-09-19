@@ -118,6 +118,8 @@ it('ZIP содержит проверяемые исходники и lockfile; 
     expect.arrayContaining([
       ...rootFiles,
       'scripts/bootstrap.mjs',
+      'scripts/benchmark-projects.mjs',
+      'scripts/benchmark-project-diff.mjs',
       'scripts/preparation-command.mjs',
       'scripts/release-smoke.mjs',
       'src/index.ts',
