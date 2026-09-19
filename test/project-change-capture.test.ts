@@ -349,3 +349,35 @@ it('копии не включают токены известных настр�
       .unavailableReason,
   ).toBe('policy');
 });
+
+it('не копирует известные SSH и AWS ключи, сохраняя прежние метаданные отпечатка', async () => {
+  const app = await fixture();
+  for (const directory of ['.ssh', '.aws']) await fs.mkdir(join(app.workspace, directory));
+  const paths = [
+    '.ssh/id_dsa',
+    '.ssh/id_ecdsa',
+    '.ssh/id_ecdsa_sk',
+    '.ssh/id_ed25519_sk',
+    '.aws/credentials',
+  ];
+  for (const path of paths)
+    await fs.writeFile(join(app.workspace, path), `фиктивный секрет для теста: ${path}`);
+  await fs.writeFile(join(app.workspace, 'source.ts'), 'export const answer = 42;');
+  await fs.writeFile(join(app.workspace, '.ssh/id_ecdsa.pub'), 'фиктивный публичный ключ');
+  const old = await app.snapshots.capture('project', app.workspace, []);
+  const next = await app.capture();
+  expect(next.digest).toBe(old.digest);
+  expect(await app.snapshots.readEntries('project', next.ref)).toEqual(
+    await app.snapshots.readEntries('project', old.ref),
+  );
+  const manifest = await app.snapshots.content.readContentManifest('project', next.contentRef!);
+  for (const path of paths) {
+    const entry = manifest.entries.find((item) => item.path === path);
+    expect.soft(entry).toMatchObject({ unavailableReason: 'policy' });
+    expect.soft(entry?.content).toBeUndefined();
+  }
+  expect(manifest.entries.filter((entry) => entry.content).map((entry) => entry.path)).toEqual([
+    '.ssh/id_ecdsa.pub',
+    'source.ts',
+  ]);
+});

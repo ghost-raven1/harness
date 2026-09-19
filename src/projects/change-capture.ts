@@ -20,9 +20,10 @@ export function contentUnavailable(
 ): ContentUnavailableReason | undefined {
   if (!options.settings.enabled) return 'disabled';
   if (
-    /^(?:\.env(?:\..*)?|\.npmrc|\.netrc|\.pypirc|\.git-credentials|id_rsa|id_ed25519)$/i.test(
+    /^(?:\.env(?:\..*)?|\.npmrc|\.netrc|\.pypirc|\.git-credentials|id_(?:rsa|dsa|ecdsa|ed25519)(?:_sk)?)$/i.test(
       basename(path),
     ) ||
+    /(?:^|\/)\.aws\/credentials$/i.test(path) ||
     /\.(?:pem|key|p12|pfx)$/i.test(path)
   )
     return 'policy';
