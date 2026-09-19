@@ -16,6 +16,7 @@ import { runPreparationCommand } from './preparation-command.mjs';
 import { portableTarget } from './portable-content.mjs';
 import { fileHash, extractPortableZip, verifyPortableFiles } from './portable-files.mjs';
 import { writeJsonAtomic } from './build-state.mjs';
+import { probeWithWindowsDiagnostics } from './portable-windows-diagnostic.mjs';
 
 /** Не наследует облачные ключи и пользовательские подключения; PATH не содержит Node или npm. */
 export function portableEnvironment(root, guard) {
@@ -146,7 +147,14 @@ export async function checkPortable(root) {
         for (let pass = 0; pass < 2; pass++)
           assert.equal(await run('/bin/sh', [join(unpacked, launcher), '--version']), version);
     }
-    const behavior = JSON.parse(await run(node, [probe, unpacked]));
+    const behavior = JSON.parse(
+      await probeWithWindowsDiagnostics(
+        () => run(node, [probe, unpacked]),
+        temporary,
+        env,
+        (rows) => appendFile(logPath, '\nДиагностика ACL Windows: ' + JSON.stringify(rows) + '\n'),
+      ),
+    );
     await verifyPortableFiles(unpacked, expected);
     const report = {
       status: 'passed',

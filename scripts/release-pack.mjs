@@ -46,6 +46,7 @@ const scripts = [
   'portable-files.mjs',
   'portable-offline.mjs',
   'portable-probe.mjs',
+  'portable-windows-diagnostic.mjs',
   'playtest-cloud.mjs',
   'playtest-codex.mjs',
   'playtest-opencode.mjs',
