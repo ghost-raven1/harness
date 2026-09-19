@@ -1,5 +1,7 @@
 import { expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
+import { appendJournal } from '../src/sessions/journal.js';
 import { ToolOutcomeUnknownError } from '../src/tools/errors.js';
 import { newAgent } from '../src/agents/service.js';
 import { call, harness, output, ScriptedProvider } from './helpers.js';
@@ -51,7 +53,7 @@ it.each([false, true])(
         { role: 'assistant', content: 'Ответ позднего этапа' },
       ];
       legacy.status = 'completed';
-      await app.sessions.create({
+      const legacyRun = {
         ...interrupted,
         id: randomUUID(),
         requestKey: 'legacy',
@@ -59,9 +61,19 @@ it.each([false, true])(
         rootAgentId: legacy.id,
         agents: { [legacy.id]: legacy },
         invocations: {},
-        status: 'completed',
+        status: 'completed' as const,
         createdAt: new Date(Date.now() + 1000).toISOString(),
+      };
+      await expect(app.sessions.create(legacyRun)).rejects.toThrow('неизвестным результатом');
+      // Новый API запрещает такую запись; наследие воспроизводим загрузкой старого журнала.
+      await appendJournal(join(app.sessions.directory, 'runs', legacyRun.id + '.jsonl'), {
+        seq: 1,
+        at: legacyRun.createdAt,
+        type: 'run.created',
+        payload: {},
+        state: legacyRun,
       });
+      await app.sessions.initialize();
       await app.sessions.delete(previous.runId);
     }
 

@@ -55,9 +55,11 @@ export function taskHeader(
     rule(width, color.bold('Задача ' + (status?.runId.slice(0, 8) ?? '')), 'top'),
     ...title.map((line) => boxLine(color.bold(line), width)),
     boxLine(
-      status?.deletedAt
-        ? color.yellow('Скрыта · только чтение')
-        : statusBadge(status?.status ?? 'running') +
+      status?.recoveryRequired
+        ? color.red('Сбой записи · нужен перезапуск')
+        : status?.deletedAt
+          ? color.yellow('Скрыта · только чтение')
+          : statusBadge(status?.status ?? 'running') +
             color.dim(
               ' · ' + terminalText(status?.profile ?? '') + ' · шаг ' + (status?.turns ?? 0),
             ),

@@ -114,3 +114,27 @@ it('объяснение ошибок конфигурации не раскры
   expect(explainError(parse)).toBe(parse.message);
   expect(explainError(new Error('HTTP 401'), 'configuration')).toContain('не принял ключ');
 });
+
+it('главное меню после отказа диска предлагает просмотр и выход вместо новой задачи', async () => {
+  const failed = { ...info, recoveryError: 'Не удалось сохранить остановку задачи' };
+  state.connect.mockResolvedValue(failed);
+  vi.mocked(liveSelect).mockImplementationOnce(async (options) => {
+    const menu = await options.load();
+    expect(menu.summaryTitle).toBe('Сбой записи · только просмотр');
+    expect(menu.summary).toContain('перезапустите Harness');
+    expect(menu.options.some((item) => item.value === 'run')).toBe(false);
+    expect(menu.options.some((item) => item.value === 'tasks')).toBe(true);
+    return 'exit';
+  });
+  const context = {
+    directory: () => '/fixture/state',
+    interactive: () => true,
+    json: () => false,
+    output: vi.fn(),
+    request: async () => failed,
+  } as CliContext;
+  const program = new Command();
+  registerDashboard(program, context);
+  await program.parseAsync(['node', 'harness']);
+  expect(state.close).toHaveBeenCalledOnce();
+});

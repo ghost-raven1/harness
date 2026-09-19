@@ -81,12 +81,17 @@ export async function serve(
     throw error;
   }
   const sockets = new Set<import('node:net').Socket>();
+  const requests = new Set<Promise<void>>();
+  let stopping = false;
+  let closing: Promise<void> | undefined;
   const server = createServer((socket) => {
+    if (stopping) return void socket.destroy();
     socket.setEncoding('utf8');
     sockets.add(socket);
     socket.on('close', () => sockets.delete(socket));
     let buffer = '';
     socket.on('data', (data) => {
+      if (stopping) return;
       buffer += data;
       if (Buffer.byteLength(buffer) > IPC_REQUEST_BYTES) {
         socket.destroy();
@@ -96,42 +101,61 @@ export async function serve(
       while ((at = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, at);
         buffer = buffer.slice(at + 1);
-        void (async () => {
+        const pending = (async () => {
           let requestId: string | null = null;
           try {
             const request = envelope.parse(JSON.parse(line));
             requestId = request.id;
             checkAccessToken(token, request.token);
             const result = await dispatch(app, request.method, request.params);
-            socket.write(
-              encodeFrame(
-                { jsonrpc: '2.0', id: request.id, result },
-                IPC_RESPONSE_BYTES,
-                'response',
-              ),
-            );
+            if (!socket.destroyed)
+              socket.write(
+                encodeFrame(
+                  { jsonrpc: '2.0', id: request.id, result },
+                  IPC_RESPONSE_BYTES,
+                  'response',
+                ),
+              );
           } catch (error) {
-            socket.write(
-              encodeFrame(
-                {
-                  jsonrpc: '2.0',
-                  id: requestId,
-                  error: {
-                    code: -32000,
-                    message: message(error).slice(0, 4096),
-                    data: resourceErrorData(error) ?? sessionConflictData(error),
+            if (!socket.destroyed)
+              socket.write(
+                encodeFrame(
+                  {
+                    jsonrpc: '2.0',
+                    id: requestId,
+                    error: {
+                      code: -32000,
+                      message: message(error).slice(0, 4096),
+                      data: resourceErrorData(error) ?? sessionConflictData(error),
+                    },
                   },
-                },
-                IPC_RESPONSE_BYTES,
-                'response',
-              ),
-            );
+                  IPC_RESPONSE_BYTES,
+                  'response',
+                ),
+              );
           }
         })();
+        requests.add(pending);
+        void pending.finally(() => requests.delete(pending)).catch(() => undefined);
       }
     });
     socket.on('error', () => undefined);
   });
+  /** Закрывает вход, останавливает исполнителей и дожидается всех уже принятых команд. */
+  function close(): Promise<void> {
+    return (closing ??= (async () => {
+      stopping = true;
+      for (const socket of sockets) socket.destroy();
+      const serverClosed = new Promise<void>((resolve) => server.close(() => resolve()));
+      // Отмена начинается до ожидания RPC: команда сама может ждать завершения задачи.
+      await Promise.allSettled([app.runtime.close(), serverClosed, ...requests]);
+      try {
+        await app.close();
+      } finally {
+        await release();
+      }
+    })());
+  }
   try {
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
@@ -140,31 +164,10 @@ export async function serve(
     if (process.platform !== 'win32') await chmod(address, 0o600);
     app.learning.start();
   } catch (error) {
-    for (const socket of sockets) socket.destroy();
-    if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
-    try {
-      await app.close();
-    } finally {
-      await release();
-    }
+    await close();
     throw error;
   }
-  let closed = false;
-  return {
-    app,
-    /** Закрывает подключения и приложение до освобождения владения каталогом состояния. */
-    async close() {
-      if (closed) return;
-      closed = true;
-      for (const socket of sockets) socket.destroy();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-      try {
-        await app.close();
-      } finally {
-        await release();
-      }
-    },
-  };
+  return { app, close };
 }
 /** Выполняет один запрос к локальному сервису с проверкой размера, ID ответа и тайм-аута. */
 export async function rpc<T = unknown>(

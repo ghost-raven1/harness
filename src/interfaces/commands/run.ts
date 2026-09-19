@@ -189,6 +189,16 @@ export function registerRunCommands(program: Command, context: CliContext): void
       await watch(context.directory(), runId, context.json());
     });
   program
+    .command('resolve-restore <runId>')
+    .description('Проверить прерванное восстановление файлов без повторной записи')
+    .action(async (runId: string) => {
+      if (!context.interactive())
+        throw new Error('Нужен интерактивный терминал для проверки файла');
+      const { reviewRestorations } = await import('../guided/restore-review.js');
+      const status = await context.request<StatusView>('runtime.status', { runId });
+      context.output({ resolved: await reviewRestorations(context, status) });
+    });
+  program
     .command('resolve <runId> <invocationId>')
     .description('Зафиксировать проверенный человеком результат прерванной записи')
     .requiredOption('--result-file <path>', 'файл с фактически установленным результатом')

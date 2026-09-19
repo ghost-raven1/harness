@@ -26,7 +26,7 @@ interface GlobalOptions {
 export function createCli(): Command {
   const program = new Command()
     .name('harness')
-    .version('0.2.0')
+    .version('0.2.1')
     .description(brandName + ' · агенты, инструменты и проверяемое обучение')
     .option(
       '--state <directory>',

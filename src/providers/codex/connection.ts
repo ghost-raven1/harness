@@ -165,7 +165,7 @@ export class CodexConnection extends EventEmitter {
   /** Согласует возможности app-server и подтверждает готовность клиента Codex. */
   async initialize(): Promise<void> {
     await this.call('initialize', {
-      clientInfo: { name: 'modular_harness', version: '0.2.0' },
+      clientInfo: { name: 'modular_harness', version: '0.2.1' },
       capabilities: { experimentalApi: true },
     });
     this.child.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');

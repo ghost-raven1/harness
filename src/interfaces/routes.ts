@@ -3,6 +3,7 @@ import { FileChanges } from '../tools/file-changes.js';
 import { fileCommand } from './file-routes.js';
 import { draftCommand } from './draft-routes.js';
 import { queryHistory } from '../sessions/history.js';
+import { requiresOutcomeReview } from '../sessions/invocations.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Application } from './application.js';
 import { runInputSchema } from '../runtime/engine.js';
@@ -32,7 +33,7 @@ export async function runStatus(
   cursor = 0,
   resultCursor?: number,
 ): Promise<Record<string, unknown>> {
-  const run = app.sessions.get(runId);
+  const run = app.runtime.view(runId);
   const events = app.sessions.history(runId, cursor, 100);
   return {
     runId,
@@ -41,6 +42,7 @@ export async function runStatus(
     deletedAt: run.deletedAt,
     sessionId: run.sessionId,
     status: run.status,
+    recoveryRequired: run.recoveryRequired,
     pendingMessages: run.userMessages?.filter((item) => !item.deliveredAt).length ?? 0,
     ...resultFields(run.result, resultCursor),
     error: run.error,
@@ -61,11 +63,15 @@ export async function runStatus(
       status: agent.status,
       parentId: agent.parentId,
     })),
-    approvals: ['running', 'awaiting_approval', 'paused'].includes(run.status)
-      ? Object.values(run.approvals).filter((item) => item.status === 'pending')
-      : [],
+    approvals:
+      !run.recoveryRequired && ['running', 'awaiting_approval', 'paused'].includes(run.status)
+        ? Object.values(run.approvals).filter((item) => item.status === 'pending')
+        : [],
     unknownInvocations: Object.values(run.invocations)
-      .filter((item) => item.status === 'unknown')
+      .filter(
+        (item) =>
+          item.status === 'unknown' || (!app.runtime.busy(runId) && requiresOutcomeReview(item)),
+      )
       .map((item) => ({
         id: item.id,
         tool: item.call.name,
@@ -164,7 +170,7 @@ async function dispatchCommand(app: Application, method: string, input: unknown)
       const until = Date.now() + args.waitMs;
       while (
         !app.sessions.history(args.runId, args.cursor, 1).length &&
-        ['running', 'awaiting_approval'].includes(app.sessions.get(args.runId).status) &&
+        ['running', 'awaiting_approval'].includes(app.runtime.view(args.runId).status) &&
         Date.now() < until
       )
         await delay(100);
@@ -180,6 +186,7 @@ async function dispatchCommand(app: Application, method: string, input: unknown)
         .parse(input ?? {});
       return app.sessions
         .list()
+        .map((run) => app.runtime.view(run.id))
         .reverse()
         .slice(args.offset, args.limit === undefined ? undefined : args.offset + args.limit)
         .map((run) => ({
@@ -202,7 +209,7 @@ async function dispatchCommand(app: Application, method: string, input: unknown)
         .strict()
         .parse(input ?? {});
       const page = queryHistory(
-        app.sessions.list(args.includeDeleted),
+        app.sessions.list(args.includeDeleted).map((run) => app.runtime.view(run.id)),
         args.query,
         args.page,
         args.limit,
@@ -241,7 +248,7 @@ async function dispatchCommand(app: Application, method: string, input: unknown)
       return { resolved: true };
     }
     case 'approvals.list':
-      return app.approvals.pending();
+      return app.sessions.recoveryError ? [] : app.approvals.pending();
     case 'approvals.decide': {
       const args = z
         .object({
@@ -361,13 +368,15 @@ async function dispatchCommand(app: Application, method: string, input: unknown)
     case 'system.info':
       return {
         configFile: app.configFile,
-        version: '0.2.0',
+        version: '0.2.1',
         node: process.version,
         state: app.directory,
         activeRuns: app.sessions
           .list()
+          .map((run) => app.runtime.view(run.id))
           .filter((run) => ['running', 'awaiting_approval'].includes(run.status)).length,
-        pendingApprovals: app.approvals.pending().length,
+        pendingApprovals: app.sessions.recoveryError ? 0 : app.approvals.pending().length,
+        recoveryError: app.sessions.recoveryError,
         learningVersion: app.learning.store.read().activeVersion,
         knowledgeCount: Object.keys(app.learning.store.read().candidates).length,
         workspaces: app.config.value.workspaces,

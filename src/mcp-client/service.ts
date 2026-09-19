@@ -16,7 +16,7 @@ export class McpClientService {
       for (const server of config.tools.mcp) {
         const jsonSchemaValidator = new AjvJsonSchemaValidator();
         const client = new Client(
-          { name: 'modular-harness', version: '0.2.0' },
+          { name: 'modular-harness', version: '0.2.1' },
           { jsonSchemaValidator },
         );
         this.clients.push(client);

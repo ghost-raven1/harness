@@ -205,7 +205,15 @@ it.each(['wait', 'poll'] as const)(
     expect(provider.requests).toHaveLength(1);
     expect(writes).toBe(1);
     unavailable.mockRestore();
-    await app.sessions.recoverInterrupted(runId);
+    if (mode === 'wait') await app.sessions.recoverInterrupted(runId);
+    else {
+      const { runStatus } = await import('../src/interfaces/routes.js');
+      const status = await runStatus(
+        app as unknown as import('../src/interfaces/application.js').Application,
+        runId,
+      );
+      expect(status.unknownInvocations).toMatchObject([{ id: invocation.id, tool: 'test.write' }]);
+    }
     await app.runtime.resolveInvocation(runId, invocation.id, 'Файл проверен человеком', true);
     await app.runtime.resume(runId);
     await app.runtime.wait(runId);

@@ -20,6 +20,7 @@ export function workspaceLine(workspace: string, width: number): string {
 
 /** Завершённый запуск не обещает новые сообщения, если ответа или пояснений не было. */
 export function emptyFeed(status: TaskView | undefined, tab: FeedTab): string {
+  if (status?.recoveryRequired) return status.error ?? 'Ошибка сохранения. Перезапустите Harness.';
   const terminal = status && ['completed', 'failed', 'cancelled'].includes(status.status);
   if (tab === 'reasoning')
     return terminal

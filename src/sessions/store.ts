@@ -1,12 +1,13 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { clone, hash, id, Serial } from '../shared/primitives.js';
+import { clone, hash, id, message, Serial } from '../shared/primitives.js';
 import { ResourceNotFoundError } from '../shared/resource-errors.js';
 import { SessionChangedError } from '../shared/session-conflict.js';
 import { writeSnapshot } from './files.js';
 import { appendJournal, readJournal } from './journal.js';
 import type { RunRecord, JournalEvent, SessionStore } from './types.js';
 import { RunOutputStore } from './output.js';
+import { assertKnownSessionOutcomes, latestSessionRun } from './continuation.js';
 import {
   readPurgeRecords,
   removeRunFiles,
@@ -21,6 +22,7 @@ export class FileSessionStore implements SessionStore {
   private readonly serial = new Serial();
   private readonly purged = new Map<string, PurgeRecord>();
   private maintenance = false;
+  private recoveryFailure?: string;
   readonly output: RunOutputStore;
   constructor(readonly directory: string) {
     this.output = new RunOutputStore(directory);
@@ -86,8 +88,17 @@ export class FileSessionStore implements SessionStore {
       .slice(after, limit === undefined ? undefined : after + limit)
       .map(clone);
   }
-  /** Сохраняет новый запуск после проверки ключа, последнего этапа и занятости сессии. */
-  create(run: RunRecord): Promise<RunRecord> {
+  /** Связывает подготовленный контекст с версиями всех этапов беседы, включая скрытые. */
+  sessionRevision(sessionId: string): string {
+    return hash(
+      [...this.runs.values()]
+        .filter((run) => run.sessionId === sessionId)
+        .map((run) => [run.id, this.events.get(run.id)?.length ?? 0] as const)
+        .sort(([a], [b]) => a.localeCompare(b)),
+    );
+  }
+  /** Сохраняет новый запуск только при неизменном контексте и проверенных исходах операций. */
+  create(run: RunRecord, expectedSessionRevision?: string): Promise<RunRecord> {
     return this.serial.run(async () => {
       this.assertRequestAllowed(run.requestKey, run.sessionId);
       const existing = this.list(true).find((item) => item.requestKey === run.requestKey);
@@ -96,18 +107,24 @@ export class FileSessionStore implements SessionStore {
           throw new Error('Idempotency key reused with different arguments');
         return existing;
       }
+      const sessionRuns = this.list(true).filter((item) => item.sessionId === run.sessionId);
       if (run.parentRunId) {
-        const latest = this.list()
-          .filter((item) => item.sessionId === run.sessionId)
-          .at(-1);
+        const latest = latestSessionRun(sessionRuns);
         if (!latest) throw new ResourceNotFoundError('task');
         if (latest.id !== run.parentRunId) throw new SessionChangedError(latest.id);
       }
+      assertKnownSessionOutcomes(sessionRuns);
       if (
-        this.list().some(
+        expectedSessionRevision !== undefined &&
+        expectedSessionRevision !== this.sessionRevision(run.sessionId)
+      )
+        throw new Error(
+          'Состояние беседы изменилось во время подготовки. Повторите отправку сообщения.',
+        );
+      if (
+        sessionRuns.some(
           (item) =>
-            item.sessionId === run.sessionId &&
-            ['running', 'awaiting_approval', 'paused'].includes(item.status),
+            !item.deletedAt && ['running', 'awaiting_approval', 'paused'].includes(item.status),
         )
       ) {
         throw new Error('Session already has an active or paused run');
@@ -185,8 +202,19 @@ export class FileSessionStore implements SessionStore {
     )
       throw new Error('Эта беседа удалена навсегда. Для новой задачи нужен новый запрос.');
   }
-  /** Запрещает запись, пока выполняется подтверждённая очистка данных. */
+  /** Возвращает неперсистентную диагностику отказа записи до перезапуска сервиса. */
+  get recoveryError(): string | undefined {
+    return this.recoveryFailure;
+  }
+  /** Блокирует новые изменения, если даже остановку задачи не удалось сохранить. */
+  requireRecovery(error: unknown): void {
+    this.recoveryFailure ??=
+      'Не удалось сохранить состояние задачи. Проверьте свободное место и доступ к папке состояния, затем закройте Harness и откройте заново. Причина: ' +
+      message(error);
+  }
+  /** Запрещает запись при отказе хранения или подтверждённой очистке данных. */
   assertWritable(): void {
+    if (this.recoveryFailure) throw new Error(this.recoveryFailure);
     if (this.maintenance)
       throw new Error('Удаляется беседа. Повторите действие после завершения удаления.');
   }

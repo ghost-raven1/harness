@@ -7,7 +7,7 @@ import { atomicJson } from '../sessions/files.js';
 import type { FileSessionStore } from '../sessions/store.js';
 import type { ToolContext } from './registry.js';
 import { safePath } from './paths.js';
-import { abort, hash, id } from '../shared/primitives.js';
+import { abort, hash, id, message } from '../shared/primitives.js';
 import { ToolOutcomeUnknownError } from './errors.js';
 
 export interface FileChange {
@@ -17,7 +17,8 @@ export interface FileChange {
   beforeHash: string;
   afterHash: string;
   existed: boolean;
-  status: 'prepared' | 'applied' | 'restoring' | 'restored';
+  status: 'prepared' | 'applied' | 'restoring' | 'restored' | 'reviewed';
+  resolution?: { at: string; result: string };
   invocationId?: string;
 }
 const digest = (data: Buffer): string => createHash('sha256').update(data).digest('hex');
@@ -201,18 +202,51 @@ export class FileChanges {
     if (previewToken !== token(item.path, item.current, item.bytes))
       throw new Error('Предпросмотр устарел. Откройте изменения снова.');
     await this.store.mutate(runId, 'file.restore_started', { changeId }, (state) => {
-      state.fileChanges!.find((c) => c.id === changeId)!.status = 'restoring';
+      // Проверка и маркер используют ту же очередь, что и создание нового запуска.
+      if (this.store.list().some((run) => ['running', 'awaiting_approval'].includes(run.status)))
+        throw new Error(
+          'Появилась работающая задача. Завершите или остановите её перед восстановлением.',
+        );
+      if (
+        this.store
+          .list()
+          .some((run) => run.sessionId === state.sessionId && run.status === 'paused')
+      )
+        throw new Error(
+          'В этой беседе есть задача на паузе. Продолжите или остановите её перед восстановлением.',
+        );
+      const change = state.fileChanges?.find((c) => c.id === changeId);
+      if (!change || change.status !== 'applied')
+        throw new Error('Состояние восстановления изменилось. Откройте изменения снова.');
+      change.status = 'restoring';
     });
-    const verifiedPath = await safePath(item.change.path, this.context(runId), true);
-    if (verifiedPath !== item.path)
-      throw new Error('Путь к файлу изменился. Автоматическое восстановление остановлено.');
-    const checked = await snapshot(verifiedPath);
-    if (previewToken !== token(item.path, checked, item.bytes))
-      throw new Error('Файл изменился; проверьте его вручную перед восстановлением.');
+    try {
+      const verifiedPath = await safePath(item.change.path, this.context(runId), true);
+      if (verifiedPath !== item.path)
+        throw new Error('Путь к файлу изменился. Автоматическое восстановление остановлено.');
+      const checked = await snapshot(verifiedPath);
+      if (previewToken !== token(item.path, checked, item.bytes))
+        throw new Error('Файл изменился; проверьте его вручную перед восстановлением.');
+    } catch (error) {
+      // Файл ещё не меняли: отказ проверки не оставляет несуществующую операцию в работе.
+      await this.store.mutate(
+        runId,
+        'file.restore_rejected',
+        { changeId, error: message(error) },
+        (state) => {
+          const change = state.fileChanges!.find((item) => item.id === changeId)!;
+          if (change.status === 'restoring') change.status = 'applied';
+        },
+      );
+      throw error;
+    }
+    // После начала записи или удаления исход может быть неизвестен; автоматический повтор запрещён.
     if (item.backup.existed) await writeFile(item.path, item.bytes, { mode: item.backup.mode });
     else await unlink(item.path);
     await this.store.mutate(runId, 'file.restored', { changeId }, (state) => {
-      state.fileChanges!.find((c) => c.id === changeId)!.status = 'restored';
+      const change = state.fileChanges!.find((c) => c.id === changeId)!;
+      change.status = 'restored';
+      delete change.resolution;
       state.agents[state.rootAgentId]!.messages.push({
         role: 'user',
         content:
@@ -221,5 +255,77 @@ export class FileChanges {
           '. Учитывай это при продолжении задачи.]',
       });
     });
+  }
+
+  /** Сравнивает прерванный откат с исходной и записанной версиями, не изменяя файл. */
+  async previewResolution(runId: string, changeId: string) {
+    const run = this.store.get(runId);
+    const change = run.fileChanges?.find((item) => item.id === changeId);
+    if (!['completed', 'failed', 'cancelled', 'paused'].includes(run.status))
+      throw new Error('Сначала остановите задачу.');
+    if (!change || change.status !== 'restoring')
+      throw new Error('Этот откат больше не требует проверки.');
+    const path = await safePath(change.path, this.context(runId), true);
+    if (path !== change.canonical)
+      throw new Error('Путь к файлу изменился. Верните исходный путь перед проверкой.');
+    const current = await snapshot(path);
+    const currentHash = digest(current.bytes);
+    const outcome =
+      current.existed === change.existed && currentHash === change.beforeHash
+        ? 'restored'
+        : current.existed && currentHash === change.afterHash
+          ? 'applied'
+          : 'reviewed';
+    const description = {
+      restored: 'Файл совпадает с исходным состоянием. Восстановление выполнено.',
+      applied: 'Сохранилась версия, записанная задачей. Восстановление не выполнено.',
+      reviewed: 'Файл отличается от обеих версий. Будет сохранён ваш результат ручной проверки.',
+    }[outcome];
+    return {
+      path: change.path,
+      outcome: outcome as 'restored' | 'applied' | 'reviewed',
+      description,
+      exists: current.existed,
+      bytes: current.bytes.length,
+      currentHash,
+      previewToken: hash({
+        runId,
+        changeId,
+        path,
+        currentHash,
+        existed: current.existed,
+        mode: current.mode,
+      }),
+    };
+  }
+
+  /** Сохраняет подтверждённый исход отката; повторной записи или удаления файла нет. */
+  async resolveRestore(
+    runId: string,
+    changeId: string,
+    previewToken: string,
+    result: string,
+  ): Promise<void> {
+    const explanation = z.string().trim().min(1).max(10000).parse(result);
+    const preview = await this.previewResolution(runId, changeId);
+    if (preview.previewToken !== previewToken)
+      throw new Error('Файл изменился после проверки. Откройте проверку заново.');
+    await this.store.mutate(
+      runId,
+      'file.restore_resolved',
+      { changeId, outcome: preview.outcome },
+      (run) => {
+        const change = run.fileChanges!.find((item) => item.id === changeId)!;
+        if (change.status !== 'restoring') throw new Error('Результат уже проверен в другом окне.');
+        change.status = preview.outcome;
+        change.resolution = { at: new Date().toISOString(), result: explanation };
+        run.agents[run.rootAgentId]!.messages.push({
+          role: 'user',
+          content:
+            '[Harness: пользователь проверил прерванное восстановление файла]\n' +
+            JSON.stringify({ path: change.path, state: preview.description, result: explanation }),
+        });
+      },
+    );
   }
 }

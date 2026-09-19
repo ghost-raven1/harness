@@ -195,14 +195,14 @@ export async function chooseTask(
 
 /** Показывает действия, допустимые для текущего состояния и режима скрытой задачи. */
 function taskActionOptions(status: StatusView) {
-  const readOnly = !!status.deletedAt;
+  const readOnly = !!status.deletedAt || !!status.recoveryRequired;
   const active = ['running', 'awaiting_approval', 'paused'].includes(status.status);
   return [
     ...(canMessageTask(status) ? [{ value: 'message', label: 'Написать модели' }] : []),
     ...(hasInterruptedOperations(status)
       ? [{ value: 'review', label: 'Проверить прерванную операцию' }]
       : []),
-    ...(!active && !readOnly && !status.unknownInvocations.length
+    ...(!active && !readOnly && !hasInterruptedOperations(status)
       ? [
           {
             value: 'continue',
@@ -242,9 +242,9 @@ function taskActionOptions(status: StatusView) {
     ...(!readOnly ? [{ value: 'iterations', label: 'Предел шагов задачи' }] : []),
     { value: 'details', label: 'Технические подробности' },
     { value: 'history', label: 'Журнал, мысли и полный ответ' },
-    ...(!readOnly && !active ? [{ value: 'message', label: 'Черновики сообщений' }] : []),
+    ...(!readOnly && !active ? [{ value: 'drafts', label: 'Черновики сообщений' }] : []),
     ...(!readOnly ? [{ value: 'delete', label: 'Убрать из списка' }] : []),
-    ...(!active ? [{ value: 'purge', label: 'Удалить навсегда' }] : []),
+    ...(!active && !status.recoveryRequired ? [{ value: 'purge', label: 'Удалить навсегда' }] : []),
     ...(!readOnly ? [{ value: 'archive', label: '← К списку задач' }] : []),
     { value: 'back', label: readOnly ? '← К списку задач' : '← В главное меню' },
   ];
@@ -288,7 +288,7 @@ async function taskActions(
         continue;
       }
 
-      if (action === 'message') {
+      if (action === 'message' || action === 'drafts') {
         notice = await writeTaskMessage(context, status);
         continue;
       }

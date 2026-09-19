@@ -137,6 +137,42 @@ it.each([true, false])(
     expect(await readFile(neighbor, 'utf8')).toBe(content);
     expect(await readFile(displaced, 'utf8')).toBe(content);
     expect((await lstat(app.path)).isSymbolicLink()).toBe(true);
-    expect(app.sessions.get(app.runId).fileChanges![0]!.status).not.toBe('restored');
+    expect(app.sessions.get(app.runId).fileChanges![0]!.status).toBe('applied');
   },
 );
+
+it('отклонённый откат сохраняет сторонние правки и не застревает в состоянии восстановления', async () => {
+  const app = await written();
+  const files = new FileChanges(app.sessions);
+  const preview = await files.previewRestore(app.runId, app.changeId);
+  const mutate = app.sessions.mutate.bind(app.sessions);
+  let interfere = true;
+  vi.spyOn(app.sessions, 'mutate').mockImplementation(async (runId, type, payload, update) => {
+    const state = await mutate(runId, type, payload, update);
+    if (type === 'file.restore_started' && interfere) {
+      interfere = false;
+      await writeFile(app.path, 'Изменено в другом редакторе');
+    }
+    return state;
+  });
+  await expect(files.restore(app.runId, app.changeId, preview.previewToken)).rejects.toThrow(
+    'Файл изменился',
+  );
+  expect(await readFile(app.path, 'utf8')).toBe('Изменено в другом редакторе');
+  expect(app.sessions.get(app.runId).fileChanges![0]!.status).toBe('applied');
+  expect(
+    app.sessions.get(app.runId).agents[app.sessions.get(app.runId).rootAgentId]!.messages,
+  ).not.toContainEqual(
+    expect.objectContaining({ content: expect.stringContaining('пользователь восстановил') }),
+  );
+
+  // Пользователь возвращает ожидаемое содержимое; новый предпросмотр снова допускает откат.
+  await writeFile(app.path, 'Новый текст\n');
+  const restored = new FileSessionStore(app.sessions.directory);
+  await restored.initialize();
+  const retry = new FileChanges(restored);
+  const current = await retry.previewRestore(app.runId, app.changeId);
+  await retry.restore(app.runId, app.changeId, current.previewToken);
+  expect(await readFile(app.path, 'utf8')).toBe('Прежний текст\n');
+  expect(restored.get(app.runId).fileChanges![0]!.status).toBe('restored');
+});

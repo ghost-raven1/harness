@@ -72,6 +72,7 @@ export function taskSummary(
 
 /** Старые сообщения о местных квотах остаются в журнале, но не мешают продолжению. */
 function taskNotice(status: StatusView): string | undefined {
+  if (status.recoveryRequired) return status.error;
   if (status.status === 'paused' && status.iterations?.pausedByLimit)
     return (
       'Предел шагов достигнут. «Продолжить после паузы» даст ещё ' +

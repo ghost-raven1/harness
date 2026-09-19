@@ -185,6 +185,7 @@ export async function createApplication(
   });
   await learning.initialize();
   await diagnostics.record({ type: 'service.started' });
+  let closing: Promise<void> | undefined;
   return {
     nest,
     config,
@@ -213,13 +214,26 @@ export async function createApplication(
       nest.get(ToolScheduler),
     ),
     /** Останавливает задачи и обучение, затем закрывает MCP, контейнер и журнал диагностики. */
-    async close() {
-      await runtime.close();
-      await learning.close();
-      await nest.get(McpClientService).close();
-      await nest.close();
-      await diagnostics.record({ type: 'service.stopped' });
-      await diagnostics.close();
+    close() {
+      return (closing ??= (async () => {
+        const errors: unknown[] = [];
+        // Каждый ресурс закрывается даже при отказе журнала предыдущего модуля.
+        for (const stop of [
+          () => runtime.close(),
+          () => learning.close(),
+          () => nest.get(McpClientService).close(),
+          () => nest.close(),
+          () => diagnostics.record({ type: 'service.stopped' }),
+          () => diagnostics.close(),
+        ]) {
+          try {
+            await stop();
+          } catch (error) {
+            errors.push(error);
+          }
+        }
+        if (errors.length) throw new AggregateError(errors, 'Ошибка закрытия Harness');
+      })());
     },
   };
 }

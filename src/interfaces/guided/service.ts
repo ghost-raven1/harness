@@ -75,6 +75,7 @@ export class DesktopService {
     return (
       this.owned?.app.sessions
         .list()
+        .map((run) => this.owned!.app.runtime.view(run.id))
         .filter((run) => ['running', 'awaiting_approval'].includes(run.status)).length ?? 0
     );
   }

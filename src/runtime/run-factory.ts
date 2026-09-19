@@ -5,7 +5,12 @@ import { loadConfig, isWithin } from '../configuration/loader.js';
 import type { FileSessionStore } from '../sessions/store.js';
 import type { LearningStore } from '../learning/types.js';
 import type { RunRecord } from '../sessions/types.js';
-import { requiresOutcomeReview } from '../sessions/invocations.js';
+import {
+  assertKnownSessionOutcomes,
+  latestSessionRun,
+  missingSessionCorrections,
+  sessionCorrections,
+} from '../sessions/continuation.js';
 import type { ChatMessage } from '../providers/types.js';
 import { newAgent } from '../agents/service.js';
 import type { IterationSettings } from './iterations.js';
@@ -82,15 +87,14 @@ export class RunFactory {
     if (!config.value.profiles[profile]) throw new Error('Unknown model profile: ' + profile);
     const agent = newAgent(config.value.defaultRole, request.message);
     let parentRunId: string | undefined;
+    let sessionRevision: string | undefined;
     if (request.sessionId) {
+      sessionRevision = this.store.sessionRevision(request.sessionId);
       const sessionRuns = this.store
         .list(true)
         .filter((run) => run.sessionId === request.sessionId);
-      if (sessionRuns.some((run) => Object.values(run.invocations).some(requiresOutcomeReview)))
-        throw new Error(
-          'В этой беседе осталась операция с неизвестным результатом. Сначала проверьте её в действиях исходной задачи.',
-        );
-      const last = sessionRuns.filter((run) => !run.deletedAt).at(-1);
+      assertKnownSessionOutcomes(sessionRuns);
+      const last = latestSessionRun(sessionRuns);
       if (!last) throw new Error('Unknown session');
       if (request.expectedParentRunId && last.id !== request.expectedParentRunId)
         throw new SessionChangedError(last.id);
@@ -111,7 +115,7 @@ export class RunFactory {
       agent.messages = [
         ...prior.messages,
         ...interrupted,
-        ...this.humanResolutions(sessionRuns),
+        ...missingSessionCorrections(sessionCorrections(this.store, sessionRuns), prior),
         ...(last.userMessages ?? [])
           .filter((item) => !item.deliveredAt)
           .map((item): ChatMessage => ({ role: 'user', content: item.content })),
@@ -146,42 +150,7 @@ export class RunFactory {
       usage: { input: 0, output: 0 },
       createdAt: new Date().toISOString(),
     };
-    const created = await this.store.create(run);
+    const created = await this.store.create(run, sessionRevision);
     return { run: created, created: created.id === run.id };
-  }
-
-  /** Поздняя проверка скрытого этапа попадает в новый ход после завершения обменов инструментами. */
-  private humanResolutions(runs: RunRecord[]): ChatMessage[] {
-    const facts = runs.flatMap((run) => {
-      const resolved = new Set(
-        this.store
-          .history(run.id, 0)
-          .filter((event) => event.type === 'tool.human_resolved')
-          .map((event) => z.object({ invocationId: z.string() }).parse(event.payload).invocationId),
-      );
-      return [...resolved].flatMap((invocationId) => {
-        const invocation = run.invocations[invocationId];
-        if (!invocation || !['succeeded', 'error'].includes(invocation.status)) return [];
-        return [
-          {
-            runId: run.id,
-            tool: invocation.call.name,
-            callId: invocation.call.id,
-            status: invocation.status,
-            result: invocation.result,
-          },
-        ];
-      });
-    });
-    return facts.length
-      ? [
-          {
-            role: 'user',
-            content:
-              '[Harness: результаты прерванных операций, проверенные пользователем]\n' +
-              JSON.stringify(facts),
-          },
-        ]
-      : [];
   }
 }

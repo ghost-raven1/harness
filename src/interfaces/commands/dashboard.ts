@@ -170,6 +170,9 @@ async function desktop(
         return {
           summary: [
             notice,
+            current.recoveryError
+              ? 'Проверьте папку состояния и перезапустите Harness.'
+              : undefined,
             workspaceLine(preferences.workspace, (process.stdout.columns || 80) - 5),
             'Модель: ' +
               (current.profiles.find((p) => p.id === preferences.profile)?.model ??
@@ -185,10 +188,12 @@ async function desktop(
           ]
             .filter(Boolean)
             .join('\n'),
-          summaryTitle: 'Готов к работе',
+          summaryTitle: current.recoveryError ? 'Сбой записи · только просмотр' : 'Готов к работе',
           message: 'Чем займёмся?',
           options: [
-            { value: 'run', label: 'Новая задача', hint: 'опишите, что нужно сделать' },
+            ...(!current.recoveryError
+              ? [{ value: 'run', label: 'Новая задача', hint: 'опишите, что нужно сделать' }]
+              : []),
             { value: 'tasks', label: 'Мои задачи', hint: 'ответы, продолжение и разрешения' },
             { value: 'settings', label: 'Настройки' },
             { value: 'help', label: 'Как пользоваться', hint: 'примеры и подсказки' },

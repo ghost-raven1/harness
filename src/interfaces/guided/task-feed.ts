@@ -45,6 +45,8 @@ const names: Record<string, string> = {
   'file.backup_created': 'Создана резервная копия',
   'file.applied': 'Файл изменён',
   'file.restored': 'Файл восстановлен',
+  'file.restore_rejected': 'Восстановление файла отклонено',
+  'file.restore_resolved': 'Результат восстановления проверен пользователем',
 };
 
 /** Собирает курсорные страницы без дублей, сохраняя отдельные потоки параллельных ролей. */
@@ -57,7 +59,12 @@ export class TaskFeed {
   revision = 0;
   /** Объединяет новые страницы событий без повторов и обновляет состояние задачи. */
   update(status: TaskView): void {
-    if (this.status?.result !== status.result || this.status?.status !== status.status)
+    if (
+      this.status?.result !== status.result ||
+      this.status?.status !== status.status ||
+      this.status?.error !== status.error ||
+      this.status?.recoveryRequired !== status.recoveryRequired
+    )
       this.revision++;
     this.status = status;
     for (const event of status.events) {

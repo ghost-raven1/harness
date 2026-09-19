@@ -16,6 +16,7 @@ export interface ServiceInfo {
   defaultProfile: string;
   tools: string[];
   activeRuns?: number;
+  recoveryError?: string;
   pendingApprovals?: number;
   learningVersion?: string;
   knowledgeCount?: number;
@@ -36,6 +37,7 @@ export interface StatusView {
   sessionId: string;
   workspace: string;
   status: RunStatus;
+  recoveryRequired?: boolean;
   pendingMessages?: number;
   profile: string;
   turns: number;

@@ -5,12 +5,15 @@ import { page } from './screen.js';
 import { liveConfirm } from './live-confirm.js';
 import { liveSelect } from './live-select.js';
 import { readText } from './text-reader.js';
+import { reviewRestorations } from './restore-review.js';
 
 /** Проверка нужна и убранной задаче: неизвестный исход нельзя обходить удалением или продолжением. */
 export function hasInterruptedOperations(status: StatusView): boolean {
+  if (status.recoveryRequired) return false;
   return (
-    ['paused', 'cancelled', 'failed'].includes(status.status) &&
-    status.unknownInvocations.length > 0
+    (['paused', 'cancelled', 'failed'].includes(status.status) &&
+      status.unknownInvocations.length > 0) ||
+    !!status.fileChanges?.some((change) => change.status === 'restoring')
   );
 }
 
@@ -116,5 +119,8 @@ export async function checkInterrupted(context: CliContext, status: StatusView):
       succeeded: outcome === 'success',
     });
   }
-  return true;
+  return reviewRestorations(
+    context,
+    await context.request<StatusView>('runtime.status', { runId: status.runId }),
+  );
 }

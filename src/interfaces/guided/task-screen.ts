@@ -44,6 +44,7 @@ export function taskFrame(
   const header = taskHeader(status, geometry.width, height, tab);
   const writable =
     !!status &&
+    !status.recoveryRequired &&
     !status.deletedAt &&
     ['running', 'awaiting_approval', 'paused'].includes(status.status);
   const footer = taskFooter(geometry.width, active, writable);

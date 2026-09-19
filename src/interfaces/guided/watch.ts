@@ -50,7 +50,7 @@ export function simpleResult(status: StatusView): void {
     );
   else prompts.log.info(labels[status.status] ?? status.status);
   if (status.error) prompts.log.error(explainError(status.error));
-  if (status.status === 'paused')
+  if (status.status === 'paused' && !status.recoveryRequired)
     note(
       'Задача сохранена. Откройте её в «Моих задачах», чтобы проверить прерванные операции и продолжить.',
       'Работа приостановлена',
@@ -112,7 +112,7 @@ export async function followRun(
         stopKeys();
       }
       if (action === 'back') return undefined;
-      if (action === 'cancel' && !status.deletedAt) {
+      if (action === 'cancel' && !status.deletedAt && !status.recoveryRequired) {
         await context.request('runtime.cancel', { runId });
         status = await context.request<TaskView>('runtime.task', { runId, cursor, outputCursor });
         screen.feed.update(status);

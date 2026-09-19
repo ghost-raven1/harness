@@ -8,8 +8,14 @@ import { explainError } from './errors.js';
 import { isMissingResource } from '../../shared/resource-errors.js';
 
 /** Уточнение адресуется текущему запуску и не создаёт новый этап беседы. */
-export function canMessageTask(status: Pick<StatusView, 'status' | 'deletedAt'>): boolean {
-  return !status.deletedAt && ['running', 'awaiting_approval', 'paused'].includes(status.status);
+export function canMessageTask(
+  status: Pick<StatusView, 'status' | 'deletedAt' | 'recoveryRequired'>,
+): boolean {
+  return (
+    !status.recoveryRequired &&
+    !status.deletedAt &&
+    ['running', 'awaiting_approval', 'paused'].includes(status.status)
+  );
 }
 
 /** Объясняет момент доставки, не выдавая очередь за прочитанное моделью сообщение. */

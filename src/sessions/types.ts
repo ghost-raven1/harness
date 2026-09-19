@@ -100,7 +100,7 @@ export interface JournalEvent {
 export interface SessionStore {
   get(id: string): RunRecord;
   list(): RunRecord[];
-  create(run: RunRecord): Promise<RunRecord>;
+  create(run: RunRecord, expectedSessionRevision?: string): Promise<RunRecord>;
   mutate(
     id: string,
     type: string,

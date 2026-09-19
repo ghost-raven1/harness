@@ -7,8 +7,9 @@ import { showRemovedTask } from './task-removed.js';
 const fileStates = {
   prepared: 'Подготовлена запись',
   applied: 'Изменён',
-  restoring: 'Восстанавливается',
+  restoring: 'Прерванное восстановление · нужна проверка',
   restored: 'Восстановлен',
+  reviewed: 'Проверен вручную · текущее содержимое сохранено',
 };
 
 /** Полные сведения читаются по вкладкам и не вытесняют управление за край окна. */
@@ -69,7 +70,12 @@ export function taskDetails(status: StatusView): TextTab[] {
         ? status.fileChanges
             .map(
               (change) =>
-                change.path + '\nСостояние: ' + fileStates[change.status] + '\nID: ' + change.id,
+                change.path +
+                '\nСостояние: ' +
+                fileStates[change.status] +
+                '\nID: ' +
+                change.id +
+                (change.resolution ? '\nПроверка пользователя: ' + change.resolution.result : ''),
             )
             .join('\n\n')
         : 'Зарегистрированных изменений файлов нет.',
