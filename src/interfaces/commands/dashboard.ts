@@ -1,3 +1,4 @@
+import { serviceCompatibility } from '../service-compatibility.js';
 import { isWithin } from '../../configuration/loader.js';
 import type { Command } from 'commander';
 import * as prompts from '@clack/prompts';
@@ -166,10 +167,11 @@ async function desktop(
     const choice = await liveSelect({
       title: 'Главное меню',
       load: async () => {
-        const current = await context.request<ServiceInfo>('system.info');
+        const current = await context.request('system.info');
         return {
           summary: [
             notice,
+            serviceCompatibility(current),
             current.recoveryError
               ? 'Проверьте папку состояния и перезапустите Harness.'
               : undefined,
@@ -225,7 +227,7 @@ async function desktop(
         }
         return false;
       }
-      info = await context.request<ServiceInfo>('system.info');
+      info = await context.request('system.info');
       if (action === 'run') {
         const profile = info.profiles.find((p) => p.id === preferences.profile);
         if (!profile) throw new Error('Выбранный профиль изменился. Выберите модель в настройках.');

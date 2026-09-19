@@ -1,4 +1,4 @@
-import type { FileSessionStore } from '../sessions/store.js';
+import type { SessionStore } from '../sessions/ports.js';
 import type { ToolCall } from '../providers/types.js';
 import { UnknownOutcomeError } from '../runtime/executor.js';
 import { abort, id, message } from '../shared/primitives.js';
@@ -12,7 +12,7 @@ export class AgentCoordinator {
 
   /** Связывает сохранённое дерево с исполнителем одного агента. */
   constructor(
-    private readonly store: FileSessionStore,
+    private readonly store: SessionStore,
     private readonly executeAgent: ExecuteAgent,
   ) {}
 

@@ -1,4 +1,5 @@
-import type { FileSessionStore } from '../sessions/store.js';
+import { ApplicationError } from '../shared/application-error.js';
+import type { SessionStore } from '../sessions/ports.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { ToolScheduler } from '../tools/scheduler.js';
 import type { FileApprovalService, PolicyService } from '../policy/service.js';
@@ -8,7 +9,13 @@ import { abort, deadline, message } from '../shared/primitives.js';
 import { delegateSchema, awaitSchema, handoffSchema } from '../agents/service.js';
 import { ToolOutcomeUnknownError } from '../tools/errors.js';
 
-export class UnknownOutcomeError extends Error {}
+/** Неизвестный результат требует проверки человеком до дальнейшего исполнения. */
+export class UnknownOutcomeError extends ApplicationError {
+  constructor(message: string) {
+    super('UNKNOWN_OUTCOME', message);
+    this.name = 'UnknownOutcomeError';
+  }
+}
 export type ControlHandler = (
   runId: string,
   agentId: string,
@@ -19,7 +26,7 @@ export type ControlHandler = (
 /** Проверяет вызов, записывает начало до эффекта и сохраняет результат с исходным ID. */
 export class InvocationExecutor {
   constructor(
-    private readonly store: FileSessionStore,
+    private readonly store: SessionStore,
     private readonly registry: ToolRegistry,
     private readonly scheduler: ToolScheduler,
     private readonly policy: PolicyService,

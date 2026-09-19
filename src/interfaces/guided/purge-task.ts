@@ -5,11 +5,10 @@ import { explainError } from './errors.js';
 import { liveConfirm } from './live-confirm.js';
 import { page, backFromPage } from './screen.js';
 import { readText } from './text-reader.js';
-import type { PurgePreview } from '../../sessions/purge.js';
 
 /** Удаляет всю переписку только после подтверждения её актуального состава. */
 export async function purgeTask(context: CliContext, status: StatusView): Promise<boolean> {
-  const load = () => context.request<PurgePreview>('runtime.purgePreview', { runId: status.runId });
+  const load = () => context.request('runtime.purgePreview', { runId: status.runId });
   const preview = await load();
   if (!preview.available) {
     await readText('Удаление пока недоступно', [

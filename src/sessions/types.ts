@@ -96,15 +96,5 @@ export interface JournalEvent {
   payload: unknown;
   state: RunRecord;
 }
-/** Единый владелец состояния запуска с последовательными журналируемыми изменениями. */
-export interface SessionStore {
-  get(id: string): RunRecord;
-  list(): RunRecord[];
-  create(run: RunRecord, expectedSessionRevision?: string): Promise<RunRecord>;
-  mutate(
-    id: string,
-    type: string,
-    payload: unknown,
-    update: (run: RunRecord) => void,
-  ): Promise<RunRecord>;
-}
+/** Совместимый экспорт составного порта; контракты чтения и записи находятся рядом. */
+export type { SessionStore } from './ports.js';

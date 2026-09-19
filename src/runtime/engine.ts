@@ -1,3 +1,4 @@
+import { ApplicationError } from '../shared/application-error.js';
 import { UsageLedger } from './usage.js';
 import {
   IterationSettings,
@@ -8,8 +9,8 @@ import {
   type IterationStatus,
 } from './iterations.js';
 import type { ConfigSnapshot } from '../configuration/schema.js';
-import type { FileSessionStore } from '../sessions/store.js';
-import type { RunRecord } from '../sessions/types.js';
+import type { SessionStore } from '../sessions/ports.js';
+import type { RunRecord, RunStatus } from '../sessions/types.js';
 import { requiresOutcomeReview } from '../sessions/invocations.js';
 import {
   assertKnownSessionOutcomes,
@@ -37,7 +38,7 @@ export { runInputSchema, type RunInput } from './run-factory.js';
 interface RuntimeServices {
   configFile: string;
   initialConfig: ConfigSnapshot;
-  store: FileSessionStore;
+  store: SessionStore;
   learning: LearningStore;
   provider: ModelProvider;
   context: ContextService;
@@ -67,7 +68,7 @@ export class HarnessRuntime {
   private readonly loop: AgentLoop;
   private readonly factory: RunFactory;
   private readonly inbox: RunInbox;
-  readonly store: FileSessionStore;
+  readonly store: SessionStore;
   private readonly initialConfig: ConfigSnapshot;
   /** Вызывается после остановки дерева; по умолчанию завершение не запускает дополнительные действия. */
   private terminal: (runId: string) => Promise<void> = async () => undefined;
@@ -76,7 +77,7 @@ export class HarnessRuntime {
     this.store = services.store;
     this.inbox = new RunInbox(services.store);
     this.usage = new UsageLedger(services.store);
-    this.iterations = new IterationSettings(services.store.directory);
+    this.iterations = new IterationSettings(services.store.stateFiles);
     this.initialConfig = services.initialConfig;
     this.factory = new RunFactory(
       services.configFile,
@@ -126,9 +127,14 @@ export class HarnessRuntime {
     return runId ? this.executions.has(runId) : this.executions.size > 0;
   }
 
+  /** Показывает остановленный из-за отказа записи запуск без чтения его полного состояния. */
+  visibleStatus(runId: string, saved: RunStatus): RunStatus {
+    return this.store.recoveryError && this.failures.has(runId) ? 'paused' : saved;
+  }
+
   /** Дополняет сохранённую задачу фактом отказа исполнителя, не подменяя журнал на диске. */
-  view(runId: string): RunRecord & { recoveryRequired?: boolean } {
-    const run = this.store.get(runId);
+  view(runId: string, loaded?: RunRecord): RunRecord & { recoveryRequired?: boolean } {
+    const run = loaded ?? this.store.get(runId);
     if (!this.store.recoveryError) return run;
     if (this.failures.has(runId)) {
       run.status = 'paused';
@@ -155,7 +161,9 @@ export class HarnessRuntime {
 
   /** Запускает корень и координирует финализацию, паузы и остановку дочерних веток. */
   private launch(runId: string): void {
-    if (this.executions.has(runId)) throw new Error('Run already executing');
+    if (this.executions.has(runId))
+      throw new ApplicationError('TASK_BUSY', 'Run already executing');
+    this.store.pin(runId);
     const controller = new AbortController();
     const done = Promise.resolve()
       .then(async () => {
@@ -228,6 +236,7 @@ export class HarnessRuntime {
       .finally(() => {
         this.agents.forgetRun(runId);
         this.executions.delete(runId);
+        this.store.unpin(runId);
       });
     this.executions.set(runId, { controller, done, cancelRequested: false });
     // CLI может только опрашивать статус. Отказ диска не должен стать необработанным rejection;
@@ -237,7 +246,7 @@ export class HarnessRuntime {
   /** Отменяет всё дерево и дожидается остановки активной работы. */
   async cancel(runId: string): Promise<void> {
     const { done } = await this.lifecycle.run(async () => {
-      const run = this.store.get(runId);
+      const run = await this.store.load(runId);
       const execution = this.executions.get(runId);
       // Итоговый статус записывается раньше остановки исполнителей и завершающего обработчика.
       if (['completed', 'failed', 'cancelled'].includes(run.status))
@@ -265,10 +274,15 @@ export class HarnessRuntime {
   /** Сохраняет продолжение и регистрирует цикл до обработки следующей команды отмены. */
   private async resumeStopped(runId: string): Promise<void> {
     this.store.assertWritable();
-    if (this.executions.has(runId)) throw new Error('Run still stopping');
+    if (this.executions.has(runId)) throw new ApplicationError('TASK_BUSY', 'Run still stopping');
+    const previous = await this.store.load(runId);
+    const sessionRuns = this.store
+      .catalog(true)
+      .filter((run) => run.sessionId === previous.sessionId);
+    const revision = this.store.sessionRevision(previous.sessionId);
+    const corrections = await sessionCorrections(this.store, sessionRuns);
     if (
-      serviceFingerprint(this.store.get(runId).config.value) !==
-      serviceFingerprint(this.initialConfig.value)
+      serviceFingerprint(previous.config.value) !== serviceFingerprint(this.initialConfig.value)
     ) {
       throw new Error(
         'Resume requires the original MCP, concurrency and learning service settings',
@@ -277,10 +291,20 @@ export class HarnessRuntime {
     await this.store.mutate(runId, 'run.resumed', {}, (state) => {
       if (state.status !== 'paused') throw new Error('Only paused runs can be resumed');
       if (Object.values(state.invocations).some(requiresOutcomeReview))
-        throw new Error('Resolve unknown invocations before resuming');
+        throw new ApplicationError(
+          'UNKNOWN_OUTCOME',
+          'Resolve unknown invocations before resuming',
+        );
       if (state.fileChanges?.some((change) => change.status === 'restoring'))
-        throw new Error('Сначала проверьте результат прерванного восстановления файла.');
-      const sessionRuns = this.store.list(true).filter((run) => run.sessionId === state.sessionId);
+        throw new ApplicationError(
+          'UNKNOWN_OUTCOME',
+          'Сначала проверьте результат прерванного восстановления файла.',
+        );
+      if (revision !== this.store.sessionRevision(state.sessionId))
+        throw new ApplicationError(
+          'STALE_PREVIEW',
+          'Состояние беседы изменилось. Повторите продолжение.',
+        );
       assertKnownSessionOutcomes(sessionRuns);
       if (state.providerPause?.retryAt && Date.parse(state.providerPause.retryAt) > Date.now())
         throw new Error(
@@ -294,7 +318,6 @@ export class HarnessRuntime {
       state.iterationStart = state.turns;
       delete state.pauseReason;
       delete state.error;
-      const corrections = sessionCorrections(this.store, sessionRuns);
       for (const agent of Object.values(state.agents))
         if (agent.status !== 'completed' && agent.status !== 'failed') {
           let parent = agent.parentId ? state.agents[agent.parentId] : undefined;
@@ -324,11 +347,12 @@ export class HarnessRuntime {
       await this.factory.currentIterationLimit(),
     );
     if (!runId) return { defaultLimit };
-    return { defaultLimit, run: this.runIterationStatus(runId) };
+    const loaded = await this.store.load(runId);
+    return { defaultLimit, run: this.runIterationStatus(runId, loaded) };
   }
   /** Просмотр сохранённого запуска не зависит от доступности текущего файла конфигурации. */
-  runIterationStatus(runId: string): NonNullable<IterationStatus['run']> {
-    const run = this.store.get(runId);
+  runIterationStatus(runId: string, loaded?: RunRecord): NonNullable<IterationStatus['run']> {
+    const run = loaded ?? this.store.get(runId);
     return {
       ...iterationProgress(run),
       pausedByLimit: run.status === 'paused' && run.pauseReason === 'iterations',
@@ -341,6 +365,7 @@ export class HarnessRuntime {
   }
   /** Меняет только настройку новых задач либо предел выбранной задачи на паузе. */
   async setIterationLimit(limit: number, runId?: string, expectedLimit?: number): Promise<void> {
+    this.store.assertWritable();
     validateIterationLimit(limit);
     if (!runId) {
       await this.iterations.setDefault(
@@ -353,7 +378,10 @@ export class HarnessRuntime {
     await this.store.mutate(runId, 'run.iteration_limit_changed', { limit }, (run) => {
       if (run.deletedAt) throw new Error('Скрытая задача доступна только для просмотра.');
       if (run.status !== 'paused' || this.executions.has(runId))
-        throw new Error('Предел шагов можно изменить после остановки задачи на паузе.');
+        throw new ApplicationError(
+          'TASK_BUSY',
+          'Предел шагов можно изменить после остановки задачи на паузе.',
+        );
       assertExpectedLimit(iterationProgress(run).limit, expectedLimit);
       run.iterationLimit = limit;
     });
@@ -368,7 +396,10 @@ export class HarnessRuntime {
   ): Promise<void> {
     await this.store.mutate(runId, 'tool.human_resolved', { invocationId }, (state) => {
       if (this.executions.has(runId))
-        throw new Error('Дождитесь полной остановки задачи перед проверкой результата.');
+        throw new ApplicationError(
+          'TASK_BUSY',
+          'Дождитесь полной остановки задачи перед проверкой результата.',
+        );
       if (!['paused', 'cancelled', 'failed'].includes(state.status))
         throw new Error(
           'Проверить результат можно у приостановленной, остановленной или завершившейся с ошибкой задачи.',

@@ -1,4 +1,4 @@
-import type { FileSessionStore } from '../sessions/store.js';
+import type { SessionStore } from '../sessions/ports.js';
 import type { RunRecord, AgentState } from '../sessions/types.js';
 import type { ModelProvider, ToolDefinition } from '../providers/types.js';
 import { ProviderError } from '../providers/errors.js';
@@ -23,7 +23,7 @@ import { abort, message } from '../shared/primitives.js';
 import { deliverMessages, hasPendingMessages } from './messages.js';
 
 interface AgentLoopServices {
-  store: FileSessionStore;
+  store: SessionStore;
   provider: ModelProvider;
   context: ContextService;
   registry: ToolRegistry;

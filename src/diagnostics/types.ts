@@ -1,3 +1,5 @@
+import { applicationErrorCodeSchema } from '../shared/application-error.js';
+
 /** Диагностика хранит только технические признаки, без содержимого команд и ответов. */
 export interface DiagnosticStatus {
   enabled: boolean;
@@ -47,6 +49,8 @@ export const diagnosticMethods = [
   'maintenance.reset',
   'diagnostics.status',
   'diagnostics.configure',
+  'diagnostics.verifyHistory',
+  'diagnostics.rebuildIndex',
 ] as const;
 
 export type DiagnosticMethod = (typeof diagnosticMethods)[number] | 'unknown';
@@ -59,6 +63,7 @@ export const diagnosticCodes = [
   'ENOSPC',
   'EROFS',
   'ENOENT',
+  ...applicationErrorCodeSchema.options,
 ] as const;
 export type DiagnosticCode = (typeof diagnosticCodes)[number];
 export type DiagnosticEvent =

@@ -2,7 +2,7 @@ import { restoreFile } from './file-preview.js';
 import { manageBudget } from './budget.js';
 import { showIterationSettings } from './iterations.js';
 import * as prompts from '@clack/prompts';
-import type { CliContext, RunSummary, StatusView } from '../types.js';
+import type { CliContext, StatusView } from '../types.js';
 import { labels, note, selected } from '../ui.js';
 import { followRun } from './watch.js';
 import { page, terminalText } from './screen.js';
@@ -73,13 +73,7 @@ export async function chooseTask(
   let query = '';
   let includeDeleted = false;
   const loadHistory = () =>
-    context.request<{
-      active: RunSummary[];
-      items: RunSummary[];
-      page: number;
-      pages: number;
-      total: number;
-    }>('runtime.history', { page: pageIndex, query, includeDeleted });
+    context.request('runtime.history', { page: pageIndex, query, includeDeleted });
   while (true) {
     const runId = selected(
       await liveSelect({
@@ -268,7 +262,7 @@ async function taskActions(
           title: 'Задача · ' + runId.slice(0, 8),
           exitOnError: (error) => isMissingResource(error, 'task'),
           load: async () => {
-            const status = await context.request<StatusView>('runtime.status', { runId });
+            const status = await context.request('runtime.status', { runId });
             menuStatus = status;
             return {
               message: 'Что дальше?',
@@ -282,7 +276,7 @@ async function taskActions(
       );
       if (action === 'archive') return 'archive';
       if (action === 'back') return menuStatus.deletedAt ? 'archive' : undefined;
-      const status = await context.request<StatusView>('runtime.status', { runId });
+      const status = await context.request('runtime.status', { runId });
       if (!taskActionOptions(status).some((option) => option.value === action)) {
         notice = 'Состояние изменилось в другом окне. Выберите актуальное действие.';
         continue;
@@ -341,7 +335,7 @@ async function taskActions(
             active: 'Остановить',
             inactive: 'Продолжить работу',
             load: async () => {
-              const current = await context.request<StatusView>('runtime.status', { runId });
+              const current = await context.request('runtime.status', { runId });
               const available =
                 !current.deletedAt &&
                 ['running', 'awaiting_approval', 'paused'].includes(current.status);
@@ -355,7 +349,7 @@ async function taskActions(
           })) ?? false,
         );
         if (yes) {
-          const current = await context.request<StatusView>('runtime.status', { runId });
+          const current = await context.request('runtime.status', { runId });
           if (
             !current.deletedAt &&
             ['running', 'awaiting_approval', 'paused'].includes(current.status)
@@ -365,7 +359,7 @@ async function taskActions(
       }
       if (action === 'resume') {
         if (!(await checkInterrupted(context, status))) continue;
-        const current = await context.request<StatusView>('runtime.status', { runId });
+        const current = await context.request('runtime.status', { runId });
         if (current.deletedAt || current.status !== 'paused') continue;
         await context.request('runtime.resume', { runId });
       }
@@ -400,7 +394,7 @@ async function feedback(context: CliContext, runId: string): Promise<string> {
       validate: (v) => (v.trim() ? undefined : 'Коротко опишите проверку'),
     }),
   );
-  const current = await context.request<StatusView>('runtime.status', { runId });
+  const current = await context.request('runtime.status', { runId });
   if (current.deletedAt) return 'Задача скрыта в другом окне. Отзыв не отправлен.';
   await context.request('learning.feedback', { runId, positive, text });
   return 'Отзыв сохранён. Опыт применяется только после проверки.';

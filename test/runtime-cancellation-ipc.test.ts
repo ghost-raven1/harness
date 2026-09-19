@@ -16,7 +16,7 @@ it('локальный сервис сохраняет отмену при дв�
   );
   const service = await serve(await configDirectory(root, api.baseUrl), directory);
   cleanup(() => service.close());
-  const { runId } = await rpc<{ runId: string }>(directory, 'runtime.run', {
+  const { runId } = await rpc(directory, 'runtime.run', {
     message: 'Проверь продолжение после ограничения провайдера',
     workspace: join(root, 'workspace'),
     requestKey: 'ipc-resume-cancel',

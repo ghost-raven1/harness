@@ -1,5 +1,6 @@
+import { ApplicationError } from '../shared/application-error.js';
 import type { Config } from '../configuration/schema.js';
-import type { FileSessionStore } from '../sessions/store.js';
+import type { SessionStore } from '../sessions/ports.js';
 import type { ModelProvider } from '../providers/types.js';
 import { ProviderError } from '../providers/errors.js';
 import type { PolicyService } from '../policy/service.js';
@@ -21,7 +22,7 @@ export class LearningService {
   /** Собирает извлечение и оценку уроков на общем хранилище и учёте запросов. */
   constructor(
     readonly store: LearningStore,
-    private readonly sessions: FileSessionStore,
+    private readonly sessions: SessionStore,
     private readonly config: Config,
     provider: ModelProvider,
     policy: PolicyService,
@@ -32,14 +33,15 @@ export class LearningService {
   }
   /** Восстанавливает пропущенные задания после сбоя между завершением задачи и постановкой в очередь. */
   async initialize(): Promise<void> {
-    for (const run of this.sessions.list())
-      if (['completed', 'failed'].includes(run.status)) await this.enqueue(run.id);
+    for (const run of this.sessions.catalog())
+      if (run.learningEnabled && ['completed', 'failed'].includes(run.status))
+        await this.enqueue(run.id);
   }
   /** Собирает подтверждённые исходы инструментов и создаёт по одному заданию на роль запуска. */
   async enqueue(runId: string): Promise<void> {
     this.assertAvailable();
     if (this.store.read().ignoredRunIds?.includes(runId)) return;
-    const run = this.sessions.get(runId);
+    const run = await this.sessions.load(runId);
     if (!run.config.value.learning.enabled) return;
     await this.store.update((state) => {
       const roles = new Set<string>();
@@ -189,7 +191,7 @@ export class LearningService {
   }
   /** Извлекает узкий урок из проверенных источников и сохраняет кандидата без публикации. */
   private async propose(job: LearningJob): Promise<LearningCandidate> {
-    const run = this.sessions.get(job.runId);
+    const run = await this.sessions.load(job.runId);
     const observations = Object.values(this.store.read().evidence).filter(
       (item) => item.runId === run.id && item.role === job.role,
     );
@@ -262,7 +264,7 @@ export class LearningService {
     candidateId?: string,
   ): Promise<void> {
     this.assertAvailable();
-    const run = this.sessions.get(runId);
+    const run = await this.sessions.load(runId);
     const feedbackId = hash({ runId, positive, text, candidateId });
     const role = run.agents[run.rootAgentId]!.role;
     await this.store.update((state) => {
@@ -328,7 +330,8 @@ export class LearningService {
   beginMaintenance(): () => void {
     this.assertAvailable();
     if (this.running)
-      throw new Error(
+      throw new ApplicationError(
+        'TASK_BUSY',
         'Сейчас проверяется урок. Дождитесь окончания проверки и повторите удаление.',
       );
     this.maintenance = true;
@@ -342,7 +345,12 @@ export class LearningService {
   }
   /** Не допускает изменения обучения одновременно с удалением его источников. */
   private assertAvailable(): void {
+    if (this.sessions.recoveryError)
+      throw new ApplicationError('STORAGE_UNAVAILABLE', this.sessions.recoveryError);
     if (this.maintenance)
-      throw new Error('Удаляется беседа. Повторите действие после завершения удаления.');
+      throw new ApplicationError(
+        'TASK_BUSY',
+        'Удаляется беседа. Повторите действие после завершения удаления.',
+      );
   }
 }

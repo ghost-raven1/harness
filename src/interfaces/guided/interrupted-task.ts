@@ -26,7 +26,7 @@ export async function checkInterrupted(context: CliContext, status: StatusView):
         await liveSelect<'later' | 'details' | 'success' | 'failed'>({
           title: 'Проверка прерванной операции',
           load: async () => {
-            const current = await context.request<StatusView>('runtime.status', {
+            const current = await context.request('runtime.status', {
               runId: status.runId,
             });
             const pending = current.unknownInvocations.some((item) => item.id === invocation.id);
@@ -93,7 +93,7 @@ export async function checkInterrupted(context: CliContext, status: StatusView):
         active: 'Да',
         inactive: 'Назад',
         load: async () => {
-          const current = await context.request<StatusView>('runtime.status', {
+          const current = await context.request('runtime.status', {
             runId: status.runId,
           });
           const available =
@@ -109,7 +109,7 @@ export async function checkInterrupted(context: CliContext, status: StatusView):
       })) ?? false,
     );
     if (!confirmed) return false;
-    const current = await context.request<StatusView>('runtime.status', { runId: status.runId });
+    const current = await context.request('runtime.status', { runId: status.runId });
     if (!['paused', 'cancelled', 'failed'].includes(current.status)) return false;
     if (!current.unknownInvocations.some((item) => item.id === invocation.id)) continue;
     await context.request('runtime.resolve', {
@@ -121,6 +121,6 @@ export async function checkInterrupted(context: CliContext, status: StatusView):
   }
   return reviewRestorations(
     context,
-    await context.request<StatusView>('runtime.status', { runId: status.runId }),
+    await context.request('runtime.status', { runId: status.runId }),
   );
 }

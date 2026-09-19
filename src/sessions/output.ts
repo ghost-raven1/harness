@@ -1,10 +1,20 @@
+import { readdir, open, stat } from 'node:fs/promises';
+import type { IndexRebuildReport } from '../diagnostics/history-types.js';
+import {
+  buildIndex,
+  indexedPage,
+  readIndex,
+  saveIndex,
+  type JournalIndex,
+} from './journal-index.js';
+import { syncDirectory } from './files.js';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { id, Serial } from '../shared/primitives.js';
 import type { ModelOutput, ModelProgress } from '../providers/types.js';
-import { appendJournalBatch, readJournal } from './journal.js';
+import { appendJournalBatch, JournalReadError } from './journal.js';
 
-const schema = z.object({
+export const outputEventSchema = z.object({
   seq: z.number().int().positive(),
   at: z.string(),
   requestId: z.string(),
@@ -13,55 +23,140 @@ const schema = z.object({
   type: z.enum(['started', 'text', 'reasoning', 'retry', 'completed', 'failed', 'truncated']),
   text: z.string().max(4096).optional(),
 });
-export type OutputEvent = z.infer<typeof schema>;
+export type OutputEvent = z.infer<typeof outputEventSchema>;
 type NewEvent = Omit<OutputEvent, 'seq'>;
 
 /** Поток интерфейса хранится отдельно: фрагменты текста не копируют снимок всего запуска. */
 export class RunOutputStore {
-  private readonly records = new Map<string, OutputEvent[]>();
+  private readonly indexes = new Map<string, JournalIndex>();
   private readonly serial = new Serial();
+  private readonly removed = new Set<string>();
   constructor(private readonly directory: string) {}
+  /** Пропускает диагностику между подтверждёнными пачками без остановки модели. */
+  withReadBarrier<T>(work: () => Promise<T>): Promise<T> {
+    return this.serial.run(work);
+  }
   /** Убирает поток из памяти после остановки всех писателей удаляемой беседы. */
   forget(runIds: string[]): Promise<void> {
     return this.serial.run(async () => {
-      for (const runId of runIds) this.records.delete(runId);
+      for (const runId of runIds) {
+        this.indexes.delete(runId);
+        this.removed.add(runId);
+      }
     });
   }
   /** Формирует имя отдельного журнала опубликованного вывода задачи. */
   private path(runId: string): string {
     return join(this.directory, 'output', runId + '.jsonl');
   }
-  /** Загружает и проверяет последовательность событий перед помещением в кэш. */
-  private async load(runId: string): Promise<OutputEvent[]> {
-    if (!this.records.has(runId)) {
-      const events = (await readJournal<unknown>(this.path(runId))).map((row, index) => {
-        const event = schema.parse(row);
-        if (event.seq !== index + 1) throw new Error('Повреждён журнал вывода задачи.');
-        return event;
-      });
-      this.records.set(runId, events);
-    }
-    return this.records.get(runId)!;
+  /** Индекс вывода содержит только номера и смещения; опубликованный текст остаётся в журнале. */
+  private indexPath(runId: string): string {
+    return join(this.directory, 'indexes', 'output', runId + '.json');
   }
-  /** Возвращает копию страницы вывода и следующий курсор без полного чтения клиентом. */
-  async page(
+  /** Проверяет схему и непрерывность последовательности вывода. */
+  private validate(value: unknown, seq: number): OutputEvent {
+    const event = outputEventSchema.parse(value);
+    if (event.seq !== seq) throw new Error('JOURNAL_INVALID_SEQUENCE');
+    return event;
+  }
+  /** Загружает метаданные или строит индекс одним проходом. */
+  private async load(runId: string, repair = false, force = false): Promise<JournalIndex> {
+    if (!force && this.indexes.has(runId)) return this.indexes.get(runId)!;
+    const saved = force
+      ? undefined
+      : await readIndex(this.indexPath(runId), this.path(runId), () => null);
+    if (saved) {
+      this.indexes.set(runId, saved.index);
+      return saved.index;
+    }
+    let rebuilt;
+    try {
+      rebuilt = await buildIndex(this.path(runId), this.validate);
+    } catch (error) {
+      if (!repair || !(error instanceof JournalReadError) || error.code !== 'JOURNAL_TORN_TAIL')
+        throw error;
+      const file = await open(this.path(runId), 'r+');
+      try {
+        await file.truncate(error.offset);
+        await file.sync();
+      } finally {
+        await file.close();
+      }
+      await syncDirectory(join(this.directory, 'output'));
+      rebuilt = await buildIndex(this.path(runId), this.validate);
+    }
+    this.indexes.set(runId, rebuilt.index);
+    await saveIndex(this.indexPath(runId), rebuilt.index, null, force);
+    return rebuilt.index;
+  }
+  /** Проверяет журналы вывода до запуска исполнителей; ремонт разрешает только владелец. */
+  async initialize(repair = true, removed: ReadonlySet<string> = new Set()): Promise<void> {
+    for (const runId of removed) this.removed.add(runId);
+    for (const name of await this.names()) await this.load(name.slice(0, -6), repair);
+  }
+  /** Перечисляет существующие потоки без создания каталога. */
+  private async names(): Promise<string[]> {
+    try {
+      return (await readdir(join(this.directory, 'output'))).filter(
+        (name) => /^[a-f0-9-]{36}\.jsonl$/.test(name) && !this.removed.has(name.slice(0, -6)),
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw error;
+    }
+  }
+  /** Перестраивает исключительно смещения; исходные записи не меняются. */
+  rebuildIndex(): Promise<IndexRebuildReport> {
+    return this.serial.run(async () => {
+      let rebuilt = 0,
+        skipped = 0;
+      const issues: IndexRebuildReport['issues'] = [];
+      for (const name of await this.names()) {
+        try {
+          await this.load(name.slice(0, -6), false, true);
+          rebuilt++;
+        } catch {
+          skipped++;
+          issues.push({ code: 'INDEX_REBUILD_FAILED', kind: 'output' });
+        }
+      }
+      return { checkedAt: new Date().toISOString(), rebuilt, skipped, issues };
+    });
+  }
+  /** Читает одну страницу с ближайшего смещения без кэша полных потоков. */
+  page(
     runId: string,
     cursor: number,
   ): Promise<{ events: OutputEvent[]; cursor: number; hasMore: boolean }> {
     return this.serial.run(async () => {
-      const records = await this.load(runId);
-      const events = records.slice(cursor, cursor + 32);
+      const index = await this.load(runId);
+      const events = await indexedPage(this.path(runId), index, cursor, 32, this.validate);
       const next = events.at(-1)?.seq ?? cursor;
-      return { events: structuredClone(events), cursor: next, hasMore: records.length > next };
+      return { events, cursor: next, hasMore: index.count > next };
     });
   }
-  /** Присваивает номера и фиксирует пачку до обновления кэша вывода. */
+  /** Обновляет смещения только после подтверждения всей пачки; отказ индекса не отменяет запись. */
   append(runId: string, events: NewEvent[]): Promise<void> {
     return this.serial.run(async () => {
-      const records = await this.load(runId);
-      const rows = events.map((event, index) => ({ ...event, seq: records.length + index + 1 }));
+      const previous = await this.load(runId);
+      const rows = events.map((event, index) => ({ ...event, seq: previous.count + index + 1 }));
       await appendJournalBatch(this.path(runId), rows);
-      records.push(...rows);
+      const index = { ...previous, positions: [...previous.positions] };
+      for (const row of rows) {
+        if (index.count % 128 === 0) index.positions.push({ seq: row.seq, offset: index.size });
+        index.lastOffset = index.size;
+        index.size += Buffer.byteLength(JSON.stringify(row) + '\n');
+        index.count++;
+      }
+      this.indexes.set(runId, index);
+      try {
+        const meta = await stat(this.path(runId));
+        index.mtimeMs = meta.mtimeMs;
+        index.ctimeMs = meta.ctimeMs;
+      } catch {
+        /* Перестроение при следующем чтении. */
+      }
+      await saveIndex(this.indexPath(runId), index, null);
     });
   }
   /** Открывает отдельную запись потока для запроса модели в выбранной роли. */

@@ -197,7 +197,7 @@ it('после 429 сохраняет паузу, историю и готову
   });
   await app.runtime.wait(runId);
   const before = app.sessions.get(runId);
-  const history = app.sessions.history(runId, 0);
+  const history = await app.sessions.history(runId, 0);
   expect(before).toMatchObject({
     status: 'paused',
     pauseReason: 'provider',
@@ -231,7 +231,7 @@ it('после 429 сохраняет паузу, историю и готову
   expect(after.learningVersion).toBe(before.learningVersion);
   expect(after.fileChanges).toEqual(before.fileChanges);
   expect(after.invocations).toEqual(before.invocations);
-  expect(restored.sessions.history(runId, 0).slice(0, history.length)).toEqual(history);
+  expect((await restored.sessions.history(runId, 0)).slice(0, history.length)).toEqual(history);
   expect(await readFile(join(directory, 'workspace/saved.txt'), 'utf8')).toBe('Правка человека');
 });
 

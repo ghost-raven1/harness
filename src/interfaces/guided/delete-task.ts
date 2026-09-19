@@ -24,7 +24,7 @@ export async function deleteTask(
         active: 'Убрать',
         inactive: 'Оставить',
         load: async () => {
-          const current = await context.request<StatusView>('runtime.status', {
+          const current = await context.request('runtime.status', {
             runId: status.runId,
           });
           return {
@@ -38,7 +38,7 @@ export async function deleteTask(
     );
   }
   if (!confirmed) return false;
-  const current = await context.request<StatusView>('runtime.status', { runId: status.runId });
+  const current = await context.request('runtime.status', { runId: status.runId });
   if (current.deletedAt) return true;
   if (['running', 'awaiting_approval', 'paused'].includes(current.status))
     await context.request('runtime.cancel', { runId: status.runId });

@@ -1,5 +1,5 @@
 import type { CliContext, StatusView } from '../types.js';
-import type { ResultPage } from '../result-pages.js';
+
 import { isMissingResource } from '../../shared/resource-errors.js';
 import { readText } from './text-reader.js';
 import { liveSelect } from './live-select.js';
@@ -11,12 +11,12 @@ export async function showPagedAnswer(context: CliContext, initial: StatusView):
   let index = 0;
   while (true) {
     const cursor = cursors[index]!;
-    const part = await context.request<ResultPage>('runtime.result', {
+    const part = await context.request('runtime.result', {
       runId: initial.runId,
       cursor,
     });
     const snapshot = async () => {
-      const current = await context.request<StatusView>('runtime.status', { runId: initial.runId });
+      const current = await context.request('runtime.status', { runId: initial.runId });
       if (current.resultLength !== part.total)
         throw new Error('Ответ изменился. Вернитесь к задаче и откройте его заново.');
       return {

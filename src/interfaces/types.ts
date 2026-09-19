@@ -12,6 +12,10 @@ export interface ServiceInfo {
   node: string;
   version: string;
   state: string;
+  buildId?: string | null;
+  protocolVersion?: number;
+  storageVersion?: number;
+  capabilities?: string[];
   workspaces: string[];
   defaultProfile: string;
   tools: string[];
@@ -52,7 +56,7 @@ export interface StatusView {
   providerPause?: RunRecord['providerPause'];
   cursor: number;
   usage: { input: number; output: number };
-  budget?: import('./guided/budget.js').BudgetView;
+  budget?: import('./contracts/index.js').CommandResponse<'budget.status'>;
   agents: Array<{ id: string; role: string; status: AgentStatus }>;
   approvals: Approval[];
   events: Array<{
@@ -101,7 +105,7 @@ export interface CliContext {
   json(): boolean;
   interactive(): boolean;
   output(value: unknown): void;
-  request<T = unknown>(method: string, params?: unknown): Promise<T>;
+  request: import('./contracts/index.js').CommandRequest;
 }
 
 export interface LearningStatusView {

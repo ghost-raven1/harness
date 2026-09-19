@@ -55,7 +55,7 @@ it('длинный путь состояния с пробелами и кири
   const directory = join(root, 'длинный проект с пробелами '.repeat(5), 'state');
   const service = await serve(await configDirectory(root, 'http://127.0.0.1:1/v1'), directory);
   cleanup(() => service.close());
-  const result = await rpc<{ node: string }>(directory, 'system.info');
+  const result = await rpc(directory, 'system.info');
   expect(result.node).toBe(process.version);
   expect(Buffer.byteLength(socketPath(directory))).toBeLessThanOrEqual(100);
 });

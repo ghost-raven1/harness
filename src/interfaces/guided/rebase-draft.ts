@@ -1,5 +1,5 @@
 import { SessionChangedError } from '../../shared/session-conflict.js';
-import type { CliContext, StatusView } from '../types.js';
+import type { CliContext } from '../types.js';
 import type { TaskDraft } from '../../sessions/drafts.js';
 import { draftLocation } from './task-drafts.js';
 import { liveConfirm } from './live-confirm.js';
@@ -11,7 +11,7 @@ export async function rebaseDraft(
   draft: TaskDraft,
   error: SessionChangedError,
 ): Promise<TaskDraft> {
-  const latest = await context.request<StatusView>('runtime.status', { runId: error.latestRunId });
+  const latest = await context.request('runtime.status', { runId: error.latestRunId });
   const yes = selected(
     (await liveConfirm({
       title: 'В беседе появился новый ответ',
@@ -22,7 +22,7 @@ export async function rebaseDraft(
       active: 'Продолжить с последним ответом',
       inactive: 'Вернуться позже',
       load: async () => {
-        const current = await context.request<StatusView>('runtime.status', {
+        const current = await context.request('runtime.status', {
           runId: latest.runId,
         });
         return {

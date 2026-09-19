@@ -109,7 +109,7 @@ export async function showTaskDetails(
         ? 'Скрыта · только чтение'
         : (labels[status.status] ?? status.status),
       load: async () => {
-        const current = await context.request<StatusView>('runtime.status', {
+        const current = await context.request('runtime.status', {
           runId: status.runId,
         });
         return {

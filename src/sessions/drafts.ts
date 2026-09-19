@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { id, hash } from '../shared/primitives.js';
 import { atomicJson, assertRealDirectory, optionalJson, syncDirectory } from './files.js';
-import type { FileSessionStore } from './store.js';
+import type { SessionStore } from './ports.js';
 import { ResourceNotFoundError } from '../shared/resource-errors.js';
 
 export const taskTextLimit = 100000;
@@ -46,7 +46,7 @@ export const draftUpdateSchema = draftLocationSchema.extend({
 
 /** Сервис записывает черновики под блокировкой хранилища; версия защищает от второго окна. */
 export class DraftStore {
-  constructor(private readonly sessions: FileSessionStore) {}
+  constructor(private readonly sessions: SessionStore) {}
   private get directory(): string {
     return join(this.sessions.directory, 'drafts');
   }
@@ -149,9 +149,9 @@ export class DraftStore {
     if (draft.scope.messageRunId)
       throw new Error('Сообщение активной задаче нельзя перенести в другой запуск.');
     if (draft.revision !== expectedRevision) throw new Error('Черновик изменён в другом окне.');
-    if (this.sessions.list(true).some((run) => run.requestKey === draft.requestKey))
+    if (this.sessions.catalog(true).some((run) => run.requestKey === draft.requestKey))
       throw new Error('Этот запрос уже принят. Проверьте отправку вместо создания новой задачи.');
-    const parent = this.sessions.get(parentRunId);
+    const parent = await this.sessions.load(parentRunId);
     if (
       parent.sessionId !== draft.scope.sessionId ||
       parent.deletedAt ||
@@ -166,7 +166,8 @@ export class DraftStore {
   /** Проверяет принадлежность уточнения конкретной задаче, беседе и рабочей папке. */
   private assertMessageScope(scope: DraftScope): void {
     if (!scope.messageRunId) return;
-    const run = this.sessions.get(scope.messageRunId);
+    const run = this.sessions.catalog(true).find((item) => item.id === scope.messageRunId);
+    if (!run) throw new ResourceNotFoundError('task');
     if (
       scope.expectedParentRunId ||
       run.sessionId !== scope.sessionId ||

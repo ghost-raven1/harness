@@ -2,15 +2,20 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { rpc } from './ipc.js';
+import type { CommandInput } from './contracts/index.js';
+import { applicationIdentity } from '../shared/identity.js';
 import { message } from '../shared/primitives.js';
 import { resultCursorSchema } from './result-pages.js';
 
 /** stdout принадлежит протоколу; подтверждения и управление опытом здесь не экспортируются. */
 export function createMcpServer(directory: string): McpServer {
-  const server = new McpServer({ name: 'modular-harness', version: '0.2.1' });
-  const call = async (method: string, args: unknown) => {
+  const server = new McpServer({ name: 'modular-harness', version: applicationIdentity().version });
+  const call = async <M extends 'runtime.run' | 'runtime.status' | 'runtime.cancel'>(
+    method: M,
+    args: CommandInput<M>,
+  ) => {
     try {
-      const result = await rpc<Record<string, unknown>>(directory, method, args);
+      const result = await rpc(directory, method, args);
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result) }],
         structuredContent: result,

@@ -33,7 +33,7 @@ it('восстанавливает успешный agents.await между за
     requestKey: 'await-recovery',
   });
   await app.runtime.wait(runId);
-  const history = app.sessions.history(runId, 0);
+  const history = await app.sessions.history(runId, 0);
   const boundary = history.findIndex(
     (event) =>
       event.type === 'tool.succeeded' &&

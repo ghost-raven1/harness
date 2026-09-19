@@ -206,7 +206,9 @@ it('проекция сохранённого журнала меняет тол
     requestKey: 'presentation',
   });
   await app.runtime.wait(runId);
-  const original = app.sessions.history(runId, 0).find((event) => event.type === 'tool.succeeded')!;
+  const original = (await app.sessions.history(runId, 0)).find(
+    (event) => event.type === 'tool.succeeded',
+  )!;
   const saved = structuredClone(original);
   const projected = taskEvent(original);
   expect(projected.title).toBe('Просмотр папки · готово');

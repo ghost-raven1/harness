@@ -1,6 +1,9 @@
+import { open, stat } from 'node:fs/promises';
+import { validateLearningState } from './state-schema.js';
+import { syncDirectory } from '../sessions/files.js';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { appendJournal, readJournal } from '../sessions/journal.js';
+import { appendJournal, scanJournal, JournalReadError } from '../sessions/journal.js';
 import { atomicText, optionalJson, writeSnapshot } from '../sessions/files.js';
 import { removeLearningTemps, type PurgeRecord } from '../sessions/purge-records.js';
 import { eraseLearningSources } from './purge.js';
@@ -12,6 +15,7 @@ export class FileLearningStore implements LearningStore {
   private readonly serial = new Serial();
   private sequence = 0;
   private maintenance = false;
+  recoveryError?: string;
   private state: LearningState = {
     schemaVersion: 1,
     activeVersion: 'baseline',
@@ -28,24 +32,54 @@ export class FileLearningStore implements LearningStore {
   /** Привязывает журнал и снимок обучения к каталогу состояния сервиса. */
   constructor(private readonly directory: string) {}
   /** Восстанавливает последнее состояние из журнала, используя снимок лишь при его отсутствии. */
-  async initialize(): Promise<void> {
-    const events = await readJournal<{ seq: number; state: LearningState }>(
-      join(this.directory, 'learning.jsonl'),
-    );
-    for (const [index, event] of events.entries()) {
-      if (event.seq !== index + 1 || event.state.schemaVersion !== 1) {
-        throw new Error('Corrupt learning journal');
+  async initialize(options: { recover?: boolean } = {}): Promise<void> {
+    let latest: LearningState | undefined;
+    try {
+      try {
+        for await (const { value } of scanJournal<{ seq: number; state: unknown }>(
+          join(this.directory, 'learning.jsonl'),
+        )) {
+          if (value.seq !== this.sequence + 1) throw new Error('JOURNAL_INVALID_SEQUENCE');
+          latest = validateLearningState(value.state);
+          this.sequence++;
+        }
+      } catch (error) {
+        if (
+          options.recover === false ||
+          !(error instanceof JournalReadError) ||
+          error.code !== 'JOURNAL_TORN_TAIL'
+        )
+          throw error;
+        const file = await open(join(this.directory, 'learning.jsonl'), 'r+');
+        try {
+          await file.truncate(error.offset);
+          await file.sync();
+        } finally {
+          await file.close();
+        }
+        await syncDirectory(this.directory);
       }
+      const journalExists = await stat(join(this.directory, 'learning.jsonl')).then(
+        () => true,
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') return false;
+          throw error;
+        },
+      );
+      const stored =
+        latest ??
+        (!journalExists
+          ? await optionalJson<unknown>(join(this.directory, 'learning.json'))
+          : undefined);
+      if (stored) this.state = validateLearningState(stored);
+    } catch {
+      // Устаревший снимок не может заменить повреждённую подтверждённую запись.
+      this.recoveryError = 'Повреждена история обучения. Доступен просмотр и диагностика.';
     }
-    this.sequence = events.length;
-    const journalState = events.at(-1)?.state;
-    const stored =
-      journalState ?? (await optionalJson<LearningState>(join(this.directory, 'learning.json')));
-    if (stored) {
-      if (stored.schemaVersion !== 1 || !stored.releases[stored.activeVersion])
-        throw new Error('Unsupported learning state');
-      this.state = stored;
-    }
+  }
+  /** Даёт диагностике согласованное чтение после завершения текущей записи обучения. */
+  withReadBarrier<T>(work: () => Promise<T>): Promise<T> {
+    return this.serial.run(work);
   }
   /** Возвращает копию, которую читатель не может незаметно изменить в хранилище. */
   read(): LearningState {
@@ -54,11 +88,13 @@ export class FileLearningStore implements LearningStore {
   /** Последовательно фиксирует изменения в журнале до обновления зеркального снимка. */
   update(change: (state: LearningState) => void): Promise<void> {
     return this.serial.run(async () => {
+      if (this.recoveryError) throw new Error(this.recoveryError);
       if (this.maintenance)
         throw new Error('Удаляется беседа. Изменение обучения временно недоступно.');
       const next = this.read();
       change(next);
       if (isDeepStrictEqual(next, this.state)) return;
+      validateLearningState(next);
       await appendJournal(join(this.directory, 'learning.jsonl'), {
         seq: this.sequence + 1,
         at: new Date().toISOString(),

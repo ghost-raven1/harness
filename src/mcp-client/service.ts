@@ -1,3 +1,4 @@
+import { applicationIdentity } from '../shared/identity.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -16,7 +17,7 @@ export class McpClientService {
       for (const server of config.tools.mcp) {
         const jsonSchemaValidator = new AjvJsonSchemaValidator();
         const client = new Client(
-          { name: 'modular-harness', version: '0.2.1' },
+          { name: 'modular-harness', version: applicationIdentity().version },
           { jsonSchemaValidator },
         );
         this.clients.push(client);

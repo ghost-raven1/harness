@@ -1,4 +1,4 @@
-import { mkdir, open, rename, readFile, lstat, unlink } from 'node:fs/promises';
+import { mkdir, open, rename, readFile, lstat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, basename } from 'node:path';
 import { id } from '../shared/primitives.js';
 
@@ -63,5 +63,17 @@ export async function assertRealDirectory(path: string): Promise<void> {
       throw new Error('Внутренняя папка Harness заменена ссылкой: ' + basename(path));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+}
+
+/** Атомарно обновляет восстанавливаемый индекс без fsync; источником истины остаётся журнал. */
+export async function writeDerivedText(path: string, content: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  const temporary = path + '.' + id() + '.tmp';
+  try {
+    await writeFile(temporary, content, { flag: 'wx', mode: 0o600 });
+    await rename(temporary, path);
+  } finally {
+    await unlink(temporary).catch(() => undefined);
   }
 }

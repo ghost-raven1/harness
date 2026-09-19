@@ -1,9 +1,30 @@
 import { message } from '../../shared/primitives.js';
+import { applicationErrorData } from '../../shared/application-error.js';
 import { ZodError } from 'zod';
 
 /** Контекст настройки позволяет объяснить JSON-ошибку, не раскрывая содержимое файла. */
 export function explainError(error: unknown, context?: 'configuration'): string {
   const text = message(error);
+  const code = applicationErrorData(error)?.code;
+  const explanations = {
+    TASK_BUSY: 'Задача ещё работает или останавливается. Дождитесь остановки и повторите действие.',
+    STALE_PREVIEW:
+      'Данные изменились после просмотра. Откройте предпросмотр ещё раз и подтвердите актуальный состав.',
+    UNKNOWN_OUTCOME:
+      'Результат операции неизвестен. Откройте технические подробности задачи и подтвердите результат проверки.',
+    STORAGE_UNAVAILABLE:
+      'Не удалось сохранить данные. Проверьте свободное место и доступ к диску; затем запустите проверку истории в doctor.',
+    INCOMPATIBLE_PROTOCOL:
+      'CLI и сервис используют разные версии протокола. Завершите задачи и откройте CLI из той же установки Harness.',
+    INVALID_REQUEST:
+      'Команда не соответствует версии сервиса. Проверьте параметры команды и версии CLI и сервиса.',
+    INVALID_RESPONSE:
+      'Сервис вернул неполный или несовместимый ответ. Проверьте состояние задачи перед повтором действия и запустите doctor.',
+    UNKNOWN_COMMAND:
+      'Сервис не поддерживает эту команду. Проверьте версии CLI и запущенного сервиса.',
+  };
+  if (code && !(context === 'configuration' && error instanceof ZodError))
+    return explanations[code];
   if (context === 'configuration') {
     if (
       error instanceof SyntaxError ||

@@ -47,7 +47,7 @@ it.each(['paused', 'running'] as const)(
       run.config.hash = hash(run.config.value);
     });
     const before = original.sessions.get(runId);
-    const historyBefore = original.sessions.history(runId, 0);
+    const historyBefore = await original.sessions.history(runId, 0);
     const usageBefore = await original.runtime.usage.status(runId);
     await original.close();
     await writeFile(join(directory, 'workspace/result.txt'), 'Правка человека после остановки');
@@ -64,7 +64,7 @@ it.each(['paused', 'running'] as const)(
     expect(after.status).toBe('completed');
     expect(after.id).toBe(runId);
     expect(after.sessionId).toBe(before.sessionId);
-    expect(recovered.sessions.history(runId, 0).slice(0, historyBefore.length)).toEqual(
+    expect((await recovered.sessions.history(runId, 0)).slice(0, historyBefore.length)).toEqual(
       historyBefore,
     );
     expect(after.error).toBeUndefined();

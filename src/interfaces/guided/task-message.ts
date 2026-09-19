@@ -33,7 +33,7 @@ async function inspectMessage(context: CliContext, draft: TaskDraft): Promise<vo
     [{ id: 'message', label: 'Текст', text: draft.text || 'Сообщение пустое.' }],
     {
       load: async () => {
-        const current = await context.request<TaskDraft>('drafts.get', draftLocation(draft));
+        const current = await context.request('drafts.get', draftLocation(draft));
         return {
           tabs: [{ id: 'message', label: 'Текст', text: current.text || 'Сообщение пустое.' }],
           notice: 'Это сохранённый черновик сообщения.',
@@ -46,7 +46,7 @@ async function inspectMessage(context: CliContext, draft: TaskDraft): Promise<vo
 
 /** Черновик и ключ остаются на диске до подтверждения; повтор не дублирует уточнение. */
 export async function writeTaskMessage(context: CliContext, initial: StatusView): Promise<string> {
-  let current = await context.request<StatusView>('runtime.status', { runId: initial.runId });
+  let current = await context.request('runtime.status', { runId: initial.runId });
   const scope = {
     workspace: initial.workspace,
     profile: initial.profile,
@@ -60,7 +60,7 @@ export async function writeTaskMessage(context: CliContext, initial: StatusView)
       inspect: !canMessageTask(current),
     });
     if (!draft && !canMessageTask(current)) return 'Сохранённых сообщений нет.';
-    draft ??= await context.request<TaskDraft>('drafts.create', { scope });
+    draft ??= await context.request('drafts.create', { scope });
     while (true) {
       if (!canMessageTask(current) && draft.state === 'editing') {
         await inspectMessage(context, draft);
@@ -73,12 +73,12 @@ export async function writeTaskMessage(context: CliContext, initial: StatusView)
           initialValue: draft.text,
           description: () => inputDescription(current),
           refresh: async () => {
-            current = await context.request<StatusView>('runtime.status', { runId: initial.runId });
+            current = await context.request('runtime.status', { runId: initial.runId });
             return context.request('drafts.get', draftLocation(draft!));
           },
           save: async (text) => {
             if (text === draft!.text) return;
-            draft = await context.request<TaskDraft>('drafts.update', {
+            draft = await context.request('drafts.update', {
               ...draftLocation(draft!),
               expectedRevision: draft!.revision,
               text,
@@ -86,12 +86,12 @@ export async function writeTaskMessage(context: CliContext, initial: StatusView)
           },
         });
         if (typeof value === 'symbol') return 'Черновик сообщения сохранён.';
-        current = await context.request<StatusView>('runtime.status', { runId: initial.runId });
+        current = await context.request('runtime.status', { runId: initial.runId });
         if (!canMessageTask(current)) {
           await inspectMessage(context, draft);
           return 'Задача завершилась. Сообщение осталось в черновиках.';
         }
-        draft = await context.request<TaskDraft>('drafts.update', {
+        draft = await context.request('drafts.update', {
           ...draftLocation(draft),
           expectedRevision: draft.revision,
           state: 'pending',

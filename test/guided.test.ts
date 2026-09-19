@@ -14,7 +14,7 @@ import { followRun } from '../src/interfaces/guided/watch.js';
 import { deleteTask } from '../src/interfaces/guided/delete-task.js';
 import { newTask, saveAnswer } from '../src/interfaces/guided/tasks.js';
 import { loadConfig } from '../src/configuration/loader.js';
-import { rpc } from '../src/interfaces/ipc.js';
+import { commandClient, rpc } from '../src/interfaces/ipc.js';
 import type { CliContext, StatusView } from '../src/interfaces/types.js';
 import { configDirectory, cleanup, temporary } from './helpers.js';
 import { modelServer, alias } from './process-fixture.js';
@@ -44,7 +44,7 @@ function context(directory: string): CliContext {
     json: () => false,
     interactive: () => true,
     output: vi.fn(),
-    request: (method, params) => rpc(directory, method, params),
+    request: commandClient(() => directory),
   };
 }
 
@@ -168,7 +168,7 @@ it('разрешение в том же окне связано с текуще�
   await owner.start(config);
   const client = context(state),
     workspace = join(root, 'workspace');
-  const run = await client.request<{ runId: string }>('runtime.run', {
+  const run = await client.request('runtime.run', {
     message: 'Запиши результат',
     workspace,
     requestKey: randomUUID(),
@@ -182,8 +182,8 @@ it('разрешение в том же окне связано с текуще�
   vi.mocked(prompts.text).mockResolvedValueOnce('Что проверено?');
   vi.mocked(prompts.select).mockResolvedValueOnce('back');
   await newTask(client, { workspace, profile: 'test' }, status);
-  const runs = await client.request<Array<{ runId: string }>>('runtime.list');
-  const next = await client.request<StatusView>('runtime.status', { runId: runs[0]!.runId });
+  const runs = await client.request('runtime.list');
+  const next = await client.request('runtime.status', { runId: runs[0]!.runId });
   expect(next.sessionId).toBe(status?.sessionId);
   expect(next.runId).not.toBe(status?.runId);
 });
@@ -204,22 +204,20 @@ it('Esc в вопросе разрешения оставляет задачу �
   const owner = new DesktopService(state);
   cleanup(() => owner.close());
   await owner.start(config);
-  const run = await rpc<{ runId: string }>(state, 'runtime.run', {
+  const run = await rpc(state, 'runtime.run', {
     message: 'Проверь версию',
     workspace: join(root, 'workspace'),
     requestKey: randomUUID(),
   });
   vi.mocked(prompts.confirm).mockResolvedValueOnce(Symbol('cancel'));
   expect(await followRun(context(state), run.runId)).toBeUndefined();
-  expect((await rpc<StatusView>(state, 'runtime.status', { runId: run.runId })).status).toBe(
+  expect((await rpc(state, 'runtime.status', { runId: run.runId })).status).toBe(
     'awaiting_approval',
   );
   expect(owner.activeCount()).toBe(1);
   await owner.close();
   await owner.start(config);
-  expect((await rpc<StatusView>(state, 'runtime.status', { runId: run.runId })).status).toBe(
-    'cancelled',
-  );
+  expect((await rpc(state, 'runtime.status', { runId: run.runId })).status).toBe('cancelled');
 });
 
 it('сохранение ответа не заменяет существующий пользовательский файл', async () => {
@@ -345,10 +343,10 @@ it('мастер сохраняет разрешённую подпапку вм
 it('удаление из интерфейса по умолчанию отменено, после согласия сначала останавливает задачу', async () => {
   const client = context('/unused');
   const methods: string[] = [];
-  client.request = async <T>(method: string): Promise<T> => {
+  client.request = (async (method: string) => {
     methods.push(method);
-    return (method === 'runtime.status' ? status : {}) as T;
-  };
+    return method === 'runtime.status' ? status : {};
+  }) as CliContext['request'];
   client.json = () => true;
   const status = {
     runId: randomUUID(),

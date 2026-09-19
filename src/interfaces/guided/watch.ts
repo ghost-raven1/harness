@@ -78,7 +78,7 @@ export async function followRun(
       try {
         while (true) {
           try {
-            status = await context.request<TaskView>('runtime.task', {
+            status = await context.request('runtime.task', {
               runId,
               cursor,
               outputCursor,
@@ -114,7 +114,7 @@ export async function followRun(
       if (action === 'back') return undefined;
       if (action === 'cancel' && !status.deletedAt && !status.recoveryRequired) {
         await context.request('runtime.cancel', { runId });
-        status = await context.request<TaskView>('runtime.task', { runId, cursor, outputCursor });
+        status = await context.request('runtime.task', { runId, cursor, outputCursor });
         screen.feed.update(status);
         screen.render();
       }

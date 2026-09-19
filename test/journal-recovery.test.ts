@@ -94,7 +94,9 @@ it.each(['truncate', 'sync'] as const)(
       });
     await expect(appendJournal(path, { seq: 2 })).rejects.toThrow('Перезапустите');
     // Чтение для диагностики не делает прежний кэш пригодным для дальнейшей записи.
-    expect(await readJournal(path)).toEqual([{ seq: 1 }]);
+    if (failure === 'truncate')
+      await expect(readJournal(path)).rejects.toThrow('JOURNAL_TORN_TAIL');
+    else expect(await readJournal(path)).toEqual([{ seq: 1 }]);
     const before = await files.readFile(path);
     await expect(appendJournal(relative(process.cwd(), path), { seq: 2 })).rejects.toThrow(
       'требует восстановления',

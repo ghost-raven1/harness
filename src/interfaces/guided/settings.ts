@@ -4,7 +4,7 @@ import { page, backFromPage } from './screen.js';
 import { changeProject } from './projects.js';
 import { isWithin } from '../../configuration/loader.js';
 import * as prompts from '@clack/prompts';
-import type { CliContext, ServiceInfo, LearningStatusView } from '../types.js';
+import type { CliContext } from '../types.js';
 import type { Preferences } from './preferences.js';
 import { savePreferences } from './preferences.js';
 import { unlockProfile } from './onboarding.js';
@@ -30,7 +30,7 @@ export async function settings(
     await liveSelect({
       title: 'Настройки',
       load: async () => {
-        const current = await context.request<ServiceInfo>('system.info');
+        const current = await context.request('system.info');
         return {
           summary:
             'В работе: ' +
@@ -93,7 +93,7 @@ export async function settings(
   }
   if (action === 'key') {
     page('Ключ API');
-    const info = await context.request<ServiceInfo>('system.info');
+    const info = await context.request('system.info');
     if (info.profiles.find((profile) => profile.id === preferences.profile)?.provider === 'codex') {
       note(
         'Codex использует вход в аккаунт. Для смены подключения выберите «Подключить другую модель → Codex». Ключ API не нужен.',
@@ -127,7 +127,7 @@ export async function settings(
         initialValue: preferences.profile,
         load: async () => ({
           message: 'Модель',
-          options: (await context.request<ServiceInfo>('system.info')).profiles.map((p) => ({
+          options: (await context.request('system.info')).profiles.map((p) => ({
             value: p.id,
             label: p.model,
             hint: p.configured ? p.provider : 'нужен ключ',
@@ -135,7 +135,7 @@ export async function settings(
         }),
       }),
     );
-    const current = await context.request<ServiceInfo>('system.info');
+    const current = await context.request('system.info');
     const workspace =
       current.workspaces.length === 1
         ? isWithin(current.workspaces[0]!, preferences.workspace)
@@ -147,9 +147,10 @@ export async function settings(
               initialValue: preferences.workspace,
               load: async () => ({
                 message: 'Папка для новых задач',
-                options: (await context.request<ServiceInfo>('system.info')).workspaces.map(
-                  (path) => ({ value: path, label: path }),
-                ),
+                options: (await context.request('system.info')).workspaces.map((path) => ({
+                  value: path,
+                  label: path,
+                })),
               }),
             }),
           );
@@ -169,7 +170,7 @@ export async function settings(
       await liveSelect({
         title: 'Самообучение',
         load: async () => {
-          const state = await context.request<LearningStatusView>('learning.status');
+          const state = await context.request('learning.status');
           const today = new Date().toISOString().slice(0, 10);
           const usedTokens = state.daily.date === today ? state.daily.tokens : 0;
           return {

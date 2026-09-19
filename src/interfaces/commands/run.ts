@@ -3,7 +3,7 @@ import * as prompts from '@clack/prompts';
 import { resolve } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { selected, watch, statusCard, decideApprovals, note } from '../ui.js';
-import type { CliContext, RunOptions, ServiceInfo, StatusView, RunSummary } from '../types.js';
+import type { CliContext, RunOptions, RunSummary } from '../types.js';
 import { deleteTask } from '../guided/delete-task.js';
 import { purgeTask } from '../guided/purge-task.js';
 import { commandPage } from '../guided/screen.js';
@@ -32,7 +32,7 @@ export async function beginRun(
     throw new Error('Укажите текст задачи аргументом');
 
   if (context.interactive() && (!options.profile || !options.workspace)) {
-    const service = await context.request<ServiceInfo>('system.info');
+    const service = await context.request('system.info');
     if (!options.profile) {
       commandPage('', false);
       options.profile = selected(
@@ -90,7 +90,7 @@ export function registerRunCommands(program: Command, context: CliContext): void
     .command('answer <runId>')
     .description('Вывести полный ответ; вывод можно перенаправить в файл')
     .action(async (runId: string) => {
-      const status = await context.request<StatusView>('runtime.status', { runId });
+      const status = await context.request('runtime.status', { runId });
       const full = await completeResult(context, status);
       if (context.json()) context.output({ runId, result: full.result });
       else process.stdout.write((full.result ?? 'Ответ ещё не получен.') + '\n');
@@ -102,7 +102,7 @@ export function registerRunCommands(program: Command, context: CliContext): void
     .action(async (runId: string, options: { yes?: boolean }) => {
       if (!options.yes && !context.interactive())
         throw new Error('Для удаления укажите --yes или откройте интерактивный CLI.');
-      const status = await context.request<StatusView>('runtime.status', { runId });
+      const status = await context.request('runtime.status', { runId });
       const deleted = await deleteTask(context, status, options.yes);
       context.output({ deleted, runId });
     });
@@ -128,7 +128,7 @@ export function registerRunCommands(program: Command, context: CliContext): void
         throw new Error(
           'Сначала выполните purge с --preview, затем передайте его токен через --confirm.',
         );
-      const status = await context.request<StatusView>('runtime.status', { runId });
+      const status = await context.request('runtime.status', { runId });
       context.output({ purged: await purgeTask(context, status), runId });
     });
   program
@@ -152,7 +152,7 @@ export function registerRunCommands(program: Command, context: CliContext): void
       if (!runId) {
         const runs: RunSummary[] = [];
         for (let offset = 0; ; offset += 100) {
-          const items = await context.request<RunSummary[]>('runtime.list', { offset, limit: 100 });
+          const items = await context.request('runtime.list', { offset, limit: 100 });
           runs.push(...items);
           if (items.length < 100) break;
         }
@@ -170,7 +170,7 @@ export function registerRunCommands(program: Command, context: CliContext): void
         await watch(context.directory(), runId, context.json());
         return;
       }
-      const status = await context.request<StatusView>('runtime.status', { runId });
+      const status = await context.request('runtime.status', { runId });
       if (process.stdout.isTTY && !context.json()) statusCard(status);
       else context.output(status);
     });
@@ -195,7 +195,7 @@ export function registerRunCommands(program: Command, context: CliContext): void
       if (!context.interactive())
         throw new Error('Нужен интерактивный терминал для проверки файла');
       const { reviewRestorations } = await import('../guided/restore-review.js');
-      const status = await context.request<StatusView>('runtime.status', { runId });
+      const status = await context.request('runtime.status', { runId });
       context.output({ resolved: await reviewRestorations(context, status) });
     });
   program

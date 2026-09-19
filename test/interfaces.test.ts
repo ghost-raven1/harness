@@ -9,7 +9,6 @@ import { stopProcessTree } from '../src/tools/process.js';
 import { rpc, socketPath } from '../src/interfaces/ipc.js';
 import { temporary, configDirectory, cleanup, eventually } from './helpers.js';
 import { modelServer, startDaemon, command, alias, cli } from './process-fixture.js';
-import type { StatusView } from '../src/interfaces/ui.js';
 
 describe('Настоящие процессы CLI + MCP + локальный сервис', () => {
   it('CLI исправляет файл через HTTP модель, MCP использует ту же сессию и экспортирует ровно три операции', async () => {
@@ -51,8 +50,7 @@ describe('Настоящие процессы CLI + MCP + локальный с�
     const ids = JSON.parse(result.stdout);
     await eventually(
       async () =>
-        (await rpc<StatusView>(directory, 'runtime.status', { runId: ids.runId })).status ===
-        'completed',
+        (await rpc(directory, 'runtime.status', { runId: ids.runId })).status === 'completed',
       15000,
     );
     expect(await readFile(join(root, 'workspace', 'result.txt'), 'utf8')).toBe(
@@ -123,17 +121,16 @@ describe('Настоящие процессы CLI + MCP + локальный с�
     );
     const config = await configDirectory(root, api.baseUrl);
     const daemon = await startDaemon(config, directory);
-    const { runId } = await rpc<{ runId: string }>(directory, 'runtime.run', {
+    const { runId } = await rpc(directory, 'runtime.run', {
       message: 'Изменение с разрешением',
       workspace: join(root, 'workspace'),
       requestKey: 'crash',
     });
     await eventually(
       async () =>
-        (await rpc<StatusView>(directory, 'runtime.status', { runId })).status ===
-        'awaiting_approval',
+        (await rpc(directory, 'runtime.status', { runId })).status === 'awaiting_approval',
     );
-    const waiting = await rpc<StatusView>(directory, 'runtime.status', { runId });
+    const waiting = await rpc(directory, 'runtime.status', { runId });
     await rpc(directory, 'approvals.decide', { approvalId: waiting.approvals[0]!.id, allow: true });
     await eventually(async () => {
       try {
@@ -152,7 +149,7 @@ describe('Настоящие процессы CLI + MCP + локальный с�
       /* Группа уже завершилась. */
     }
     await startDaemon(config, directory);
-    const recovered = await rpc<StatusView>(directory, 'runtime.status', { runId });
+    const recovered = await rpc(directory, 'runtime.status', { runId });
     expect(recovered.status).toBe('paused');
     expect(recovered.unknownInvocations).toHaveLength(1);
     await expect(rpc(directory, 'runtime.resume', { runId })).rejects.toThrow('Resolve unknown');
@@ -177,14 +174,14 @@ describe('Настоящие процессы CLI + MCP + локальный с�
       ],
     }));
     await startDaemon(await configDirectory(root, api.baseUrl), directory);
-    const ids = await rpc<{ runId: string; sessionId: string }>(directory, 'runtime.run', {
+    const ids = await rpc(directory, 'runtime.run', {
       message: 'x',
       workspace: join(root, 'workspace'),
       requestKey: 'ask',
     });
     await eventually(
       async () =>
-        (await rpc<StatusView>(directory, 'runtime.status', { runId: ids.runId })).status ===
+        (await rpc(directory, 'runtime.status', { runId: ids.runId })).status ===
         'awaiting_approval',
     );
     await expect(
@@ -196,7 +193,7 @@ describe('Настоящие процессы CLI + MCP + локальный с�
       }),
     ).rejects.toThrow('Session already');
     expect((await command(['--state', directory, '--json', 'cancel', ids.runId])).code).toBe(0);
-    const status = await rpc<StatusView>(directory, 'runtime.status', { runId: ids.runId });
+    const status = await rpc(directory, 'runtime.status', { runId: ids.runId });
     expect(status.status).toBe('cancelled');
     expect(status.agents.every((a) => a.status === 'cancelled')).toBe(true);
     expect(await rpc(directory, 'approvals.list')).toEqual([]);
@@ -228,7 +225,7 @@ describe('Настоящие процессы CLI + MCP + локальный с�
         setTimeout(() => socket.write(packet.subarray(cut)), 25);
       });
     });
-    const list = await rpc<Array<{ task: string }>>(directory, 'runtime.list');
+    const list = await rpc(directory, 'runtime.list');
     expect(list[0]!.task).toBe('Японский ёж');
   });
 });

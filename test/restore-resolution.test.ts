@@ -157,8 +157,9 @@ it('успешный повтор отката не приписывает ст�
   expect(change.status).toBe('restored');
   expect(change.resolution).toBeUndefined();
   expect(
-    app.sessions.history(app.runId, 0).find((event) => event.type === 'file.restore_resolved')!
-      .state.fileChanges![0]!.resolution?.result,
+    (await app.sessions.history(app.runId, 0)).find(
+      (event) => event.type === 'file.restore_resolved',
+    )!.state.fileChanges![0]!.resolution?.result,
   ).toBe('Откат не выполнен, сохранилась новая версия');
   const next = await app.runtime.start({
     message: 'Проверь текущее состояние',

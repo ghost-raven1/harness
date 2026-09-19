@@ -1,9 +1,10 @@
+import { ApplicationError } from '../shared/application-error.js';
 import { minimatch } from 'minimatch';
 import type { Config, Decision, PermissionRule } from '../configuration/schema.js';
 import type { RunRecord, AgentState, Approval } from '../sessions/types.js';
 import type { ToolCall } from '../providers/types.js';
 import { hash, id, abort } from '../shared/primitives.js';
-import type { FileSessionStore } from '../sessions/store.js';
+import type { SessionStore } from '../sessions/ports.js';
 
 /** Объединяет решения с приоритетом запрета, затем запроса разрешения. */
 function combine(decisions: Decision[]): Decision {
@@ -91,7 +92,7 @@ export interface ApprovalService {
 export class FileApprovalService implements ApprovalService {
   private readonly waiters = new Map<string, () => void>();
   constructor(
-    private readonly store: FileSessionStore,
+    private readonly store: SessionStore,
     private readonly policy: PolicyService,
   ) {}
   /** Сохраняет запрос человеку и ждёт решения или отмены, повторно проверяя привязку. */
@@ -144,7 +145,7 @@ export class FileApprovalService implements ApprovalService {
     const current = this.store.get(runId);
     const granted = current.approvals[approvalId]!;
     if (this.policy.binding(current, current.agents[agentId]!, call) !== granted.binding)
-      throw new Error('Approval binding changed');
+      throw new ApplicationError('STALE_PREVIEW', 'Approval binding changed');
     return availableApproval(current, granted);
   }
 
@@ -163,12 +164,14 @@ export class FileApprovalService implements ApprovalService {
   }
   /** Сохраняет однократное решение человека и пробуждает ожидающий вызов. */
   async resolve(approvalId: string, allow: boolean, previewToken?: string): Promise<void> {
-    const run = this.store.list().find((item) => item.approvals[approvalId]);
+    const run = this.store.catalog().find((item) => item.approvalIds.includes(approvalId));
     if (!run) throw new Error('Unknown approval');
     await this.store.mutate(run.id, 'approval.decided', { approvalId, allow }, (state) => {
       const approval = state.approvals[approvalId]!;
-      if (approval.status !== 'pending') throw new Error('Approval already resolved');
-      if (state.status === 'cancelled') throw new Error('Run cancelled');
+      if (approval.status !== 'pending')
+        throw new ApplicationError('STALE_PREVIEW', 'Approval already resolved');
+      if (state.status === 'cancelled')
+        throw new ApplicationError('STALE_PREVIEW', 'Run cancelled');
       approval.status = allow ? 'allowed' : 'denied';
       if (previewToken) approval.previewToken = previewToken;
     });
@@ -177,8 +180,8 @@ export class FileApprovalService implements ApprovalService {
   /** Возвращает нерешённые запросы разрешений из работающих и приостановленных задач. */
   pending(): Approval[] {
     return this.store
-      .list()
+      .catalog()
       .filter((run) => ['running', 'awaiting_approval', 'paused'].includes(run.status))
-      .flatMap((run) => Object.values(run.approvals).filter((a) => a.status === 'pending'));
+      .flatMap((run) => run.pendingApprovals);
   }
 }

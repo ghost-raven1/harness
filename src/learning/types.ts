@@ -80,3 +80,10 @@ export interface LearningEvaluator {
   /** Возвращает результаты доверенных проверок; сам отчёт не публикует новую версию. */
   evaluate(candidate: LearningCandidate): Promise<EvaluationReport>;
 }
+
+/** Урок вместе со ссылками на доказательства и последней оценкой. */
+export interface LearningInspection {
+  candidate: LearningCandidate;
+  evidence: Array<LearningEvidence | undefined>;
+  report?: EvaluationReport;
+}

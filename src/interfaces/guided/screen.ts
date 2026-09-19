@@ -1,12 +1,9 @@
-import { stripVTControlCharacters } from 'node:util';
+import { plainText as terminalText } from '../../shared/plain-text.js';
 import { showLogo, renderLogo } from '../branding.js';
 import * as prompts from '@clack/prompts';
 
 let active = false;
-/** Вывод модели не может управлять курсором, заголовком окна или буфером обмена терминала. */
-export function terminalText(value: string): string {
-  return stripVTControlCharacters(value).replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '');
-}
+export { plainText as terminalText } from '../../shared/plain-text.js';
 /** Рабочий стол занимает отдельный буфер; выход восстанавливает исходный терминал. */
 export function enterDesktopScreen(): () => void {
   if (!process.stdout.isTTY || process.env.TERM === 'dumb') return () => undefined;

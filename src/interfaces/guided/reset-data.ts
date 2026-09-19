@@ -28,7 +28,7 @@ export async function resetData(context: CliContext, scope?: DataResetScope): Pr
     const choice = await liveSelect<DataResetScope | 'back'>({
       title: 'Очистка данных',
       load: async () => {
-        const current = await context.request<DataResetPreview>('maintenance.resetPreview', {
+        const current = await context.request('maintenance.resetPreview', {
           scope: 'all',
         });
         return {
@@ -59,7 +59,7 @@ export async function confirmDataReset(
   context: CliContext,
   scope: DataResetScope,
 ): Promise<boolean> {
-  const load = () => context.request<DataResetPreview>('maintenance.resetPreview', { scope });
+  const load = () => context.request('maintenance.resetPreview', { scope });
   try {
     const preview = await load();
     if (!preview.available) {

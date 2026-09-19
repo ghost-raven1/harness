@@ -3,7 +3,6 @@ import type { CliContext } from '../types.js';
 import type { DataResetScope } from '../../application/data-reset.js';
 import { resetData } from '../guided/reset-data.js';
 import { showDiagnostics } from '../guided/diagnostics.js';
-import type { IterationStatus } from '../../runtime/iterations.js';
 
 /** Общая очистка требует явного состава и подтверждения актуального предпросмотра. */
 export function registerMaintenanceCommands(program: Command, context: CliContext): void {
@@ -14,7 +13,7 @@ export function registerMaintenanceCommands(program: Command, context: CliContex
     .option('--limit <number>', 'число шагов в одной порции, общее для всех подагентов')
     .action(async (options: { run?: string; limit?: string }) => {
       const params = options.run ? { runId: options.run } : {};
-      const status = await context.request<IterationStatus>('iterations.status', params);
+      const status = await context.request('iterations.status', params);
       if (options.limit === undefined) {
         context.output(status);
         return;
@@ -58,11 +57,11 @@ export function registerMaintenanceCommands(program: Command, context: CliContex
         throw new Error('Выберите --preview или --confirm, а не оба сразу.');
       if ((options.preview || options.confirm) && !options.scope)
         throw new Error('Укажите состав очистки через --scope tasks, learning или all.');
-      if (options.preview) {
+      if (options.preview && options.scope) {
         context.output(await context.request('maintenance.resetPreview', { scope: options.scope }));
         return;
       }
-      if (options.confirm) {
+      if (options.confirm && options.scope) {
         context.output(
           await context.request('maintenance.reset', {
             scope: options.scope,

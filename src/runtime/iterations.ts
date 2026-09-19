@@ -1,6 +1,6 @@
-import { join } from 'node:path';
+import { ApplicationError } from '../shared/application-error.js';
 import { z } from 'zod';
-import { atomicJson, optionalJson } from '../sessions/files.js';
+import type { StateFiles } from '../sessions/ports.js';
 import type { RunRecord } from '../sessions/types.js';
 import { Serial } from '../shared/primitives.js';
 
@@ -43,20 +43,20 @@ export function validateIterationLimit(limit: number): void {
 /** Не позволяет перезаписать настройку, изменённую после открытия формы. */
 export function assertExpectedLimit(current: number, expected?: number): void {
   if (expected !== undefined && current !== expected)
-    throw new Error('Предел шагов уже изменился. Откройте настройки заново.');
+    throw new ApplicationError(
+      'STALE_PREVIEW',
+      'Предел шагов уже изменился. Откройте настройки заново.',
+    );
 }
 
 /** Хранит настройку новых задач; текущие запуски сохраняют собственный предел. */
 export class IterationSettings {
   private readonly serial = new Serial();
-  private readonly path: string;
-  constructor(directory: string) {
-    this.path = join(directory, 'iteration-settings.json');
-  }
+  constructor(private readonly files: StateFiles) {}
   /** Читает сохранённый предел или значение конфига; повреждение не маскируется значением по умолчанию. */
   private async read(fallback: number): Promise<number> {
     try {
-      const saved = await optionalJson(this.path);
+      const saved = await this.files.read('iteration-settings');
       return saved === undefined ? fallback : settingsSchema.parse(saved).defaultLimit;
     } catch {
       throw new Error('Не удалось прочитать настройки шагов в iteration-settings.json.');
@@ -71,7 +71,7 @@ export class IterationSettings {
     validateIterationLimit(limit);
     return this.serial.run(async () => {
       assertExpectedLimit(await this.read(fallback), expectedLimit);
-      await atomicJson(this.path, { schemaVersion: 1, defaultLimit: limit });
+      await this.files.write('iteration-settings', { schemaVersion: 1, defaultLimit: limit });
     });
   }
 }

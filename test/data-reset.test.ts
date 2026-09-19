@@ -360,9 +360,10 @@ it.each(['resets', 'purged'])(
     expect(await files(item.directory)).toEqual(beforeState);
     expect(await files(item.workspace)).toEqual(beforeWorkspace);
     await item.app.close();
-    await expect(createApplication(item.configFile, item.directory, item.provider)).rejects.toThrow(
-      'ссылк',
-    );
+    const diagnostic = await createApplication(item.configFile, item.directory, item.provider);
+    expect(diagnostic.sessions.recoveryError).toContain('ссылк');
+    expect(() => diagnostic.sessions.assertWritable()).toThrow('ссылк');
+    await diagnostic.close();
     expect(await files(item.workspace)).toEqual(beforeWorkspace);
   },
 );
@@ -375,6 +376,10 @@ it('tasks/all очищают файлы после аварии вне инде�
     'Неиндексированный ответ',
   );
   await writeFile(join(item.directory, 'runs', 'unfinished.tmp'), 'Незавершённый снимок');
+  for (const folder of ['indexes', 'search']) {
+    await mkdir(join(item.directory, folder), { recursive: true });
+    await writeFile(join(item.directory, folder, 'orphan.tmp'), 'Удаляемый производный текст');
+  }
   const plan = await item.app.reset.preview('tasks');
   expect(plan.artifacts).toBe(2);
   await writeFile(
@@ -391,7 +396,7 @@ it('tasks/all очищают файлы после аварии вне инде�
   await item.app.reset.reset('tasks', fresh.previewToken);
   expect(
     Object.keys(await files(item.directory)).some((path) =>
-      /\/(runs|output|artifacts|file-backups)\//.test(path),
+      /\/(runs|output|artifacts|file-backups|indexes|search)\//.test(path),
     ),
   ).toBe(false);
 });

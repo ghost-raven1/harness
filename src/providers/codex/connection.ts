@@ -1,3 +1,4 @@
+import { applicationIdentity } from '../../shared/identity.js';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -165,7 +166,7 @@ export class CodexConnection extends EventEmitter {
   /** Согласует возможности app-server и подтверждает готовность клиента Codex. */
   async initialize(): Promise<void> {
     await this.call('initialize', {
-      clientInfo: { name: 'modular_harness', version: '0.2.1' },
+      clientInfo: { name: 'modular_harness', version: applicationIdentity().version },
       capabilities: { experimentalApi: true },
     });
     this.child.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');

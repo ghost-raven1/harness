@@ -12,8 +12,8 @@ export async function manageBudget(
   const runId = run?.runId;
   const load = async () => {
     const [usage, current] = await Promise.all([
-      context.request<BudgetView>('budget.status', { runId }),
-      runId ? context.request<StatusView>('runtime.status', { runId }) : undefined,
+      context.request('budget.status', { runId }),
+      runId ? context.request('runtime.status', { runId }) : undefined,
     ]);
     const text = [
       ...(current

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { id, Serial } from '../shared/primitives.js';
-import type { FileSessionStore } from '../sessions/store.js';
+import type { SessionStore } from '../sessions/ports.js';
 import type { RunRecord } from '../sessions/types.js';
 
 export const runMessageSchema = z
@@ -30,14 +30,14 @@ export function hasPendingMessages(run: RunRecord): boolean {
 /** Принимает сообщения без отмены текущих операций; повторный ключ возвращает прежнюю квитанцию. */
 export class RunInbox {
   private readonly serial = new Serial();
-  constructor(private readonly store: FileSessionStore) {}
+  constructor(private readonly store: SessionStore) {}
 
   /** Сохраняет новое уточнение либо возвращает квитанцию идентичного запроса. */
   send(input: RunMessageInput): Promise<MessageReceipt> {
     const request = runMessageSchema.parse(input);
     return this.serial.run(async () => {
       this.store.assertWritable();
-      let run = this.store.get(request.runId);
+      let run = await this.store.load(request.runId);
       let entry = run.userMessages?.find((item) => item.requestKey === request.requestKey);
       if (entry && entry.content !== request.message)
         throw new Error('Ключ отправки уже использован для другого сообщения.');
@@ -75,7 +75,7 @@ export class RunInbox {
 }
 
 /** Включает очередь только между полными обменами; поток модели и compaction её не затирают. */
-export async function deliverMessages(store: FileSessionStore, run: RunRecord): Promise<RunRecord> {
+export async function deliverMessages(store: SessionStore, run: RunRecord): Promise<RunRecord> {
   if (!hasPendingMessages(run)) return run;
   const messageIds = (run.userMessages ?? [])
     .filter((item) => !item.deliveredAt)

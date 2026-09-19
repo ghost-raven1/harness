@@ -1,3 +1,4 @@
+import { repairJournalTail } from '../src/sessions/journal.js';
 import { expect, it } from 'vitest';
 import { appendFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -125,6 +126,9 @@ it('пачки ограничены, страницы не теряются, о�
   expect(events.filter((row) => row.type === 'truncated')).toHaveLength(1);
   expect(events.at(-1)?.type).toBe('failed');
   await appendFile(join(root, 'output', 'run.jsonl'), '{"seq":');
+  await expect(new RunOutputStore(root).page('run', 0)).rejects.toThrow('JOURNAL_TORN_TAIL');
+  // Ремонт выполняет владелец до открытия страниц.
+  await repairJournalTail(join(root, 'output', 'run.jsonl'));
   expect(await new RunOutputStore(root).page('run', 0)).toEqual(first);
 });
 
@@ -196,7 +200,7 @@ it('удаление сохраняет файлы, доказательства
   await app.sessions.delete(run.runId);
   await app.sessions.delete(run.runId);
   expect(
-    app.sessions.history(run.runId, 0).filter((row) => row.type === 'run.deleted'),
+    (await app.sessions.history(run.runId, 0)).filter((row) => row.type === 'run.deleted'),
   ).toHaveLength(1);
   expect(app.sessions.list()).toHaveLength(0);
   expect(app.sessions.list(true)).toHaveLength(1);
@@ -207,7 +211,7 @@ it('удаление сохраняет файлы, доказательства
   await restarted.initialize();
   expect(restarted.list()).toEqual([]);
   expect(await restarted.readArtifact(run.runId, artifact, 0, 100)).toBe('Доказательство');
-  expect(restarted.history(run.runId, 0).at(-1)?.type).toBe('run.deleted');
+  expect((await restarted.history(run.runId, 0)).at(-1)?.type).toBe('run.deleted');
 });
 
 it('активная задача удаляется только после завершённой отмены', async () => {

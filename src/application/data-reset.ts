@@ -1,5 +1,5 @@
-import type { FileSessionStore } from '../sessions/store.js';
-import { requiresOutcomeReview } from '../sessions/invocations.js';
+import { ApplicationError } from '../shared/application-error.js';
+import type { SessionStore } from '../sessions/ports.js';
 import type { LearningService } from '../learning/service.js';
 import { FileLearningStore } from '../learning/store.js';
 import type { HarnessRuntime } from '../runtime/engine.js';
@@ -43,7 +43,7 @@ export interface DataResetPreview {
 /** Координирует выбранную человеком очистку задач и знаний, сохраняя настройки и учёт расхода. */
 export class DataReset {
   constructor(
-    private readonly sessions: FileSessionStore,
+    private readonly sessions: SessionStore,
     private readonly learning: LearningService,
     private readonly learningStore: FileLearningStore,
     private readonly runtime: HarnessRuntime,
@@ -53,12 +53,13 @@ export class DataReset {
   /** Собирает выбранный состав очистки, блокирующие операции и токен подтверждения. */
   async preview(input: DataResetScope): Promise<DataResetPreview> {
     const scope = dataResetScopeSchema.parse(input);
-    const runs = this.sessions.list(true),
+    const runs = this.sessions.catalog(true),
       state = this.learningStore.read();
     const removeTasks = scope !== 'learning',
       forgetKnowledge = scope !== 'tasks';
     const runIds = new Set(runs.map((run) => run.id));
     const blockers: string[] = [];
+    if (this.sessions.recoveryError) blockers.push(this.sessions.recoveryError);
     if (
       this.runtime.busy() ||
       runs.some((run) => ['running', 'awaiting_approval'].includes(run.status))
@@ -66,14 +67,7 @@ export class DataReset {
       blockers.push('Сначала остановите работающие задачи и дождитесь их остановки.');
     if (this.learning.busy())
       blockers.push('Сейчас проверяется урок. Дождитесь окончания проверки.');
-    if (
-      removeTasks &&
-      runs.some(
-        (run) =>
-          Object.values(run.invocations).some(requiresOutcomeReview) ||
-          run.fileChanges?.some((item) => item.status === 'restoring'),
-      )
-    )
+    if (removeTasks && runs.some((run) => run.unknownOutcome))
       blockers.push(
         'В задачах есть операция с неизвестным результатом. Сначала проверьте её результат.',
       );
@@ -128,10 +122,13 @@ export class DataReset {
         if (
           this.runtime.busy() ||
           this.sessions
-            .list(true)
+            .catalog(true)
             .some((run) => ['running', 'awaiting_approval'].includes(run.status))
         )
-          throw new Error('Сначала остановите работающие задачи и дождитесь их остановки.');
+          throw new ApplicationError(
+            'TASK_BUSY',
+            'Сначала остановите работающие задачи и дождитесь их остановки.',
+          );
       });
       let unlockLearning: (() => void) | undefined, unlockStore: (() => void) | undefined;
       let started = false,
@@ -140,10 +137,26 @@ export class DataReset {
         unlockLearning = this.learning.beginMaintenance();
         unlockStore = await this.learningStore.beginMaintenance();
         const preview = await this.preview(scope);
-        if (!preview.available) throw new Error(preview.blockers.join('\n'));
+        if (!preview.available) {
+          const unsafe = (await linkedPurgeDirectories(this.sessions.directory)).length > 0;
+          const unknown = (scope === 'learning' ? [] : this.sessions.catalog(true)).some(
+            (run) => run.unknownOutcome,
+          );
+          throw new ApplicationError(
+            unsafe || this.sessions.recoveryError
+              ? 'STORAGE_UNAVAILABLE'
+              : unknown
+                ? 'UNKNOWN_OUTCOME'
+                : 'TASK_BUSY',
+            preview.blockers.join('\n'),
+          );
+        }
         if (preview.previewToken !== previewToken)
-          throw new Error('Состав данных изменился. Откройте предпросмотр очистки заново.');
-        const runs = this.sessions.list(true);
+          throw new ApplicationError(
+            'STALE_PREVIEW',
+            'Состав данных изменился. Откройте предпросмотр очистки заново.',
+          );
+        const runs = this.sessions.catalog(true);
         const sessionIds =
           scope === 'learning' ? [] : [...new Set(runs.map((run) => run.sessionId))];
         const record: DataResetRecord = {
@@ -179,7 +192,8 @@ export class DataReset {
         return resetResult(record);
       } catch (error) {
         if (started)
-          throw new Error(
+          throw new ApplicationError(
+            'STORAGE_UNAVAILABLE',
             'Очистка данных прервалась. Перезапустите локальный сервис: она продолжится автоматически.',
             { cause: error },
           );
@@ -201,6 +215,8 @@ export async function recoverDataResets(directory: string): Promise<void> {
   if (!pending.length) return;
   const learning = new FileLearningStore(directory);
   await learning.initialize();
+  if (learning.recoveryError)
+    throw new ApplicationError('STORAGE_UNAVAILABLE', learning.recoveryError);
   for (const record of pending) {
     for (const item of record.sessions)
       await writePurgeRecord(directory, resetSessionRecord(record, item));

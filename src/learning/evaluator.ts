@@ -4,7 +4,7 @@ import type {
   EvaluationReport,
   LearningStore,
 } from './types.js';
-import type { FileSessionStore } from '../sessions/store.js';
+import type { SessionStore } from '../sessions/ports.js';
 import type { LearningBudget } from './budget.js';
 import type { PolicyService } from '../policy/service.js';
 import type { EvaluationCase } from '../configuration/schema.js';
@@ -22,13 +22,13 @@ export class HeldOutEvaluator implements LearningEvaluator {
   /** Получает сохранённые источники, учёт запросов и политику контрольных инструментов. */
   constructor(
     private readonly learning: LearningStore,
-    private readonly sessions: FileSessionStore,
+    private readonly sessions: SessionStore,
     private readonly budget: LearningBudget,
     private readonly policy: PolicyService,
   ) {}
   /** Продолжает совместимый отчёт и сравнивает обе версии на независимых контрольных случаях. */
   async evaluate(candidate: LearningCandidate): Promise<EvaluationReport> {
-    const run = this.sessions.get(candidate.sourceRunId);
+    const run = await this.sessions.load(candidate.sourceRunId);
     const suite = run.config.value.learning.cases.filter(
       (test) =>
         test.role === candidate.role &&
@@ -113,7 +113,7 @@ export class HeldOutEvaluator implements LearningEvaluator {
     baselineVersion: string,
     withCandidate: boolean,
   ): Promise<{ passed: boolean; detail: string }> {
-    const run = this.sessions.get(candidate.sourceRunId);
+    const run = await this.sessions.load(candidate.sourceRunId);
     const config = run.config.value;
     const registry = new ToolRegistry();
     for (const tool of test.tools)

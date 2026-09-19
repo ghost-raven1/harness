@@ -3,7 +3,8 @@ import { Command } from 'commander';
 import * as prompts from '@clack/prompts';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { rpc } from './ipc.js';
+import { commandClient } from './ipc.js';
+import { applicationIdentity } from '../shared/identity.js';
 import { print } from './ui.js';
 import { brandName, renderLogo, showLogo } from './branding.js';
 import { registerRunCommands } from './commands/run.js';
@@ -15,6 +16,10 @@ import { registerDashboard } from './commands/dashboard.js';
 import { registerMaintenanceCommands } from './commands/maintenance.js';
 import { registerMessageCommand } from './commands/message.js';
 import { message } from '../shared/primitives.js';
+import { applicationErrorData } from '../shared/application-error.js';
+import { resourceErrorData } from '../shared/resource-errors.js';
+import { sessionConflictData } from '../shared/session-conflict.js';
+import { explainError } from './guided/errors.js';
 import type { CliContext } from './types.js';
 
 interface GlobalOptions {
@@ -26,7 +31,7 @@ interface GlobalOptions {
 export function createCli(): Command {
   const program = new Command()
     .name('harness')
-    .version('0.2.1')
+    .version(applicationIdentity().version)
     .description(brandName + ' · агенты, инструменты и проверяемое обучение')
     .option(
       '--state <directory>',
@@ -44,7 +49,7 @@ export function createCli(): Command {
     json,
     interactive: () => !!process.stdin.isTTY && !!process.stdout.isTTY && !json(),
     output: (value) => print(value, json()),
-    request: (method, params = {}) => rpc(directory(), method, params),
+    request: commandClient(directory),
   };
 
   let logoShown = false;
@@ -81,6 +86,14 @@ export function createCli(): Command {
   return program;
 }
 
+/** Машинный ответ сохраняет прежнее поле error и добавляет стабильный код восстановления. */
+export function cliErrorResult(error: unknown) {
+  return {
+    error: message(error),
+    ...(applicationErrorData(error) ?? resourceErrorData(error) ?? sessionConflictData(error)),
+  };
+}
+
 // Node учитывает ссылки npm bin и отличает запуск CLI от импорта createCli.
 if (import.meta.main) {
   createCli()
@@ -91,9 +104,9 @@ if (import.meta.main) {
         return;
       }
       if (process.argv.includes('--json')) {
-        process.stdout.write(JSON.stringify({ error: message(error) }) + '\n');
+        process.stdout.write(JSON.stringify(cliErrorResult(error)) + '\n');
       } else {
-        prompts.log.error(message(error));
+        prompts.log.error(explainError(error));
       }
       process.exitCode = 1;
     });

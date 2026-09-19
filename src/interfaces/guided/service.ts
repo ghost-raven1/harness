@@ -74,8 +74,7 @@ export class DesktopService {
   activeCount(): number {
     return (
       this.owned?.app.sessions
-        .list()
-        .map((run) => this.owned!.app.runtime.view(run.id))
+        .catalog()
         .filter((run) => ['running', 'awaiting_approval'].includes(run.status)).length ?? 0
     );
   }
@@ -83,7 +82,7 @@ export class DesktopService {
   /** Присоединяется к существующему сервису; отсутствие сервиса разрешает первичную настройку. */
   async connect(): Promise<ServiceInfo | undefined> {
     try {
-      return await rpc<ServiceInfo>(this.directory, 'system.info');
+      return await rpc(this.directory, 'system.info');
     } catch (error) {
       if (error instanceof Error && error.message.startsWith('Local service unavailable.'))
         return undefined;
@@ -95,7 +94,7 @@ export class DesktopService {
   async start(configFile: string): Promise<ServiceInfo> {
     assertRuntime();
     this.owned = await serve(configFile, this.directory);
-    return await rpc<ServiceInfo>(this.directory, 'system.info');
+    return await rpc(this.directory, 'system.info');
   }
 
   /** Закрывает только собственный сервис; подключённое чужое окно остаётся работать. */

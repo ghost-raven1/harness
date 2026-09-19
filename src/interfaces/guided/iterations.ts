@@ -59,7 +59,7 @@ async function editLimit(
   let notice = '';
   const check = async () => {
     try {
-      const latest = await context.request<IterationStatus>('iterations.status', { runId });
+      const latest = await context.request('iterations.status', { runId });
       notice =
         runId && !latest.run?.editable
           ? 'Изменение доступно на паузе'
@@ -108,7 +108,7 @@ export async function showIterationSettings(
   runId?: string,
 ): Promise<'removed' | undefined> {
   const title = runId ? 'Предел шагов задачи' : 'Предел шагов';
-  const load = () => context.request<IterationStatus>('iterations.status', { runId });
+  const load = () => context.request('iterations.status', { runId });
   let removed = false;
   let notice = '';
   while (true) {

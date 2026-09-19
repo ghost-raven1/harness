@@ -1,6 +1,6 @@
 {
   "name": "modular-agent-harness",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "Local MCP agent harness with policy enforcement and evaluated procedural learning",
   "type": "module",
@@ -32,7 +32,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "playtest:cloud": "npm run build && node scripts/playtest-cloud.mjs",
-    "playtest:codex": "npm run build && node scripts/playtest-codex.mjs"
+    "playtest:codex": "npm run build && node scripts/playtest-codex.mjs",
+    "benchmark:storage": "node --max-old-space-size=768 scripts/benchmark-storage.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "1.2.12",

@@ -1,5 +1,5 @@
 import * as prompts from '@clack/prompts';
-import type { CliContext, LearningInspectView, LearningStatusView } from '../types.js';
+import type { CliContext, LearningStatusView } from '../types.js';
 import { selected } from '../ui.js';
 import { explainError } from './errors.js';
 import { page, terminalText } from './screen.js';
@@ -55,7 +55,7 @@ export async function browseKnowledge(context: CliContext): Promise<void> {
       await liveSelect({
         title: 'База знаний',
         load: async () => {
-          const state = await context.request<LearningStatusView>('learning.status');
+          const state = await context.request('learning.status');
           const active = new Set(state.activeCandidateIds ?? []);
           const catalogue = queryKnowledge(state, query, activeOnly, pageIndex);
           return {
@@ -106,7 +106,7 @@ export async function browseKnowledge(context: CliContext): Promise<void> {
       }),
     );
     if (action === 'back') return;
-    const state = await context.request<LearningStatusView>('learning.status');
+    const state = await context.request('learning.status');
     pageIndex = queryKnowledge(state, query, activeOnly, pageIndex).page;
     if (action === 'search') {
       page('Поиск по знаниям');
@@ -132,7 +132,7 @@ export async function browseKnowledge(context: CliContext): Promise<void> {
               {
                 id: 'queue',
                 label: 'Все задания',
-                text: queueText(await context.request<LearningStatusView>('learning.status')),
+                text: queueText(await context.request('learning.status')),
               },
             ],
           }),
@@ -148,7 +148,7 @@ export async function browseKnowledge(context: CliContext): Promise<void> {
               {
                 id: 'versions',
                 label: 'Все выпуски',
-                text: releaseText(await context.request<LearningStatusView>('learning.status')),
+                text: releaseText(await context.request('learning.status')),
               },
             ],
           }),
@@ -178,8 +178,8 @@ async function inspectKnowledge(context: CliContext, id: string): Promise<void> 
 async function readKnowledge(context: CliContext, id: string): Promise<void> {
   const loadLesson = async () => {
     const [detail, state] = await Promise.all([
-      context.request<LearningInspectView>('learning.inspect', { id }),
-      context.request<LearningStatusView>('learning.status'),
+      context.request('learning.inspect', { id }),
+      context.request('learning.status'),
     ]);
     if (!state.candidates.some((candidate) => candidate.id === id))
       throw new ResourceNotFoundError('lesson');
@@ -238,10 +238,7 @@ async function readKnowledge(context: CliContext, id: string): Promise<void> {
       let title = 'Урок сохранён',
         content: string;
       try {
-        const { path, exists } = await context.request<{ path: string; exists?: boolean }>(
-          'learning.export',
-          { id },
-        );
+        const { path, exists } = await context.request('learning.export', { id });
         if (exists) title = 'Файл уже существует';
         content = exists
           ? 'Существующий файл сохранён без изменений:\n' + path

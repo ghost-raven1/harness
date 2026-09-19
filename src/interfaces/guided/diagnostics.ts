@@ -27,7 +27,7 @@ export async function showDiagnostics(context: CliContext): Promise<void> {
     const action = await liveSelect({
       title: 'Диагностический лог',
       load: async () => {
-        const status = await context.request<DiagnosticStatus>('diagnostics.status');
+        const status = await context.request('diagnostics.status');
         return {
           summaryTitle: 'Запись в файл',
           summary: [
@@ -54,7 +54,7 @@ export async function showDiagnostics(context: CliContext): Promise<void> {
       await context.request('diagnostics.configure', { enabled: action === 'enable' });
     if (action === 'details') {
       const load = async () => {
-        const status = await context.request<DiagnosticStatus>('diagnostics.status');
+        const status = await context.request('diagnostics.status');
         return { tabs: [{ id: 'log', label: 'Диагностика', text: details(status) }] };
       };
       await readText('Диагностический лог', (await load()).tabs, { load });

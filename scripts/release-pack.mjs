@@ -34,6 +34,7 @@ const scripts = [
   'preparation-command.mjs',
   'install-runtime.mjs',
   'check-engines.mjs',
+  'benchmark-storage.mjs',
   'start-windows.ps1',
   'release-pack.mjs',
   'release-smoke.mjs',

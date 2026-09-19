@@ -107,7 +107,15 @@ export async function removeLessonExports(directory: string, ids: string[]): Pro
   }
 }
 
-const taskDirectories = ['runs', 'output', 'artifacts', 'file-backups', 'drafts'] as const;
+const taskDirectories = [
+  'runs',
+  'output',
+  'artifacts',
+  'file-backups',
+  'drafts',
+  'indexes',
+  'search',
+] as const;
 interface StorageEntry {
   path: string;
   size: number;

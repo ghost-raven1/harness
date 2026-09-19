@@ -31,7 +31,7 @@ it('при пределе 1 делает паузу перед следующи�
   });
   await app.runtime.wait(runId);
   const before = app.sessions.get(runId);
-  const history = app.sessions.history(runId, 0);
+  const history = await app.sessions.history(runId, 0);
   expect(before.status).toBe('paused');
   expect(before.pauseReason).toBe('iterations');
   expect(before.turns).toBe(1);
@@ -61,7 +61,7 @@ it('при пределе 1 делает паузу перед следующи�
   expect(after.learningVersion).toBe(before.learningVersion);
   expect(after.fileChanges).toEqual(before.fileChanges);
   expect(after.invocations).toEqual(before.invocations);
-  expect(app.sessions.history(runId, 0).slice(0, history.length)).toEqual(history);
+  expect((await app.sessions.history(runId, 0)).slice(0, history.length)).toEqual(history);
   expect(await readFile(join(app.workspace, 'result.txt'), 'utf8')).toBe('Изменено человеком');
   expect(source.requests).toHaveLength(2);
   expect((await app.runtime.iterationStatus(runId)).run).toMatchObject({
@@ -173,7 +173,7 @@ it('сохраняет default после перезапуска, меняет �
   await restored.runtime.wait(next.runId);
   expect(restored.sessions.get(next.runId).turns).toBe(winningLimit);
   expect(restored.sessions.get(next.runId).iterationLimit).toBe(winningLimit);
-  const historyBefore = restored.sessions.history(runId, 0);
+  const historyBefore = await restored.sessions.history(runId, 0);
   await restored.runtime.resume(runId);
   await restored.runtime.wait(runId);
   expect(restored.sessions.get(runId)).toMatchObject({
@@ -181,7 +181,9 @@ it('сохраняет default после перезапуска, меняет �
     iterationStart: 1,
     iterationLimit: 2,
   });
-  expect(restored.sessions.history(runId, 0).slice(0, historyBefore.length)).toEqual(historyBefore);
+  expect((await restored.sessions.history(runId, 0)).slice(0, historyBefore.length)).toEqual(
+    historyBefore,
+  );
 });
 
 it('продолжает старую запись без новых полей с отдельной порцией и прежним пределом из снимка', async () => {

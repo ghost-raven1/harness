@@ -33,6 +33,11 @@ jobs:
         run: npm ci --include=dev --include=optional --no-audit --no-fund 2>&1 | tee "$CI_LOG_DIR/install.log"
       - name: Форматирование, типы, сборка и тесты
         run: npm run check 2>&1 | tee "$CI_LOG_DIR/check.log"
+      - name: Каталог 1 000 и 10 000 задач
+        if: runner.os == 'Linux'
+        run: |
+          npm run benchmark:storage -- 1000 "$CI_LOG_DIR/storage-1000.json" 2>&1 | tee "$CI_LOG_DIR/storage-1000.log"
+          npm run benchmark:storage -- 10000 "$CI_LOG_DIR/storage-10000.json" 2>&1 | tee "$CI_LOG_DIR/storage-10000.log"
       - name: Проверка ZIP-поставки в новой папке
         run: |
           collect_release() {
@@ -78,6 +83,16 @@ jobs:
           }
           trap collect_pty EXIT
           "$RUNNER_TEMP/harness-pty-python/bin/python" scripts/playtest-source-bugs.py --node "$(command -v node)" 2>&1 | tee "$CI_LOG_DIR/pty.log"
+      - name: Два окна, восстановление и диагностика в PTY 48×24 и 80×24
+        if: runner.os == 'Linux'
+        env:
+          PYTHONUNBUFFERED: '1'
+        run: |
+          collect_core_pty() {
+            if [ -d releases/core-playtest ]; then cp -R releases/core-playtest "$CI_LOG_DIR/"; fi
+          }
+          trap collect_core_pty EXIT
+          "$RUNNER_TEMP/harness-pty-python/bin/python" scripts/playtest-core.py --node "$(command -v node)" 2>&1 | tee "$CI_LOG_DIR/core-pty.log"
       - name: Логи и свежие отчёты
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

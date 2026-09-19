@@ -2,7 +2,7 @@ import { realpath } from 'node:fs/promises';
 import { z } from 'zod';
 import type { ConfigSnapshot } from '../configuration/schema.js';
 import { loadConfig, isWithin } from '../configuration/loader.js';
-import type { FileSessionStore } from '../sessions/store.js';
+import type { SessionStore } from '../sessions/ports.js';
 import type { LearningStore } from '../learning/types.js';
 import type { RunRecord } from '../sessions/types.js';
 import {
@@ -51,7 +51,7 @@ export class RunFactory {
   constructor(
     private readonly configFile: string,
     private readonly initialConfig: ConfigSnapshot,
-    private readonly store: FileSessionStore,
+    private readonly store: SessionStore,
     private readonly learning: LearningStore,
     private readonly iterations: IterationSettings,
   ) {}
@@ -68,11 +68,11 @@ export class RunFactory {
     const request = runInputSchema.parse(input);
     this.store.assertRequestAllowed(request.requestKey, request.sessionId);
     const requestHash = hash(request);
-    const previous = this.store.list(true).find((run) => run.requestKey === request.requestKey);
+    const previous = this.store.catalog(true).find((run) => run.requestKey === request.requestKey);
     if (previous) {
       if (previous.requestHash !== requestHash)
         throw new Error('Idempotency key reused with different arguments');
-      return { run: previous, created: false };
+      return { run: await this.store.load(previous.id), created: false };
     }
     const config = await this.currentConfig();
     if (serviceFingerprint(config.value) !== serviceFingerprint(this.initialConfig.value)) {
@@ -91,10 +91,11 @@ export class RunFactory {
     if (request.sessionId) {
       sessionRevision = this.store.sessionRevision(request.sessionId);
       const sessionRuns = this.store
-        .list(true)
+        .catalog(true)
         .filter((run) => run.sessionId === request.sessionId);
       assertKnownSessionOutcomes(sessionRuns);
-      const last = latestSessionRun(sessionRuns);
+      const latest = latestSessionRun(sessionRuns);
+      const last = latest ? await this.store.load(latest.id) : undefined;
       if (!last) throw new Error('Unknown session');
       if (request.expectedParentRunId && last.id !== request.expectedParentRunId)
         throw new SessionChangedError(last.id);
@@ -115,7 +116,7 @@ export class RunFactory {
       agent.messages = [
         ...prior.messages,
         ...interrupted,
-        ...missingSessionCorrections(sessionCorrections(this.store, sessionRuns), prior),
+        ...missingSessionCorrections(await sessionCorrections(this.store, sessionRuns), prior),
         ...(last.userMessages ?? [])
           .filter((item) => !item.deliveredAt)
           .map((item): ChatMessage => ({ role: 'user', content: item.content })),

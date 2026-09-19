@@ -1,7 +1,7 @@
 import * as prompts from '@clack/prompts';
 import color from 'picocolors';
 import wrapAnsi from 'wrap-ansi';
-import type { CliContext, StatusView } from '../types.js';
+import type { CliContext } from '../types.js';
 import { note, selected } from '../ui.js';
 import { page, backFromPage, terminalText } from './screen.js';
 import { liveSelect } from './live-select.js';
@@ -77,7 +77,7 @@ export async function restoreFile(context: CliContext, runId: string): Promise<v
     await liveSelect({
       title: 'Восстановление файла',
       load: async () => {
-        const status = await context.request<StatusView>('runtime.status', { runId });
+        const status = await context.request('runtime.status', { runId });
         const changes = status.deletedAt ? [] : (status.fileChanges ?? []);
         return {
           message: 'Какой файл вернуть к состоянию перед записью?',
@@ -93,7 +93,7 @@ export async function restoreFile(context: CliContext, runId: string): Promise<v
     }),
   );
   if (changeId === 'back') return;
-  const current = await context.request<StatusView>('runtime.status', { runId });
+  const current = await context.request('runtime.status', { runId });
   if (
     current.deletedAt ||
     !current.fileChanges?.some((item) => item.id === changeId && item.status === 'applied')
@@ -103,7 +103,7 @@ export async function restoreFile(context: CliContext, runId: string): Promise<v
     );
   const previewParts: string[] = [];
   const previewToken = await showFilePreview(async (offset) => {
-    const preview = await context.request<FilePreview>('files.previewRestore', {
+    const preview = await context.request('files.previewRestore', {
       runId,
       changeId,
       offset,
@@ -123,7 +123,7 @@ export async function restoreFile(context: CliContext, runId: string): Promise<v
       active: 'Восстановить',
       inactive: 'Оставить',
       load: async () => {
-        const current = await context.request<StatusView>('runtime.status', { runId });
+        const current = await context.request('runtime.status', { runId });
         const available =
           !current.deletedAt &&
           !!current.fileChanges?.some((item) => item.id === changeId && item.status === 'applied');
@@ -137,7 +137,7 @@ export async function restoreFile(context: CliContext, runId: string): Promise<v
     })) ?? false,
   );
   if (yes) {
-    const current = await context.request<StatusView>('runtime.status', { runId });
+    const current = await context.request('runtime.status', { runId });
     if (
       current.deletedAt ||
       !current.fileChanges?.some((item) => item.id === changeId && item.status === 'applied')

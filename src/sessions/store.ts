@@ -1,11 +1,20 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { clone, hash, id, message, Serial } from '../shared/primitives.js';
+import { ApplicationError } from '../shared/application-error.js';
 import { ResourceNotFoundError } from '../shared/resource-errors.js';
 import { SessionChangedError } from '../shared/session-conflict.js';
-import { writeSnapshot } from './files.js';
-import { appendJournal, readJournal } from './journal.js';
-import type { RunRecord, JournalEvent, SessionStore } from './types.js';
+import { writeSnapshot, assertRealDirectory } from './files.js';
+import { appendJournal } from './journal.js';
+import { FileStateFiles } from './state-files.js';
+import { catalogEntry } from './catalog.js';
+import { SessionArchive } from './archive.js';
+import { saveIndex, type JournalIndex } from './journal-index.js';
+import { validateRunRecord } from './validation.js';
+import type { SessionStore } from './ports.js';
+import { verifyHistory } from '../diagnostics/history-verification.js';
+import type { IndexRebuildReport } from '../diagnostics/history-types.js';
+import type { RunRecord, JournalEvent } from './types.js';
 import { RunOutputStore } from './output.js';
 import { assertKnownSessionOutcomes, latestSessionRun } from './continuation.js';
 import {
@@ -16,43 +25,129 @@ import {
 } from './purge-records.js';
 
 /** Хранилище с одним писателем; синхронизированный журнал важнее снимков. */
-export class FileSessionStore implements SessionStore {
-  private readonly runs = new Map<string, RunRecord>();
-  private readonly events = new Map<string, JournalEvent[]>();
+export class FileSessionStore extends SessionArchive implements SessionStore {
   private readonly serial = new Serial();
   private readonly purged = new Map<string, PurgeRecord>();
   private maintenance = false;
   private recoveryFailure?: string;
   readonly output: RunOutputStore;
-  constructor(readonly directory: string) {
+  readonly stateFiles: FileStateFiles;
+  constructor(directory: string) {
+    super(directory);
+    this.stateFiles = new FileStateFiles(directory);
     this.output = new RunOutputStore(directory);
   }
-  /** Восстанавливает последнее состояние из журналов и отмечает прерванные операции. */
-  async initialize(): Promise<void> {
-    for (const record of await readPurgeRecords(this.directory))
-      this.purged.set(record.sessionId, record);
+  /** Загружает каталог; только владелец состояния может исправить оборванный хвост. */
+  async initialize(options: { recover?: boolean } = {}): Promise<void> {
+    try {
+      for (const name of ['runs', 'output', 'indexes', 'indexes/runs', 'indexes/output', 'search'])
+        await assertRealDirectory(join(this.directory, name));
+    } catch (error) {
+      this.requireRecovery(error);
+      return;
+    }
+    try {
+      for (const record of await readPurgeRecords(this.directory))
+        this.purged.set(record.sessionId, record);
+    } catch (error) {
+      this.requireRecovery(error);
+      return;
+    }
+    const removed = new Set([...this.purged.values()].flatMap((record) => record.runIds));
     await mkdir(join(this.directory, 'runs'), { recursive: true, mode: 0o700 });
     for (const name of await readdir(join(this.directory, 'runs'))) {
-      if (!name.endsWith('.jsonl')) continue;
-      if ([...this.purged.values()].some((record) => record.runIds.includes(name.slice(0, -6))))
+      if (!name.endsWith('.jsonl') || removed.has(name.slice(0, -6))) continue;
+      const runId = name.slice(0, -6);
+      if (!/^[a-f0-9-]{36}$/.test(runId)) {
+        this.requireRecovery(new Error('JOURNAL_INVALID_ID'));
         continue;
-      const path = join(this.directory, 'runs', name);
-      const rows = await readJournal<JournalEvent>(path);
-      rows.forEach((event, index) => {
-        if (event.seq !== index + 1 || event.state?.schemaVersion !== 1 || !event.state.id) {
-          throw new Error('Unsupported or corrupt session journal: ' + name);
-        }
-      });
-      const last = rows.at(-1);
-      if (!last) continue;
-      this.runs.set(last.state.id, last.state);
-      this.events.set(last.state.id, rows);
+      }
+      try {
+        await this.indexRun(runId, options.recover !== false);
+      } catch (error) {
+        this.requireRecovery(error);
+      }
     }
-    for (const run of this.list(true)) await this.recoverInterrupted(run.id);
+    try {
+      for (const entry of this.catalog(true)) {
+        if (entry.parentRunId) {
+          const parent = this.entries.get(entry.parentRunId);
+          if (
+            !parent ||
+            parent.sessionId !== entry.sessionId ||
+            parent.workspace !== entry.workspace
+          )
+            throw new Error('JOURNAL_INVALID_REFERENCE');
+        }
+      }
+      latestSessionRun(this.catalog(true));
+    } catch (error) {
+      this.requireRecovery(error);
+    }
+    try {
+      await this.output.initialize(options.recover !== false, removed);
+    } catch (error) {
+      this.requireRecovery(error);
+    }
+    if (!this.recoveryError && options.recover !== false) {
+      for (const entry of this.catalog(true)) {
+        if (['running', 'awaiting_approval'].includes(entry.status) || entry.unfinishedOperations)
+          await this.recoverInterrupted(entry.id);
+      }
+    }
+  }
+  /** Согласует ремонт поискового файла с изменением задачи и каскадным удалением. */
+  protected override repairSearch(run: RunRecord): Promise<void> {
+    return this.serial.run(async () => {
+      if (
+        this.purgeRecord(run.id) ||
+        this.entries.get(run.id)?.searchHash !== catalogEntry(run, 1).searchHash
+      )
+        return;
+      await this.searches.save(run);
+    });
+  }
+  /** Проверяет источники последовательно с записью, не изменяя их. */
+  verifyHistory(barrier: <T>(work: () => Promise<T>) => Promise<T> = (work) => work()) {
+    return this.serial.run(() =>
+      this.output.withReadBarrier(() =>
+        barrier(async () => {
+          const report = await verifyHistory(this.directory);
+          if (!report.healthy)
+            this.requireRecovery(new Error(report.issues[0]?.code ?? 'STORAGE_UNAVAILABLE'));
+          return report;
+        }),
+      ),
+    );
+  }
+  /** Перестраивает только производные данные под блокировкой владельца сервиса. */
+  rebuildIndex(): Promise<IndexRebuildReport> {
+    return this.serial.run(async () => {
+      let rebuilt = 0,
+        skipped = 0;
+      const issues: IndexRebuildReport['issues'] = [];
+      for (const name of await readdir(join(this.directory, 'runs'))) {
+        const runId = name.slice(0, -6);
+        if (!name.endsWith('.jsonl') || this.purgeRecord(runId)) continue;
+        try {
+          await this.indexRun(runId, false, true);
+          rebuilt++;
+        } catch {
+          skipped++;
+          issues.push({ code: 'INDEX_REBUILD_FAILED', kind: 'run' });
+        }
+      }
+      const output = await this.output.rebuildIndex();
+      rebuilt += output.rebuilt;
+      skipped += output.skipped;
+      issues.push(...output.issues);
+      this.searches.invalidate();
+      return { checkedAt: new Date().toISOString(), rebuilt, skipped, issues };
+    });
   }
   /** Вызывается после остановки исполнителей; статус паузы сам по себе не доказывает завершение записи. */
   async recoverInterrupted(runId: string): Promise<void> {
-    const run = this.get(runId);
+    const run = await this.load(runId);
     const active = (state: RunRecord): boolean =>
       ['running', 'awaiting_approval'].includes(state.status);
     if (!active(run) && !Object.values(run.invocations).some((item) => item.status === 'started'))
@@ -69,45 +164,17 @@ export class FileSessionStore implements SessionStore {
       }
     });
   }
-  /** Возвращает отсортированные копии запусков, по умолчанию исключая скрытые. */
-  list(includeDeleted = false): RunRecord[] {
-    return [...this.runs.values()]
-      .filter((run) => includeDeleted || !run.deletedAt)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
-      .map(clone);
-  }
-  /** Возвращает копию запуска; отсутствие записи отличается от ошибки подключения. */
-  get(runId: string): RunRecord {
-    const run = this.runs.get(runId);
-    if (!run) throw new ResourceNotFoundError('task');
-    return clone(run);
-  }
-  /** Читает ограниченную страницу событий после указанного курсора. */
-  history(runId: string, after: number, limit?: number): JournalEvent[] {
-    return (this.events.get(runId) ?? [])
-      .slice(after, limit === undefined ? undefined : after + limit)
-      .map(clone);
-  }
-  /** Связывает подготовленный контекст с версиями всех этапов беседы, включая скрытые. */
-  sessionRevision(sessionId: string): string {
-    return hash(
-      [...this.runs.values()]
-        .filter((run) => run.sessionId === sessionId)
-        .map((run) => [run.id, this.events.get(run.id)?.length ?? 0] as const)
-        .sort(([a], [b]) => a.localeCompare(b)),
-    );
-  }
   /** Сохраняет новый запуск только при неизменном контексте и проверенных исходах операций. */
   create(run: RunRecord, expectedSessionRevision?: string): Promise<RunRecord> {
     return this.serial.run(async () => {
       this.assertRequestAllowed(run.requestKey, run.sessionId);
-      const existing = this.list(true).find((item) => item.requestKey === run.requestKey);
+      const existing = this.catalog(true).find((item) => item.requestKey === run.requestKey);
       if (existing) {
         if (existing.requestHash !== run.requestHash)
           throw new Error('Idempotency key reused with different arguments');
-        return existing;
+        return this.load(existing.id);
       }
-      const sessionRuns = this.list(true).filter((item) => item.sessionId === run.sessionId);
+      const sessionRuns = this.catalog(true).filter((item) => item.sessionId === run.sessionId);
       if (run.parentRunId) {
         const latest = latestSessionRun(sessionRuns);
         if (!latest) throw new ResourceNotFoundError('task');
@@ -127,10 +194,11 @@ export class FileSessionStore implements SessionStore {
             !item.deletedAt && ['running', 'awaiting_approval', 'paused'].includes(item.status),
         )
       ) {
-        throw new Error('Session already has an active or paused run');
+        throw new ApplicationError('TASK_BUSY', 'Session already has an active or paused run');
       }
-      await this.persist(clone(run), 'run.created', {});
-      return this.get(run.id);
+      const created = clone(run);
+      await this.persist(created, 'run.created', {});
+      return clone(created);
     });
   }
   /** Последовательно применяет изменение к копии и фиксирует его в журнале. */
@@ -142,10 +210,10 @@ export class FileSessionStore implements SessionStore {
   ): Promise<RunRecord> {
     return this.serial.run(async () => {
       this.assertWritable();
-      const next = this.get(runId);
+      const next = await this.load(runId);
       update(next);
       await this.persist(next, type, payload);
-      return this.get(runId);
+      return clone(next);
     });
   }
   /** Сериализует служебные файлы с журналом и очисткой, не ожидая долгих инструментов проекта. */
@@ -159,33 +227,60 @@ export class FileSessionStore implements SessionStore {
   async delete(runId: string): Promise<void> {
     await this.serial.run(async () => {
       this.assertWritable();
-      const run = this.get(runId);
+      const run = await this.load(runId);
       if (run.deletedAt) return;
       if (!['completed', 'failed', 'cancelled'].includes(run.status))
-        throw new Error('Сначала остановите задачу.');
+        throw new ApplicationError('TASK_BUSY', 'Сначала остановите задачу.');
       run.deletedAt = new Date().toISOString();
       await this.persist(run, 'run.deleted', {});
     });
   }
   /** Сначала синхронизирует журнал, затем обновляет память и вспомогательный снимок. */
   private async persist(state: RunRecord, type: string, payload: unknown): Promise<void> {
-    const previous = this.events.get(state.id) ?? [];
+    validateRunRecord(state);
+    const previous = this.indexes.get(state.id);
     const event: JournalEvent = {
-      seq: previous.length + 1,
+      seq: (previous?.count ?? 0) + 1,
       at: new Date().toISOString(),
       type,
       payload,
       state,
     };
-    await appendJournal(join(this.directory, 'runs', state.id + '.jsonl'), event);
-    this.runs.set(state.id, state);
-    this.events.set(state.id, [...previous, event]);
+    await appendJournal(this.path(state.id), event);
+    const offset = previous?.size ?? 0;
+    const positions = [...(previous?.positions ?? [])];
+    if ((event.seq - 1) % 128 === 0) positions.push({ seq: event.seq, offset });
+    const index: JournalIndex = {
+      schemaVersion: 1,
+      count: event.seq,
+      lastOffset: offset,
+      size: offset + Buffer.byteLength(JSON.stringify(event) + '\n'),
+      mtimeMs: 0,
+      ctimeMs: 0,
+      positions,
+    };
+    const entry = catalogEntry(state, event.seq);
+    const searchChanged = this.entries.get(state.id)?.searchHash !== entry.searchHash;
+    this.remember(state);
+    this.entries.set(state.id, entry);
+    this.indexes.set(state.id, index);
+    this.searches.invalidate();
+    // После fsync результата ошибки производных файлов уже не могут отменить подтверждение.
+    try {
+      const meta = await stat(this.path(state.id));
+      index.mtimeMs = meta.mtimeMs;
+      index.ctimeMs = meta.ctimeMs;
+    } catch {
+      /* Перестроим индекс при следующем запуске. */
+    }
+    if (searchChanged) await this.searches.save(state);
+    await saveIndex(this.indexPath(state.id), index, entry);
     await writeSnapshot(join(this.directory, 'runs', state.id + '.json'), state);
   }
   /** Сохраняет полный результат инструмента в отдельном файле текущего запуска. */
   async artifact(runId: string, content: string): Promise<string> {
     this.assertWritable();
-    this.get(runId);
+    await this.load(runId);
     const artifactId = id();
     const directory = join(this.directory, 'artifacts', runId);
     await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -214,9 +309,13 @@ export class FileSessionStore implements SessionStore {
   }
   /** Запрещает запись при отказе хранения или подтверждённой очистке данных. */
   assertWritable(): void {
-    if (this.recoveryFailure) throw new Error(this.recoveryFailure);
+    if (this.recoveryFailure)
+      throw new ApplicationError('STORAGE_UNAVAILABLE', this.recoveryFailure);
     if (this.maintenance)
-      throw new Error('Удаляется беседа. Повторите действие после завершения удаления.');
+      throw new ApplicationError(
+        'TASK_BUSY',
+        'Удаляется беседа. Повторите действие после завершения удаления.',
+      );
   }
   /** Дожидается прежних изменений и устанавливает блокировку обслуживания после проверки. */
   beginMaintenance(check: () => void): Promise<() => void> {
@@ -247,7 +346,11 @@ export class FileSessionStore implements SessionStore {
       await removeRunFiles(this.directory, record);
       for (const runId of record.runIds) {
         this.runs.delete(runId);
-        this.events.delete(runId);
+        this.entries.delete(runId);
+        this.indexes.delete(runId);
+        this.historical.delete(runId);
+        this.pinned.delete(runId);
+        this.searches.invalidate();
       }
     });
   }
@@ -258,7 +361,7 @@ export class FileSessionStore implements SessionStore {
     offset: number,
     limit: number,
   ): Promise<string> {
-    const run = this.get(runId);
+    const run = await this.load(runId);
     if (!/^[a-f0-9-]{36}$/.test(artifactId)) throw new Error('Invalid artifact ID');
     let content: string;
     try {
@@ -269,7 +372,7 @@ export class FileSessionStore implements SessionStore {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       // Продолжения хранят ссылки на прежние результаты; владельца ищем только по метаданным беседы.
-      const owner = [...this.runs.values()].find(
+      const owner = [...this.entries.values()].find(
         (candidate) =>
           candidate.id !== runId &&
           candidate.sessionId === run.sessionId &&

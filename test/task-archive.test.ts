@@ -118,7 +118,7 @@ it('архив выдаёт все страницы без пропусков, �
 it('скрытую задачу можно прочитать и экспортировать, меню не предлагает изменения', async () => {
   const { app, hidden } = await archive();
   const request = vi.fn((method: string, params?: unknown) => dispatch(app, method, params));
-  const events = app.sessions.history(hidden.runId, 0).length;
+  const events = (await app.sessions.history(hidden.runId, 0)).length;
   vi.mocked(prompts.select).mockClear();
   vi.mocked(prompts.select)
     .mockResolvedValueOnce('hidden')
@@ -157,7 +157,7 @@ it('скрытую задачу можно прочитать и экспорт�
   expect(await readFile(join(app.workspace, 'Ответ Harness ' + hidden.runId + '.md'), 'utf8')).toBe(
     'Полный ответ: секретный ключ поиска\n',
   );
-  expect(app.sessions.history(hidden.runId, 0)).toHaveLength(events);
+  expect(await app.sessions.history(hidden.runId, 0)).toHaveLength(events);
   expect(app.sessions.get(hidden.runId).deletedAt).toBeDefined();
 });
 

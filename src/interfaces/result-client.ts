@@ -1,5 +1,4 @@
 import type { CliContext, StatusView } from './types.js';
-import type { ResultPage } from './result-pages.js';
 
 /** Дочитывает именно выбранный запуск; пустая или изменившаяся страница не маскируется под полный ответ. */
 export async function completeResult(
@@ -11,7 +10,7 @@ export async function completeResult(
   let cursor = 0;
   const total = status.resultLength;
   while (true) {
-    const page = await context.request<ResultPage>('runtime.result', {
+    const page = await context.request('runtime.result', {
       runId: status.runId,
       cursor,
     });

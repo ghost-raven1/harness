@@ -1,3 +1,4 @@
+import { serviceCompatibility } from './service-compatibility.js';
 import { runtimeVersion } from '../configuration/runtime-version.js';
 import { arch, platform } from 'node:os';
 import { rpc, socketPath } from './ipc.js';
@@ -29,8 +30,14 @@ export async function diagnose(directory: string, explicitConfig?: string) {
   ];
   let service: ServiceInfo | undefined;
   try {
-    service = await rpc<ServiceInfo>(directory, 'system.info');
+    service = await rpc(directory, 'system.info');
     checks.push({ name: 'Сервис', status: 'pass', detail: directory });
+    const compatibility = serviceCompatibility(service);
+    checks.push({
+      name: 'Совместимость сборок',
+      status: compatibility ? 'warn' : 'pass',
+      detail: compatibility ?? 'CLI и сервис совместимы',
+    });
   } catch {
     checks.push({
       name: 'Сервис',

@@ -1,11 +1,8 @@
 import * as prompts from '@clack/prompts';
-import type { FileChanges } from '../../tools/file-changes.js';
 import type { CliContext, StatusView } from '../types.js';
 import { selected } from '../ui.js';
 import { page } from './screen.js';
 import { liveConfirm } from './live-confirm.js';
-
-type ResolutionPreview = Awaited<ReturnType<FileChanges['previewResolution']>>;
 
 /** Проводит человека через проверку оборванного отката, сохраняя фактическое содержимое файла. */
 export async function reviewRestorations(
@@ -15,7 +12,7 @@ export async function reviewRestorations(
   for (const change of status.fileChanges ?? []) {
     if (change.status !== 'restoring') continue;
     const selection = { runId: status.runId, changeId: change.id };
-    const preview = await context.request<ResolutionPreview>('files.previewResolution', selection);
+    const preview = await context.request('files.previewResolution', selection);
     page('Проверка восстановления файла');
     const result = selected(
       await prompts.text({
@@ -34,7 +31,7 @@ export async function reviewRestorations(
         active: 'Сохранить проверку',
         inactive: 'Проверить позже',
         load: async () => {
-          const current = await context.request<StatusView>('runtime.status', {
+          const current = await context.request('runtime.status', {
             runId: status.runId,
           });
           if (
@@ -43,10 +40,7 @@ export async function reviewRestorations(
             )
           )
             return { available: false, detail: 'Результат уже проверен в другом окне.' };
-          const actual = await context.request<ResolutionPreview>(
-            'files.previewResolution',
-            selection,
-          );
+          const actual = await context.request('files.previewResolution', selection);
           const available = actual.previewToken === preview.previewToken;
           return {
             available,

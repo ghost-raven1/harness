@@ -30,7 +30,8 @@ it('частично выполненный откат сохраняет нео
   const changes = new FileChanges(app.sessions);
   const changeId = app.sessions.get(runId).fileChanges![0]!.id;
   const preview = await changes.previewRestore(runId, changeId);
-  vi.mocked(files.writeFile).mockImplementationOnce(async () => {
+  vi.mocked(files.writeFile).mockImplementation(async (...args) => {
+    if (args[0] !== path) return actual.writeFile(...args);
     await actual.writeFile(path, 'Прежняя');
     throw new Error('Запись оборвалась после изменения файла');
   });

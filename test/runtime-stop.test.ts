@@ -45,7 +45,7 @@ it('повторная отмена и закрытие ждут фактиче�
   expect(app.runtime.busy()).toBe(false);
   expect(app.sessions.get(runId).status).toBe('cancelled');
   expect(
-    app.sessions.history(runId, 0).filter((event) => event.type === 'run.cancelled'),
+    (await app.sessions.history(runId, 0)).filter((event) => event.type === 'run.cancelled'),
   ).toHaveLength(1);
 });
 
@@ -89,6 +89,6 @@ it.each(['completed', 'failed'] as const)(
     }
     expect(app.runtime.busy()).toBe(false);
     expect(app.sessions.get(runId).status).toBe(status);
-    expect(app.sessions.history(runId, 0).at(-1)!.type).toBe('test.terminal_saved');
+    expect((await app.sessions.history(runId, 0)).at(-1)!.type).toBe('test.terminal_saved');
   },
 );

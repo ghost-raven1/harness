@@ -1,8 +1,5 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { z } from 'zod';
-import { atomicJson } from '../sessions/files.js';
-import type { FileSessionStore } from '../sessions/store.js';
+import type { SessionStore } from '../sessions/ports.js';
 import type { ModelProvider, ModelRequest } from '../providers/types.js';
 import { abort, clone, Serial } from '../shared/primitives.js';
 
@@ -27,16 +24,15 @@ export class UsageLedger {
   private loaded = false;
   private readonly serial = new Serial();
   constructor(
-    private readonly store: FileSessionStore,
+    private readonly store: SessionStore,
     private readonly date = () => new Date().toISOString().slice(0, 10),
   ) {}
   /** Загружает учёт один раз; повреждённый файл блокирует новые запросы к API. */
   private async load(): Promise<void> {
     if (this.loaded) return;
     try {
-      this.state = schema.parse(
-        JSON.parse(await readFile(join(this.store.directory, 'usage.json'), 'utf8')),
-      );
+      const saved = await this.store.stateFiles.read('usage');
+      if (saved !== undefined) this.state = schema.parse(saved);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
         throw new Error(
@@ -47,7 +43,7 @@ export class UsageLedger {
   }
   /** Обновляет учёт в памяти только после атомарной записи на диск. */
   private async save(next: Ledger): Promise<void> {
-    await atomicJson(join(this.store.directory, 'usage.json'), next);
+    await this.store.stateFiles.write('usage', next);
     this.state = next;
   }
   /** Возвращает запись суток UTC, создавая начальные нулевые счётчики. */
@@ -66,7 +62,7 @@ export class UsageLedger {
       await this.load();
       const date = this.date(),
         daily = this.day(clone(this.state), date);
-      if (runId) this.store.get(runId);
+      if (runId) await this.store.load(runId);
       const spent = runId ? this.state.runs[runId] : undefined;
       return {
         date,

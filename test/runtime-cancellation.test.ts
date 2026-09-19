@@ -41,7 +41,7 @@ it.each(['cancel', 'close'] as const)(
     expect(stopped.result).toBeUndefined();
     expect(stopped.agents[stopped.rootAgentId]!.status).toBe('cancelled');
     expect(app.runtime.busy()).toBe(false);
-    const events = app.sessions.history(runId, 0);
+    const events = await app.sessions.history(runId, 0);
     const cancelledAt = events.findIndex((event) => event.type === 'run.cancelled');
     expect(cancelledAt).toBeGreaterThan(-1);
     expect(events.slice(cancelledAt + 1).map((event) => event.type)).not.toContain('run.completed');

@@ -129,7 +129,7 @@ it('авария после паузы дерева до остановки за
     requestKey: 'paused-tree-crash',
   });
   await eventually(() => app.sessions.get(runId).status === 'paused');
-  const events = app.sessions.history(runId, 0);
+  const events = await app.sessions.history(runId, 0);
   const last = events.at(-1)!;
   expect(last.type).toBe('run.paused');
   expect(

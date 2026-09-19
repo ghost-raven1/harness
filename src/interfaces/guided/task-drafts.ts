@@ -1,5 +1,5 @@
 import type { CliContext } from '../types.js';
-import type { DraftScope, DraftSummary, TaskDraft } from '../../sessions/drafts.js';
+import type { DraftScope, TaskDraft } from '../../sessions/drafts.js';
 import { liveSelect } from './live-select.js';
 import { liveConfirm } from './live-confirm.js';
 import { selected } from '../ui.js';
@@ -21,7 +21,7 @@ export async function chooseDraft(
   let offset = 0;
   while (true) {
     const load = async () => {
-      let page = await context.request<{ items: DraftSummary[]; total: number }>('drafts.list', {
+      let page = await context.request('drafts.list', {
         scope,
         offset,
       });
@@ -67,13 +67,13 @@ export async function chooseDraft(
     }
     const location = { id: choice, sessionId: scope.sessionId };
     try {
-      let draft = await context.request<TaskDraft>('drafts.get', location);
+      let draft = await context.request('drafts.get', location);
       const action = selected(
         await liveSelect({
           title: scope.messageRunId ? 'Черновик сообщения' : 'Черновик задачи',
           exitOnError: (error) => isMissingResource(error, 'draft'),
           load: async () => {
-            draft = await context.request<TaskDraft>('drafts.get', location);
+            draft = await context.request('drafts.get', location);
             return {
               summary: terminalText(draft.text).slice(0, 500) || 'Сообщение пока пустое.',
               summaryTitle:
@@ -98,7 +98,7 @@ export async function chooseDraft(
           },
         }),
       );
-      if (action === 'restore') return context.request<TaskDraft>('drafts.get', location);
+      if (action === 'restore') return context.request('drafts.get', location);
       if (
         action === 'delete' &&
         selected(
@@ -109,7 +109,7 @@ export async function chooseDraft(
             active: 'Удалить черновик',
             inactive: 'Оставить',
             load: async () => {
-              const current = await context.request<TaskDraft>('drafts.get', location);
+              const current = await context.request('drafts.get', location);
               return {
                 available: current.revision === draft.revision,
                 detail:
@@ -138,13 +138,13 @@ export async function pendingDraft(
   key?: string,
 ): Promise<TaskDraft | undefined> {
   for (let offset = 0; ; offset += 20) {
-    const page = await context.request<{ items: DraftSummary[]; total: number }>('drafts.list', {
+    const page = await context.request('drafts.list', {
       scope,
       offset,
     });
     for (const item of page.items) {
       if (item.state !== 'pending' || (key && item.requestKey !== key)) continue;
-      const draft = await context.request<TaskDraft>('drafts.get', {
+      const draft = await context.request('drafts.get', {
         id: item.id,
         sessionId: scope.sessionId,
       });

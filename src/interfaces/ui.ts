@@ -1,4 +1,4 @@
-import { showFilePreview, type FilePreview } from './guided/file-preview.js';
+import { showFilePreview } from './guided/file-preview.js';
 import * as prompts from '@clack/prompts';
 import { learningVersionLabel } from './guided/learning-labels.js';
 import color from 'picocolors';
@@ -92,7 +92,7 @@ export async function watch(directory: string, runId: string, json: boolean): Pr
   let cursor = 0;
   try {
     while (true) {
-      const status = await rpc<StatusView>(directory, 'runtime.status', {
+      const status = await rpc(directory, 'runtime.status', {
         runId,
         cursor,
         waitMs: 1000,
@@ -131,9 +131,7 @@ export async function watch(directory: string, runId: string, json: boolean): Pr
 export async function decideApprovals(directory: string, runId?: string): Promise<void> {
   if (!process.stdin.isTTY) throw new Error('Для подтверждения нужен интерактивный терминал');
   const load = async () =>
-    (await rpc<Approval[]>(directory, 'approvals.list')).filter(
-      (item) => !runId || item.runId === runId,
-    );
+    (await rpc(directory, 'approvals.list')).filter((item) => !runId || item.runId === runId);
   const approvalId = selected(
     await liveSelect({
       title: 'Разрешения',
@@ -174,7 +172,7 @@ export async function decideApproval(directory: string, item: Approval): Promise
   const previewToken =
     item.tool === 'fs.write'
       ? await showFilePreview((offset) =>
-          rpc<FilePreview>(directory, 'files.preview', { approvalId: item.id, offset }),
+          rpc(directory, 'files.preview', { approvalId: item.id, offset }),
         )
       : undefined;
   commandPage('', false);
@@ -184,7 +182,7 @@ export async function decideApproval(directory: string, item: Approval): Promise
     message: 'Разрешить однократное выполнение этой операции?',
     body: explanation + '\n\n' + JSON.stringify(item.args, null, 2) + '\n\n' + reason,
     load: async () => {
-      const pending = (await rpc<Approval[]>(directory, 'approvals.list')).some(
+      const pending = (await rpc(directory, 'approvals.list')).some(
         (approval) => approval.id === item.id,
       );
       return {

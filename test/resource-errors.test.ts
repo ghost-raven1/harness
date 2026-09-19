@@ -17,12 +17,13 @@ it('настоящий IPC отличает удалённые задачи и �
   const api = await modelServer(() => ({ text: 'Проверочный ответ' }));
   const service = await serve(await configDirectory(root, api.baseUrl), directory);
   cleanup(() => service.close());
-  const { runId } = await rpc<{ runId: string }>(directory, 'runtime.run', {
+  const { runId } = await rpc(directory, 'runtime.run', {
     message: 'Изолированная проверка',
     workspace: join(root, 'workspace'),
     requestKey: randomUUID(),
   });
   await eventually(() => service.app.sessions.get(runId).status === 'completed');
+  await service.app.runtime.wait(runId);
   const lessonId = randomUUID();
   await (service.app.learning.store as FileLearningStore).update((state) => {
     state.candidates[lessonId] = {
@@ -40,8 +41,8 @@ it('настоящий IPC отличает удалённые задачи и �
     };
   });
   await expect(rpc(directory, 'runtime.task', { runId })).resolves.toMatchObject({ runId });
-  for (const scope of ['tasks', 'learning']) {
-    const plan = await rpc<{ previewToken: string }>(directory, 'maintenance.resetPreview', {
+  for (const scope of ['tasks', 'learning'] as const) {
+    const plan = await rpc(directory, 'maintenance.resetPreview', {
       scope,
     });
     await rpc(directory, 'maintenance.reset', { scope, previewToken: plan.previewToken });

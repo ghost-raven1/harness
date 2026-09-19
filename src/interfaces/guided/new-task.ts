@@ -1,6 +1,6 @@
 import * as prompts from '@clack/prompts';
 import type { CliContext, StatusView } from '../types.js';
-import type { DraftScope, TaskDraft } from '../../sessions/drafts.js';
+import type { DraftScope } from '../../sessions/drafts.js';
 import { taskTextLimit } from '../../sessions/drafts.js';
 import { readTaskInput } from './task-input.js';
 import { chooseDraft, draftLocation, pendingDraft } from './task-drafts.js';
@@ -30,7 +30,7 @@ export async function prepareTask(
     input.text === undefined
       ? await chooseDraft(context, input.scope)
       : await pendingDraft(context, input.scope, input.text, input.requestKey);
-  draft ??= await context.request<TaskDraft>('drafts.create', {
+  draft ??= await context.request('drafts.create', {
     scope: input.scope,
     text: input.text ?? input.initialValue ?? '',
     requestKey: input.requestKey,
@@ -45,7 +45,7 @@ export async function prepareTask(
           refresh: () => context.request('drafts.get', draftLocation(draft!)),
           save: async (text) => {
             if (text === draft!.text) return;
-            draft = await context.request<TaskDraft>('drafts.update', {
+            draft = await context.request('drafts.update', {
               ...draftLocation(draft!),
               expectedRevision: draft!.revision,
               text,
@@ -55,7 +55,7 @@ export async function prepareTask(
         if (typeof value === 'symbol') throw new Error('INTERACTIVE_CANCEL');
       }
       if (input.previous) {
-        const current = await context.request<StatusView>('runtime.status', {
+        const current = await context.request('runtime.status', {
           runId: input.previous.runId,
         });
         if (current.unknownInvocations.length)
@@ -70,7 +70,7 @@ export async function prepareTask(
             'Состояние задачи изменилось. Вернитесь к списку и выберите доступное действие. Черновик сохранён.',
           );
       }
-      draft = await context.request<TaskDraft>('drafts.update', {
+      draft = await context.request('drafts.update', {
         ...draftLocation(draft),
         expectedRevision: draft.revision,
         state: 'pending',

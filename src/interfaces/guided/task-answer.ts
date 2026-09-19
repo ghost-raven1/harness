@@ -34,7 +34,7 @@ export async function showTaskAnswer(
       const action = await readText('Ответ модели', snapshot.tabs, {
         subtitle: snapshot.subtitle,
         load: async () => {
-          current = await context.request<StatusView>('runtime.status', { runId: initial.runId });
+          current = await context.request('runtime.status', { runId: initial.runId });
           return answerSnapshot(current);
         },
         exitOnError: (error) => isMissingResource(error, 'task'),

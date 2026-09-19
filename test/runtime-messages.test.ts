@@ -50,7 +50,9 @@ it('принимает уточнение во время ответа, деду
     expect(receipts[0]).toMatchObject({ runId, sessionId, status: 'queued' });
     expect(app.sessions.get(runId).userMessages).toHaveLength(1);
     expect(
-      app.sessions.history(runId, 0).filter((event) => event.type === 'user.message_queued'),
+      (await app.sessions.history(runId, 0)).filter(
+        (event) => event.type === 'user.message_queued',
+      ),
     ).toHaveLength(1);
     await expect(app.runtime.sendMessage({ ...request, message: 'Другой текст' })).rejects.toThrow(
       'другого сообщения',

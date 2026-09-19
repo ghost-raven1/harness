@@ -1,12 +1,12 @@
 import type { Command } from 'commander';
 import { note } from '../ui.js';
-import type { CliContext, LearningStatusView } from '../types.js';
+import type { CliContext } from '../types.js';
 import { learningVersionLabel } from '../guided/learning-labels.js';
 import { lessonLabels } from '../guided/knowledge-format.js';
 
 /** Показывает состояние обучения, расход за текущие сутки UTC и последние кандидаты. */
 export async function showLearning(context: CliContext): Promise<void> {
-  const state = await context.request<LearningStatusView>('learning.status');
+  const state = await context.request('learning.status');
   if (context.json() || !process.stdout.isTTY) {
     context.output(state);
     return;

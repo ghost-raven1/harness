@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { serve, rpc, socketPath } from '../src/interfaces/ipc.js';
+import { commandClient, serve, rpc, rpcRaw, socketPath } from '../src/interfaces/ipc.js';
 import { createAccessToken } from '../src/interfaces/local-channel.js';
 import { createMcpServer } from '../src/interfaces/mcp-server.js';
 import { RESULT_PAGE_BYTES, textPage } from '../src/interfaces/result-pages.js';
@@ -31,12 +31,12 @@ it('ошибки сериализации и размера отклоняютс
   const cycle: { self?: unknown } = {};
   cycle.self = cycle;
   for (const params of [{ value: 1n }, cycle])
-    await expect(rpc(directory, 'system.info', params)).rejects.toThrow('формате JSON');
-  await expect(rpc(directory, 'system.info', { text: '\0'.repeat(210000) })).rejects.toThrow(
+    await expect(rpcRaw(directory, 'system.info', params)).rejects.toThrow('формате JSON');
+  await expect(rpcRaw(directory, 'system.info', { text: '\0'.repeat(210000) })).rejects.toThrow(
     'Запрос слишком большой',
   );
   expect(connections).toBe(0);
-  expect(await rpc(directory, 'system.info')).toBe('ok');
+  expect(await rpcRaw(directory, 'system.info')).toBe('ok');
   expect(connections).toBe(1);
 });
 
@@ -62,13 +62,13 @@ it('real IPC и MCP читают большой сохранённый отве�
   const api = await modelServer(() => ({ text: 'Обычный ответ' }));
   const service = await serve(await configDirectory(root, api.baseUrl), directory);
   cleanup(() => service.close());
-  const { runId } = await rpc<{ runId: string }>(directory, 'runtime.run', {
+  const { runId } = await rpc(directory, 'runtime.run', {
     workspace: join(root, 'workspace'),
     message: 'Исходная задача',
     requestKey: 'long-result',
   });
   await service.app.runtime.wait(runId);
-  const ordinary = await rpc<StatusView>(directory, 'runtime.status', { runId });
+  const ordinary = await rpc(directory, 'runtime.status', { runId });
   expect(ordinary.result).toBe('Обычный ответ');
   expect(ordinary.resultPage).toBeUndefined();
   const result = '🙂я\n"\\'.repeat(750000);
@@ -76,18 +76,13 @@ it('real IPC и MCP читают большой сохранённый отве�
   await service.app.sessions.mutate(runId, 'test.result_saved', {}, (run) => {
     run.result = result;
   });
-  const status = await rpc<StatusView>(directory, 'runtime.status', { runId });
+  const status = await rpc(directory, 'runtime.status', { runId });
   expect(status.resultTruncated).toBe(true);
   expect(status.resultLength).toBe(result.length);
   expect(Buffer.byteLength(JSON.stringify(status))).toBeLessThan(8 * 1024 * 1024);
-  expect((await rpc<StatusView>(directory, 'runtime.task', { runId })).resultPage).toEqual(
-    status.resultPage,
-  );
+  expect((await rpc(directory, 'runtime.task', { runId })).resultPage).toEqual(status.resultPage);
   await expect(saveAnswer(status)).rejects.toThrow('ещё не дочитан');
-  const full = await completeResult(
-    { request: <T>(method: string, params?: unknown) => rpc<T>(directory, method, params) },
-    status,
-  );
+  const full = await completeResult({ request: commandClient(() => directory) }, status);
   expect(full.result).toBe(result);
   const path = await saveAnswer(full);
   expect(await readFile(path, 'utf8')).toBe(result + '\n');
@@ -133,7 +128,7 @@ it('список длинных задач помещается в IPC; стра
   const api = await modelServer(() => ({ text: 'Ответ' }));
   const service = await serve(await configDirectory(root, api.baseUrl), directory);
   cleanup(() => service.close());
-  const { runId } = await rpc<{ runId: string }>(directory, 'runtime.run', {
+  const { runId } = await rpc(directory, 'runtime.run', {
     workspace: join(root, 'workspace'),
     message: 'Начало',
     requestKey: 'list-source',
@@ -149,19 +144,19 @@ it('список длинных задач помещается в IPC; стра
     run.agents[run.rootAgentId]!.task = task;
     await service.app.sessions.create(run);
   }
-  const all = await rpc<RunSummary[]>(directory, 'runtime.list');
+  const all = await rpc(directory, 'runtime.list');
   expect(all).toHaveLength(44);
   expect(Buffer.byteLength(JSON.stringify(all))).toBeLessThan(8 * 1024 * 1024);
   expect(all.filter((item) => item.taskTruncated)).toHaveLength(43);
   const parts: RunSummary[] = [];
   for (let offset = 0; offset < all.length; offset += 10)
-    parts.push(...(await rpc<RunSummary[]>(directory, 'runtime.list', { offset, limit: 10 })));
+    parts.push(...(await rpc(directory, 'runtime.list', { offset, limit: 10 })));
   expect(parts).toEqual(all);
-  const fullTask = await rpc<StatusView>(directory, 'runtime.status', {
+  const fullTask = await rpc(directory, 'runtime.status', {
     runId: all.find((item) => item.taskTruncated)!.runId,
   });
   expect(fullTask.task).toBe(task);
-  const history = await rpc<{ total: number; items: RunSummary[] }>(directory, 'runtime.history', {
+  const history = await rpc(directory, 'runtime.history', {
     query: 'КОНЕЦ!',
     limit: 50,
   });

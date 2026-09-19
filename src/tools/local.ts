@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { executeProgram } from './process.js';
 import type { ToolRegistry } from './registry.js';
-import type { FileSessionStore } from '../sessions/store.js';
+import type { SessionStore } from '../sessions/ports.js';
 import { safePath } from './paths.js';
 import { FileChanges } from './file-changes.js';
 import { listDirectory } from './directory-list.js';
@@ -18,7 +18,7 @@ const object = (
 });
 
 /** Регистрирует схемы и исполнители локальных файлов, процессов и артефактов. */
-export function registerLocalTools(registry: ToolRegistry, store: FileSessionStore): void {
+export function registerLocalTools(registry: ToolRegistry, store: SessionStore): void {
   registry.register({
     definition: {
       name: 'fs.read',

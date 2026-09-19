@@ -118,7 +118,7 @@ it('поздняя проверка переживает повторную па
     app.provider.requests.at(-1)!.messages.filter((message) => message.content.includes(fact)),
   ).toHaveLength(1);
   expect(
-    app.sessions.history(app.run.id, 0).filter((event) => event.type === 'tool.started'),
+    (await app.sessions.history(app.run.id, 0)).filter((event) => event.type === 'tool.started'),
   ).toHaveLength(1);
   expect(app.writes()).toBe(1);
 });

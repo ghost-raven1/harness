@@ -21,6 +21,8 @@ it('мгновенный отказ модели при abort не переза�
   const run = app.sessions.get(runId);
   expect(run.status).toBe('cancelled');
   expect(run.error).toBeUndefined();
-  expect(app.sessions.history(runId, 0).some((event) => event.type === 'run.failed')).toBe(false);
+  expect((await app.sessions.history(runId, 0)).some((event) => event.type === 'run.failed')).toBe(
+    false,
+  );
   expect(Object.values(run.agents).every((agent) => agent.status === 'cancelled')).toBe(true);
 });

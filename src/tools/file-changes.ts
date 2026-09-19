@@ -1,10 +1,11 @@
+import { ApplicationError } from '../shared/application-error.js';
 import { readFile, stat, writeFile, unlink } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { createTwoFilesPatch } from 'diff';
 import { z } from 'zod';
 import { atomicJson } from '../sessions/files.js';
-import type { FileSessionStore } from '../sessions/store.js';
+import type { SessionStore } from '../sessions/ports.js';
 import type { ToolContext } from './registry.js';
 import { safePath } from './paths.js';
 import { abort, hash, id, message } from '../shared/primitives.js';
@@ -36,7 +37,10 @@ async function snapshot(path: string) {
       throw new Error('Для записи с резервной копией нужен обычный файл не больше 4 МиБ.');
     const bytes = await readFile(path);
     if (bytes.length > maxBytes)
-      throw new Error('Файл вырос во время чтения. Повторите предпросмотр.');
+      throw new ApplicationError(
+        'STALE_PREVIEW',
+        'Файл вырос во время чтения. Повторите предпросмотр.',
+      );
     return { bytes, existed: true, mode: meta.mode & 0o777 };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
@@ -77,10 +81,10 @@ function diff(path: string, before: Buffer, after: Buffer, offset = 0) {
 
 /** Хранит исходные байты до записи и восстанавливает их только поверх ожидаемой версии. */
 export class FileChanges {
-  constructor(private readonly store: FileSessionStore) {}
+  constructor(private readonly store: SessionStore) {}
   /** Восстанавливает рабочую папку и закреплённую конфигурацию задачи для файловых проверок. */
-  private context(runId: string): ToolContext {
-    const run = this.store.get(runId);
+  private async context(runId: string): Promise<ToolContext> {
+    const run = await this.store.load(runId);
     return {
       runId,
       workspace: run.workspace,
@@ -90,15 +94,18 @@ export class FileChanges {
   }
   /** Показывает ожидающую разрешения запись и выдаёт токен текущего состояния файла. */
   async previewApproval(approvalId: string, offset = 0) {
-    const run = this.store.list().find((run) => run.approvals[approvalId]);
+    const entry = this.store
+      .catalog()
+      .find((run) => run.pendingApprovals.some((approval) => approval.id === approvalId));
+    const run = entry ? await this.store.load(entry.id) : undefined;
     const approval = run?.approvals[approvalId];
     if (!run || !approval || approval.status !== 'pending' || approval.tool !== 'fs.write')
-      throw new Error('Запись больше не ожидает решения.');
+      throw new ApplicationError('STALE_PREVIEW', 'Запись больше не ожидает решения.');
     const args = z
       .object({ path: z.string(), content: z.string().max(1048576) })
       .strict()
       .parse(approval.args);
-    const path = await safePath(args.path, this.context(run.id), true),
+    const path = await safePath(args.path, await this.context(run.id), true),
       before = await snapshot(path),
       after = Buffer.from(args.content);
     return {
@@ -113,7 +120,8 @@ export class FileChanges {
       before = await snapshot(path),
       after = Buffer.from(content);
     if (context.previewToken && context.previewToken !== token(path, before, after))
-      throw new Error(
+      throw new ApplicationError(
+        'STALE_PREVIEW',
         'Файл изменился после предпросмотра. Запись отклонена; нужно новое разрешение.',
       );
     const change: FileChange = {
@@ -141,10 +149,14 @@ export class FileChanges {
     );
     abort(context.signal);
     const verifiedPath = await safePath(local, context, true);
-    if (verifiedPath !== path) throw new Error('Путь изменился во время подготовки записи.');
+    if (verifiedPath !== path)
+      throw new ApplicationError('STALE_PREVIEW', 'Путь изменился во время подготовки записи.');
     const current = await snapshot(verifiedPath);
     if (token(path, current, after) !== token(path, before, after))
-      throw new Error('Файл изменился во время подготовки записи. Повторите операцию.');
+      throw new ApplicationError(
+        'STALE_PREVIEW',
+        'Файл изменился во время подготовки записи. Повторите операцию.',
+      );
     try {
       await writeFile(path, after, { signal: context.signal, mode: before.mode });
       await this.store.mutate(context.runId, 'file.written', { changeId: change.id }, (state) => {
@@ -163,20 +175,28 @@ export class FileChanges {
   }
   /** Проверяет завершение задачи, неизменность записанного файла и целостность резервной копии. */
   private async restoration(runId: string, changeId: string) {
-    const run = this.store.get(runId),
+    const run = await this.store.load(runId),
       change = run.fileChanges?.find((item) => item.id === changeId);
     if (!['completed', 'failed', 'cancelled'].includes(run.status))
-      throw new Error('Завершите или остановите задачу перед восстановлением файла.');
+      throw new ApplicationError(
+        'TASK_BUSY',
+        'Завершите или остановите задачу перед восстановлением файла.',
+      );
     if (!change || change.status !== 'applied')
-      throw new Error(
+      throw new ApplicationError(
+        'UNKNOWN_OUTCOME',
         'Эту запись нельзя автоматически восстановить. Неизвестный исход требует ручной проверки.',
       );
-    const path = await safePath(change.path, this.context(runId), true);
+    const path = await safePath(change.path, await this.context(runId), true);
     if (path !== change.canonical)
-      throw new Error('Путь к файлу изменился. Автоматическое восстановление остановлено.');
+      throw new ApplicationError(
+        'STALE_PREVIEW',
+        'Путь к файлу изменился. Автоматическое восстановление остановлено.',
+      );
     const current = await snapshot(path);
     if (!current.existed || digest(current.bytes) !== change.afterHash)
-      throw new Error(
+      throw new ApplicationError(
+        'STALE_PREVIEW',
         'Файл изменён после работы Harness. Восстановление не затронет ваши новые правки.',
       );
     const backup = backupSchema.parse(
@@ -184,7 +204,7 @@ export class FileChanges {
     );
     const bytes = Buffer.from(backup.content, 'base64');
     if (digest(bytes) !== change.beforeHash || backup.existed !== change.existed)
-      throw new Error('Резервная копия повреждена.');
+      throw new ApplicationError('STORAGE_UNAVAILABLE', 'Резервная копия повреждена.');
     return { change, path, current, backup, bytes };
   }
   /** Показывает откат к резервной копии и связывает его с текущим состоянием файла. */
@@ -200,33 +220,47 @@ export class FileChanges {
   async restore(runId: string, changeId: string, previewToken: string): Promise<void> {
     const item = await this.restoration(runId, changeId);
     if (previewToken !== token(item.path, item.current, item.bytes))
-      throw new Error('Предпросмотр устарел. Откройте изменения снова.');
+      throw new ApplicationError(
+        'STALE_PREVIEW',
+        'Предпросмотр устарел. Откройте изменения снова.',
+      );
     await this.store.mutate(runId, 'file.restore_started', { changeId }, (state) => {
       // Проверка и маркер используют ту же очередь, что и создание нового запуска.
-      if (this.store.list().some((run) => ['running', 'awaiting_approval'].includes(run.status)))
-        throw new Error(
+      if (this.store.catalog().some((run) => ['running', 'awaiting_approval'].includes(run.status)))
+        throw new ApplicationError(
+          'TASK_BUSY',
           'Появилась работающая задача. Завершите или остановите её перед восстановлением.',
         );
       if (
         this.store
-          .list()
+          .catalog()
           .some((run) => run.sessionId === state.sessionId && run.status === 'paused')
       )
-        throw new Error(
+        throw new ApplicationError(
+          'TASK_BUSY',
           'В этой беседе есть задача на паузе. Продолжите или остановите её перед восстановлением.',
         );
       const change = state.fileChanges?.find((c) => c.id === changeId);
       if (!change || change.status !== 'applied')
-        throw new Error('Состояние восстановления изменилось. Откройте изменения снова.');
+        throw new ApplicationError(
+          'STALE_PREVIEW',
+          'Состояние восстановления изменилось. Откройте изменения снова.',
+        );
       change.status = 'restoring';
     });
     try {
-      const verifiedPath = await safePath(item.change.path, this.context(runId), true);
+      const verifiedPath = await safePath(item.change.path, await this.context(runId), true);
       if (verifiedPath !== item.path)
-        throw new Error('Путь к файлу изменился. Автоматическое восстановление остановлено.');
+        throw new ApplicationError(
+          'STALE_PREVIEW',
+          'Путь к файлу изменился. Автоматическое восстановление остановлено.',
+        );
       const checked = await snapshot(verifiedPath);
       if (previewToken !== token(item.path, checked, item.bytes))
-        throw new Error('Файл изменился; проверьте его вручную перед восстановлением.');
+        throw new ApplicationError(
+          'STALE_PREVIEW',
+          'Файл изменился; проверьте его вручную перед восстановлением.',
+        );
     } catch (error) {
       // Файл ещё не меняли: отказ проверки не оставляет несуществующую операцию в работе.
       await this.store.mutate(
@@ -259,13 +293,13 @@ export class FileChanges {
 
   /** Сравнивает прерванный откат с исходной и записанной версиями, не изменяя файл. */
   async previewResolution(runId: string, changeId: string) {
-    const run = this.store.get(runId);
+    const run = await this.store.load(runId);
     const change = run.fileChanges?.find((item) => item.id === changeId);
     if (!['completed', 'failed', 'cancelled', 'paused'].includes(run.status))
-      throw new Error('Сначала остановите задачу.');
+      throw new ApplicationError('TASK_BUSY', 'Сначала остановите задачу.');
     if (!change || change.status !== 'restoring')
-      throw new Error('Этот откат больше не требует проверки.');
-    const path = await safePath(change.path, this.context(runId), true);
+      throw new ApplicationError('STALE_PREVIEW', 'Этот откат больше не требует проверки.');
+    const path = await safePath(change.path, await this.context(runId), true);
     if (path !== change.canonical)
       throw new Error('Путь к файлу изменился. Верните исходный путь перед проверкой.');
     const current = await snapshot(path);
@@ -309,14 +343,18 @@ export class FileChanges {
     const explanation = z.string().trim().min(1).max(10000).parse(result);
     const preview = await this.previewResolution(runId, changeId);
     if (preview.previewToken !== previewToken)
-      throw new Error('Файл изменился после проверки. Откройте проверку заново.');
+      throw new ApplicationError(
+        'STALE_PREVIEW',
+        'Файл изменился после проверки. Откройте проверку заново.',
+      );
     await this.store.mutate(
       runId,
       'file.restore_resolved',
       { changeId, outcome: preview.outcome },
       (run) => {
         const change = run.fileChanges!.find((item) => item.id === changeId)!;
-        if (change.status !== 'restoring') throw new Error('Результат уже проверен в другом окне.');
+        if (change.status !== 'restoring')
+          throw new ApplicationError('STALE_PREVIEW', 'Результат уже проверен в другом окне.');
         change.status = preview.outcome;
         change.resolution = { at: new Date().toISOString(), result: explanation };
         run.agents[run.rootAgentId]!.messages.push({
