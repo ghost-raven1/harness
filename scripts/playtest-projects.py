@@ -185,6 +185,14 @@ def run_case(node, root, width, frames, checks):
         second.wait_text('В работе', ['Ждёт разрешения: 1'])
         mutate('cancel', approval_id)
         wait_status(approval_id, 'cancelled')
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            preview = fixture.call('projects.purgePreview', {'projectId': approval_id})
+            if preview['available']:
+                break
+            terminal.drain(0.1)
+        assert preview['available'], preview
+        capture('approval-cancelled', 'Остановлен')
         preview = fixture.call('projects.purgePreview', {'projectId': approval_id})
         mutate('purge', approval_id, previewToken=preview['previewToken'])
         terminal.wait_text('Проект удалён')
