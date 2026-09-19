@@ -81,12 +81,53 @@ export class ProjectWorkspace {
       await assertRealDirectory(path);
       await mkdir(path, { recursive: true, mode: 0o700 });
     }
-    const root = await realpath(workspace);
-    const artifacts = await realpath(dirname(destination));
     const id = randomUUID();
     const ref = 'project-artifacts/' + projectId + '/' + id + '.jsonl';
     const temporary = join(destination, id + '.tmp');
     const handle = await open(temporary, 'wx', 0o600);
+    try {
+      const snapshot = await this.scan(projectId, workspace, deniedPaths, (line) =>
+        handle.writeFile(line),
+      );
+      await handle.sync();
+      await handle.close();
+      await rename(temporary, resolve(this.directory, ref));
+      await syncDirectory(destination);
+      return { ...snapshot, ref };
+    } finally {
+      await handle.close();
+      await unlink(temporary).catch(() => undefined);
+    }
+  }
+
+  /** Проверяет актуальные файлы без создания манифеста и других записей на диске. */
+  async inspect(
+    projectId: string,
+    workspace: string,
+    deniedPaths: string[],
+  ): Promise<Omit<WorkspaceSnapshot, 'ref'>> {
+    projectDirectory(this.directory, projectId);
+    return this.scan(projectId, workspace, deniedPaths);
+  }
+
+  /** Единый обход обеспечивает одинаковый отпечаток просмотра и сохранённой проверки. */
+  private async scan(
+    projectId: string,
+    workspace: string,
+    deniedPaths: string[],
+    sink?: (line: string) => Promise<void>,
+  ): Promise<Omit<WorkspaceSnapshot, 'ref'>> {
+    const root = await realpath(workspace);
+    const stateDirectory = await realpath(this.directory).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return resolve(this.directory);
+      throw error;
+    });
+    const managedDirectories = [
+      resolve(stateDirectory, 'project-artifacts'),
+      resolve(stateDirectory, 'exports', 'projects'),
+    ];
+    const managed = (path: string) =>
+      managedDirectories.some((directory) => isWithin(directory, path));
     const createdAt = new Date().toISOString();
     const digest = createHash('sha256');
     const observed = new Map<string, string>();
@@ -101,7 +142,7 @@ export class ProjectWorkspace {
           'PROJECT_CHANGED',
           'Манифест папки превышает 16 МиБ. Уточните исключения проекта.',
         );
-      await handle.writeFile(line);
+      await sink?.(line);
     };
     const record = async (value: Entry): Promise<void> => {
       const entry = entrySchema.parse(value);
@@ -124,7 +165,7 @@ export class ProjectWorkspace {
       );
     };
     const visit = async (path: string, local: string): Promise<void> => {
-      if (local && (denied(local) || isWithin(artifacts, path))) return;
+      if (local && (denied(local) || managed(path))) return;
       if (++visited > maximumEntries)
         throw new ApplicationError(
           'PROJECT_CHANGED',
@@ -150,7 +191,7 @@ export class ProjectWorkspace {
         const children: string[] = [];
         for await (const child of await opendir(path)) {
           const childLocal = local ? local + '/' + child.name : child.name;
-          if (!denied(childLocal) && !isWithin(artifacts, join(path, child.name))) {
+          if (!denied(childLocal) && !managed(join(path, child.name))) {
             if (children.length + visited >= maximumEntries)
               throw new Error('В папке больше 50 000 записей. Уточните исключения проекта.');
             children.push(child.name);
@@ -192,38 +233,27 @@ export class ProjectWorkspace {
     };
     try {
       await write({ schemaVersion: 1, projectId, createdAt });
-      try {
-        await visit(root, '');
-        for (const [path, state] of observed)
-          if (fingerprint(await lstat(path, { bigint: true })) !== state)
-            throw new Error('Исходные файлы изменились до завершения снимка.');
-        if ((await realpath(workspace)) !== root) throw new Error('Рабочая папка заменена.');
-      } catch (error) {
-        if (error instanceof ApplicationError) throw error;
-        if (
-          ['ENOSPC', 'EIO', 'EROFS', 'EDQUOT'].includes((error as NodeJS.ErrnoException).code ?? '')
-        )
-          throw new ApplicationError(
-            'STORAGE_UNAVAILABLE',
-            'Не удалось сохранить снимок проекта.',
-            { cause: error },
-          );
-        throw new ApplicationError(
-          'PROJECT_CHANGED',
-          'Папка изменилась или недоступна. Повторите проверку проекта.',
-          { cause: error },
-        );
-      }
+      await visit(root, '');
+      for (const [path, state] of observed)
+        if (fingerprint(await lstat(path, { bigint: true })) !== state)
+          throw new Error('Исходные файлы изменились до завершения снимка.');
+      if ((await realpath(workspace)) !== root) throw new Error('Рабочая папка заменена.');
       const value = digest.digest('hex');
       await write({ digest: value, files });
-      await handle.sync();
-      await handle.close();
-      await rename(temporary, resolve(this.directory, ref));
-      await syncDirectory(destination);
-      return { digest: value, ref, files, createdAt };
-    } finally {
-      await handle.close();
-      await unlink(temporary).catch(() => undefined);
+      return { digest: value, files, createdAt };
+    } catch (error) {
+      if (error instanceof ApplicationError) throw error;
+      if (
+        ['ENOSPC', 'EIO', 'EROFS', 'EDQUOT'].includes((error as NodeJS.ErrnoException).code ?? '')
+      )
+        throw new ApplicationError('STORAGE_UNAVAILABLE', 'Не удалось сохранить снимок проекта.', {
+          cause: error,
+        });
+      throw new ApplicationError(
+        'PROJECT_CHANGED',
+        'Папка изменилась или недоступна. Повторите проверку проекта.',
+        { cause: error },
+      );
     }
   }
 

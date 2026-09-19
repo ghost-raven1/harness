@@ -24,6 +24,9 @@ import { FileDiagnosticLog } from '../diagnostics/file-log.js';
 import { ProjectPurge, recoverProjectPurges } from './project-purge.js';
 import { createProjects } from './projects.js';
 import type { ProjectService } from '../projects/service.js';
+import { ProjectPlanService } from '../projects/plan-service.js';
+import { ProjectEvidenceService } from '../projects/evidence.js';
+import { ProjectExportService } from './project-export.js';
 
 const CONFIG = Symbol('CONFIG'),
   MODEL = Symbol('MODEL');
@@ -45,6 +48,9 @@ export interface Application {
   reset: DataReset;
   diagnostics: FileDiagnosticLog;
   projects: ProjectService;
+  projectPlans: ProjectPlanService;
+  projectEvidence: ProjectEvidenceService;
+  projectExports: ProjectExportService;
   close(): Promise<void>;
 }
 /** Собирает модули через Nest; тесты могут заменить только модельный транспорт. */
@@ -205,6 +211,24 @@ export async function createApplication(
     learning,
     registry: nest.get(ToolRegistry),
   });
+  const projectPlans = new ProjectPlanService(projects);
+  const projectEvidence = new ProjectEvidenceService({
+    projects: projects.store,
+    sessions: nest.get(FileSessionStore),
+    workspace: projects.coordinator.options.workspace,
+  });
+  projects.verifyAcceptance = (project) => projectEvidence.validateAccept(project);
+  const projectExports = new ProjectExportService({
+    directory,
+    projects: projects.store,
+    evidence: projectEvidence,
+    serialize: (work) => projects!.coordinator.serial.run(work),
+    assertWritable: () => nest.get(FileSessionStore).assertWritable(),
+    acceptedPlan: (project) =>
+      project.acceptedVersion
+        ? projectPlans.history.read(project, project.acceptedVersion)
+        : Promise.resolve(undefined),
+  });
   const projectPurge = new ProjectPurge({
     projects: projects.store,
     sessions: nest.get(FileSessionStore),
@@ -214,6 +238,10 @@ export async function createApplication(
     scheduler: nest.get(ToolScheduler),
     busy: () => projects!.busy(),
     serialize: (work) => projects!.coordinator.serial.run(work),
+    onPurged: (projectId) => {
+      projectEvidence.forget(projectId);
+      projectPlans.history.forget(projectId);
+    },
   });
   projects.maintenance = projectPurge;
   if (!runtime.store.recoveryError) await learning.initialize();
@@ -228,6 +256,9 @@ export async function createApplication(
     learning,
     diagnostics,
     projects,
+    projectPlans,
+    projectEvidence,
+    projectExports,
     sessions: nest.get(FileSessionStore),
     drafts: new DraftStore(nest.get(FileSessionStore)),
     approvals: nest.get(FileApprovalService),

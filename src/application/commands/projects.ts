@@ -1,6 +1,8 @@
 import { projectInputs } from '../../projects/schema.js';
 import { ApplicationError } from '../../shared/application-error.js';
 import type { Application } from '../bootstrap.js';
+import { planReadCommands } from '../../projects/plan-schema.js';
+import { projectReadInputs } from '../../projects/read-schema.js';
 
 /** Проверяет параметры проекта на прикладной границе без зависимости от транспорта. */
 export async function projectsCommand(
@@ -9,9 +11,48 @@ export async function projectsCommand(
   input: unknown,
 ): Promise<unknown> {
   const recovery = app.sessions?.recoveryError || app.projects.store?.recoveryError;
-  if (recovery && !['projects.list', 'projects.detail', 'projects.purgePreview'].includes(method))
+  if (
+    recovery &&
+    ![
+      'projects.list',
+      'projects.detail',
+      'projects.purgePreview',
+      'projects.reports',
+      'projects.checkOutput',
+      'projects.review',
+      'projects.planVersions',
+      'projects.comparePlans',
+      'projects.validatePlan',
+    ].includes(method)
+  )
     throw new ApplicationError('STORAGE_UNAVAILABLE', recovery);
   switch (method) {
+    case 'projects.reports':
+      return app.projectEvidence.reports(projectReadInputs.reports.parse(input));
+    case 'projects.checkOutput':
+      return app.projectEvidence.checkOutput(projectReadInputs.checkOutput.parse(input));
+    case 'projects.review': {
+      const review = await app.projectEvidence.review(projectReadInputs.review.parse(input));
+      return recovery
+        ? { ...review, canAccept: false, blockers: [recovery, ...review.blockers] }
+        : review;
+    }
+    case 'projects.exportPreview':
+      return app.projectExports.preview(projectReadInputs.exportPreview.parse(input));
+    case 'projects.exportReport':
+      return app.projectExports.export(projectReadInputs.exportReport.parse(input));
+    case 'projects.planVersions':
+      return app.projectPlans.planVersions(
+        planReadCommands['projects.planVersions'].params.parse(input),
+      );
+    case 'projects.comparePlans':
+      return app.projectPlans.comparePlans(
+        planReadCommands['projects.comparePlans'].params.parse(input),
+      );
+    case 'projects.validatePlan':
+      return app.projectPlans.validatePlan(
+        planReadCommands['projects.validatePlan'].params.parse(input),
+      );
     case 'projects.list':
       return app.projects.list(projectInputs.list.parse(input ?? {}));
     case 'projects.detail': {

@@ -2,104 +2,24 @@ import { ApplicationError } from '../shared/application-error.js';
 import { hash } from '../shared/primitives.js';
 import type { ConfigSnapshot } from '../configuration/schema.js';
 import type { ToolRegistry } from '../tools/registry.js';
-import { PolicyService } from '../policy/service.js';
-import { projectPlanSchema } from './schema.js';
-import type { ProjectPlan, ProjectRecord, ProjectStage, VersionedPlan } from './types.js';
+import type { ProjectPlan, ProjectRecord, VersionedPlan } from './types.js';
+import { assertPlanIssues, completedStageIssues, inspectPlan } from './plan-validation.js';
 
 /** Проверяет роли, инструменты и граф зависимостей до принятия предложенного плана. */
 export function validatePlan(
   value: unknown,
   snapshot: ConfigSnapshot,
   tools: ToolRegistry,
+  enforcePayloadLimit = true,
 ): ProjectPlan {
-  const parsed = projectPlanSchema.safeParse(value);
-  const fail = (message: string): never => {
-    throw new ApplicationError('INVALID_PLAN', message);
-  };
-  if (!parsed.success)
-    return fail(
-      'План не соответствует формату этапов и проверок: ' +
-        parsed.error.issues.map((i) => i.path.join('.') + ': ' + i.message).join('; '),
-    );
-  const plan = parsed.data,
-    config = snapshot.value,
-    policy = new PolicyService();
-  const stages = new Map(plan.stages.map((stage) => [stage.id, stage]));
-  if (stages.size !== plan.stages.length) fail('Идентификаторы этапов должны различаться.');
-  const names = new Set(tools.definitions().map((tool) => tool.name));
-  for (const stage of plan.stages) {
-    if (!Object.hasOwn(config.roles, stage.role)) fail('В конфигурации нет роли: ' + stage.role);
-    for (const dependency of stage.dependsOn)
-      if (!stages.has(dependency)) fail('Не найден этап зависимости: ' + dependency);
-    for (const tool of stage.requiredTools)
-      if (
-        !names.has(tool) ||
-        !policy.canAdvertise(
-          config,
-          { role: stage.role, authorityRoles: [config.defaultRole] },
-          tool,
-        )
-      )
-        fail('Этапу недоступен инструмент: ' + tool);
-    if (stage.verification.kind === 'commands') {
-      if (
-        new Set(stage.verification.checks.map((check) => check.id)).size !==
-        stage.verification.checks.length
-      )
-        fail('Идентификаторы проверок этапа должны различаться.');
-      for (const check of stage.verification.checks) {
-        try {
-          tools.validate('process.exec', { command: check.command, args: check.args });
-        } catch {
-          fail('Недоступна команда проверки: ' + check.title);
-        }
-        if (
-          policy.decide(config, { role: config.defaultRole, authorityRoles: [] }, 'process.exec', {
-            command: check.command,
-            args: check.args,
-          }) === 'deny'
-        )
-          fail('Политика запрещает команду проверки: ' + check.title);
-      }
-    }
-  }
-  if (allChecks({ ...plan, version: 1 }).length > 100)
-    fail('План допускает не более 100 разных команд проверок. Сократите или объедините команды.');
-  const ordered: ProjectStage[] = [],
-    visiting = new Set<string>(),
-    visited = new Set<string>();
-  const visit = (id: string): void => {
-    if (visited.has(id)) return;
-    if (visiting.has(id)) fail('В зависимостях этапов есть цикл.');
-    visiting.add(id);
-    for (const dependency of stages.get(id)!.dependsOn) visit(dependency);
-    visiting.delete(id);
-    visited.add(id);
-    ordered.push(stages.get(id)!);
-  };
-  for (const stage of plan.stages) visit(stage.id);
-  return { ...plan, stages: ordered };
+  const result = inspectPlan(value, snapshot, tools, undefined, enforcePayloadLimit);
+  assertPlanIssues(result.issues);
+  return result.plan!;
 }
 
 /** Новая версия не переписывает историю завершённого этапа под прежним идентификатором. */
 export function replacePlan(project: ProjectRecord, plan: ProjectPlan): void {
-  for (const stage of plan.stages) {
-    const previous = project.stages[stage.id];
-    if (previous?.status === 'completed' && previous.definitionHash !== hash(stage))
-      throw new ApplicationError(
-        'INVALID_PLAN',
-        'Завершённый этап нельзя переписать. Добавьте новый этап с другим идентификатором.',
-      );
-  }
-  for (const previous of Object.values(project.stages))
-    if (
-      previous.status === 'completed' &&
-      !plan.stages.some((stage) => stage.id === previous.stageId)
-    )
-      throw new ApplicationError(
-        'INVALID_PLAN',
-        'Сохраните завершённые этапы в плане; новая работа оформляется новым этапом.',
-      );
+  assertPlanIssues(completedStageIssues(project, plan));
   project.plan = { ...plan, version: (project.plan?.version ?? 0) + 1 };
   const next: ProjectRecord['stages'] = {};
   for (const stage of plan.stages) {

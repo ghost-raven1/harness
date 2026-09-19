@@ -48,6 +48,7 @@ export interface WorkspaceAccess {
 
 /** Внутренний порт оркестратора; методы не становятся командами модели или публичного runtime. */
 export interface ProjectRunPort {
+  catalog(): RunCatalogEntry[];
   start(input: ProjectRunStart): Promise<{ runId: string; sessionId: string }>;
   inspect(runId: string): Promise<RunRecord>;
   find(requestKey: string): RunCatalogEntry | undefined;

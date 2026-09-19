@@ -21,6 +21,23 @@ async function fixture() {
   return { root, directory, workspace, snapshots: new ProjectWorkspace(directory) };
 }
 
+it('управляемый экспорт не меняет отпечаток даже при нестандартном state внутри рабочей папки', async () => {
+  const workspace = await temporary();
+  const state = join(workspace, 'custom-state');
+  await fs.mkdir(state);
+  await fs.writeFile(join(workspace, 'index.ts'), 'export const answer = 42;');
+  const snapshots = new ProjectWorkspace(state);
+  const before = await snapshots.capture('nested-state', workspace, []);
+  const exports = join(state, 'exports', 'projects', 'nested-state');
+  await fs.mkdir(exports, { recursive: true });
+  await fs.writeFile(join(exports, 'result.md'), 'Отчёт проверки');
+  await fs.writeFile(join(exports, 'receipt.json'), '{}');
+  expect((await snapshots.inspect('nested-state', workspace, [])).digest).toBe(before.digest);
+  // Пользовательский отчёт рядом с исходниками остаётся частью проверяемого проекта.
+  await fs.writeFile(join(workspace, 'result.md'), 'Скопировано пользователем');
+  expect((await snapshots.inspect('nested-state', workspace, [])).digest).not.toBe(before.digest);
+});
+
 it('gitless-снимки устойчивы, сохраняют dirty-файлы и описывают добавления, правки и удаления', async () => {
   const app = await fixture();
   await fs.mkdir(join(app.workspace, 'src'));

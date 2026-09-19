@@ -1,3 +1,4 @@
+import { readBoundedArtifact, boundedArtifactVersion } from './artifact-reader.js';
 import { mkdir, readdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { clone, hash, id, message, Serial } from '../shared/primitives.js';
@@ -353,6 +354,28 @@ export class FileSessionStore extends SessionArchive implements SessionStore {
         this.searches.invalidate();
       }
     });
+  }
+  /** Проверяет существование и версию исходного файла перед обращением к кэшу доказательств. */
+  async ownedArtifactVersion(
+    runId: string,
+    artifactId: string,
+    maximumBytes: number,
+  ): Promise<string> {
+    const run = await this.load(runId);
+    if (!run.artifacts.some((artifact) => artifact.id === artifactId))
+      throw new Error('Артефакт не принадлежит запуску.');
+    return boundedArtifactVersion(this.directory, runId, artifactId, maximumBytes);
+  }
+  /** Доказательства проектов не заимствуют артефакты соседних запусков одной беседы. */
+  async readOwnedArtifact(
+    runId: string,
+    artifactId: string,
+    maximumBytes: number,
+  ): Promise<string> {
+    const run = await this.load(runId);
+    if (!run.artifacts.some((artifact) => artifact.id === artifactId))
+      throw new Error('Артефакт не принадлежит запуску.');
+    return readBoundedArtifact(this.directory, runId, artifactId, maximumBytes);
   }
   /** Читает часть артефакта текущего запуска или предшествующего этапа той же беседы. */
   async readArtifact(

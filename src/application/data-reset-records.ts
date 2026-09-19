@@ -120,6 +120,7 @@ const taskDirectories = [
   'project-records',
   'project-index',
   'project-artifacts',
+  'exports/projects',
 ] as const;
 interface StorageEntry {
   path: string;
@@ -130,6 +131,7 @@ interface StorageEntry {
 
 /** Включает оставшиеся после аварии файлы, которых уже нет в индексе сессий; ссылки не обходит. */
 export async function taskStorageInventory(directory: string): Promise<StorageEntry[]> {
+  await assertRealDirectory(join(directory, 'exports'));
   const result: StorageEntry[] = [];
   const visit = async (relative: string): Promise<void> => {
     const path = join(directory, relative),
@@ -153,6 +155,7 @@ export async function taskStorageInventory(directory: string): Promise<StorageEn
 
 /** Каталоги задач и черновиков принадлежат сервису; настройки и файлы проекта остаются вне них. */
 export async function removeTaskStorage(directory: string): Promise<void> {
+  await assertRealDirectory(join(directory, 'exports'));
   for (const folder of taskDirectories) await assertRealDirectory(join(directory, folder));
   for (const folder of taskDirectories)
     await rm(join(directory, folder), { recursive: true, force: true });

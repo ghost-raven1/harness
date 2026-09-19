@@ -119,7 +119,7 @@ export async function removeProjectFiles(
     for (const name of await names(join(directory, folder)))
       if (
         name.startsWith(record.projectId + '.') &&
-        /^\.(?:jsonl?)(?:\.[a-f0-9-]+\.tmp)?$/.test(name.slice(record.projectId.length))
+        /^\.(?:plans\.json|jsonl?)(?:\.[a-f0-9-]+\.tmp)?$/.test(name.slice(record.projectId.length))
       )
         await rm(join(directory, folder, name), { force: true });
     await syncExisting(join(directory, folder));
@@ -128,6 +128,13 @@ export async function removeProjectFiles(
     recursive: true,
     force: true,
   });
+  for (const path of [join(directory, 'exports'), join(directory, 'exports', 'projects')])
+    await assertRealDirectory(path);
+  await rm(join(directory, 'exports', 'projects', record.projectId), {
+    recursive: true,
+    force: true,
+  });
+  await syncExisting(join(directory, 'exports', 'projects'));
   await syncExisting(join(directory, 'project-artifacts'));
   for (const name of record.draftFiles) await rm(join(directory, 'drafts', name), { force: true });
   await syncExisting(join(directory, 'drafts'));

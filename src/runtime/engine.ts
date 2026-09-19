@@ -162,6 +162,7 @@ export class HarnessRuntime {
   /** Возвращает внутренние операции с правом управления проектными запусками. */
   projectRuns(): ProjectRunPort {
     return {
+      catalog: () => this.store.catalog(true),
       start: (input) => this.startProject(input),
       inspect: async (runId) => this.view(runId, await this.store.load(runId)),
       find: (requestKey) => this.store.catalog(true).find((run) => run.requestKey === requestKey),

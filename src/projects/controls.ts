@@ -346,6 +346,7 @@ export class ProjectControls {
         throw new ApplicationError('PROJECT_CONFLICT', 'Результат ещё не готов к приёмке.');
       this.service.leases.acquire(project.id, project.workspace);
       try {
+        await this.service.verifyAcceptance?.(project);
         const current = await this.service.coordinator.capture(project);
         if (
           project.resultSnapshot.digest !== request.expectedResultRevision ||

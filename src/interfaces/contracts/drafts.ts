@@ -3,22 +3,15 @@ import {
   draftLocationSchema,
   draftScopeSchema,
   draftUpdateSchema,
+  draftSchema,
   taskTextLimit,
 } from '../../sessions/drafts.js';
 import { command, count } from './common.js';
+import { draftPayloadSchema } from '../../sessions/draft-payload.js';
 
-const draftSchema = z.object({
-  schemaVersion: z.literal(1),
-  id: z.string().uuid(),
-  scope: draftScopeSchema,
-  requestKey: z.string().min(1).max(200),
-  revision: count,
-  text: z.string().max(taskTextLimit),
-  state: z.enum(['editing', 'pending']),
-  expectedProjectRevision: count.optional(),
-  updatedAt: z.string(),
-});
-const summarySchema = draftSchema.omit({ text: true }).extend({ preview: z.string() });
+const summarySchema = draftSchema
+  .omit({ text: true, payload: true })
+  .extend({ preview: z.string() });
 
 export const draftCommands = {
   'drafts.list': command(
@@ -32,6 +25,8 @@ export const draftCommands = {
         scope: draftScopeSchema,
         text: z.string().max(taskTextLimit).optional(),
         requestKey: z.string().min(1).max(200).optional(),
+        payload: draftPayloadSchema.optional(),
+        expectedProjectRevision: count.optional(),
       })
       .strict(),
     draftSchema,

@@ -6,6 +6,7 @@ import {
   draftUpdateSchema,
   taskTextLimit,
 } from '../sessions/drafts.js';
+import { draftPayloadSchema } from '../sessions/draft-payload.js';
 
 /** Черновики доступны только человеку через локальный канал, без инструментов модели. */
 export async function draftCommand(
@@ -31,10 +32,18 @@ export async function draftCommand(
               scope: draftScopeSchema,
               text: z.string().max(taskTextLimit).optional(),
               requestKey: z.string().min(1).max(200).optional(),
+              payload: draftPayloadSchema.optional(),
+              expectedProjectRevision: z.number().int().nonnegative().safe().optional(),
             })
             .strict()
             .parse(input);
-          return app.drafts.create(args.scope, args.text, args.requestKey);
+          return app.drafts.create(
+            args.scope,
+            args.text,
+            args.requestKey,
+            args.payload,
+            args.expectedProjectRevision,
+          );
         }
         case 'drafts.update':
           return app.drafts.update(draftUpdateSchema.parse(input));

@@ -5,6 +5,7 @@ import { id, hash } from '../shared/primitives.js';
 import { atomicJson, assertRealDirectory, optionalJson, syncDirectory } from './files.js';
 import type { SessionStore } from './ports.js';
 import { ResourceNotFoundError } from '../shared/resource-errors.js';
+import { assertDraftSize, draftPayloadSchema, type DraftPayload } from './draft-payload.js';
 
 export const taskTextLimit = 100000;
 export const draftScopeSchema = z
@@ -14,7 +15,9 @@ export const draftScopeSchema = z
     sessionId: z.string().uuid().optional(),
     expectedParentRunId: z.string().uuid().optional(),
     messageRunId: z.string().uuid().optional(),
-    purpose: z.enum(['project.goal', 'project.plan', 'project.message']).optional(),
+    purpose: z
+      .enum(['project.goal', 'project.plan', 'project.message', 'project.create', 'project.edit'])
+      .optional(),
     projectId: z.string().uuid().optional(),
     stageId: z.string().min(1).max(200).optional(),
   })
@@ -27,7 +30,7 @@ export const draftLocationSchema = z
   })
   .strict();
 export type DraftLocation = z.infer<typeof draftLocationSchema>;
-const draftSchema = z
+export const draftSchema = z
   .object({
     schemaVersion: z.literal(1),
     id: z.string().uuid(),
@@ -37,16 +40,18 @@ const draftSchema = z
     text: z.string().max(taskTextLimit),
     state: z.enum(['editing', 'pending']),
     expectedProjectRevision: z.number().int().nonnegative().safe().optional(),
+    payload: draftPayloadSchema.optional(),
     updatedAt: z.string(),
   })
   .strict();
 export type TaskDraft = z.infer<typeof draftSchema>;
-export type DraftSummary = Omit<TaskDraft, 'text'> & { preview: string };
+export type DraftSummary = Omit<TaskDraft, 'text' | 'payload'> & { preview: string };
 export const draftUpdateSchema = draftLocationSchema.extend({
   expectedRevision: z.number().int().nonnegative(),
   text: z.string().max(taskTextLimit).optional(),
   state: z.enum(['editing', 'pending']).optional(),
   expectedProjectRevision: z.number().int().nonnegative().safe().optional(),
+  payload: draftPayloadSchema.optional(),
 });
 
 /** Сервис записывает черновики под блокировкой хранилища; версия защищает от второго окна. */
@@ -78,8 +83,9 @@ export class DraftStore {
       if (!name.startsWith((scope.sessionId ?? 'new') + '.') || !name.endsWith('.json')) continue;
       const draft = draftSchema.parse(await optionalJson(join(this.directory, name)));
       if (hash(draft.scope) !== hash(scope)) continue;
-      const { text, ...metadata } = draft;
-      items.push({ ...metadata, preview: text.replace(/\s+/g, ' ').slice(0, 160) });
+      const { text, payload, ...metadata } = draft;
+      const description = payload?.kind === 'project.create' ? payload.goal : text;
+      items.push({ ...metadata, preview: description.replace(/\s+/g, ' ').slice(0, 160) });
     }
     items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id));
     return { items: items.slice(offset, offset + 20), total: items.length };
@@ -94,28 +100,39 @@ export class DraftStore {
     return draft;
   }
   /** Создаёт отдельный черновик с ключом, сохраняемым при повторной отправке. */
-  async create(scope: DraftScope, text = '', requestKey = id()): Promise<TaskDraft> {
+  async create(
+    scope: DraftScope,
+    text = '',
+    requestKey = id(),
+    payload?: DraftPayload,
+    expectedProjectRevision?: number,
+  ): Promise<TaskDraft> {
     this.assertMessageScope(draftScopeSchema.parse(scope));
+    this.assertPayloadScope(scope, payload);
     this.sessions.assertRequestAllowed(requestKey, scope.sessionId);
     const draft = draftSchema.parse({
       schemaVersion: 1,
       id: id(),
       scope,
       text,
+      payload,
+      expectedProjectRevision,
       requestKey,
       revision: 0,
       state: 'editing',
       updatedAt: new Date().toISOString(),
     });
+    assertDraftSize(draft);
     await assertRealDirectory(this.directory);
     await atomicJson(this.path({ id: draft.id, sessionId: scope.sessionId }), draft);
     return draft;
   }
   /** Сохраняет правку по ожидаемой ревизии; отправленный текст остаётся неизменным. */
   async update(input: z.infer<typeof draftUpdateSchema>): Promise<TaskDraft> {
-    const { expectedRevision, text, state, expectedProjectRevision, ...location } =
+    const { expectedRevision, text, state, expectedProjectRevision, payload, ...location } =
       draftUpdateSchema.parse(input);
     const draft = await this.get(location);
+    this.assertPayloadScope(draft.scope, payload ?? draft.payload);
     if (draft.revision !== expectedRevision)
       throw new Error('Черновик изменён в другом окне. Откройте сохранённую версию заново.');
     if (
@@ -123,7 +140,8 @@ export class DraftStore {
       ((text !== undefined && text !== draft.text) ||
         state === 'editing' ||
         (expectedProjectRevision !== undefined &&
-          expectedProjectRevision !== draft.expectedProjectRevision))
+          expectedProjectRevision !== draft.expectedProjectRevision) ||
+        (payload !== undefined && hash(payload) !== hash(draft.payload)))
     )
       throw new Error(
         'Запрос уже отправлялся. Сначала проверьте его повторной отправкой с тем же ключом.',
@@ -133,11 +151,30 @@ export class DraftStore {
       text: text ?? draft.text,
       state: state ?? draft.state,
       ...(expectedProjectRevision === undefined ? {} : { expectedProjectRevision }),
+      ...(payload === undefined ? {} : { payload }),
       revision: draft.revision + 1,
       updatedAt: new Date().toISOString(),
     };
-    if (next.state === 'pending' && !next.text.trim())
+    if (next.state === 'pending' && !next.payload && !next.text.trim())
       throw new Error('Опишите задачу своими словами.');
+    if (
+      next.state === 'pending' &&
+      next.scope.purpose === 'project.create' &&
+      next.payload?.kind !== 'project.create'
+    )
+      throw new Error('Сначала заполните параметры проекта.');
+    if (next.state === 'pending' && next.payload?.kind === 'project.create') {
+      const { title, goal, workspace, profile } = next.payload;
+      if (![title, goal, workspace, profile].every((value) => value.trim()))
+        throw new Error('Заполните название, цель, папку и профиль проекта перед подтверждением.');
+    }
+    if (
+      next.state === 'pending' &&
+      next.scope.purpose === 'project.edit' &&
+      (next.payload?.kind !== 'project.edit' || next.expectedProjectRevision === undefined)
+    )
+      throw new Error('Сначала сохраните редакцию плана и её исходную ревизию.');
+    assertDraftSize(next);
     await atomicJson(this.path(location), next);
     return next;
   }
@@ -181,7 +218,7 @@ export class DraftStore {
         scope.sessionId ||
         scope.expectedParentRunId ||
         scope.messageRunId ||
-        (scope.purpose !== 'project.goal' && !scope.projectId) ||
+        (!['project.goal', 'project.create'].includes(scope.purpose) && !scope.projectId) ||
         (scope.purpose === 'project.message' ? !scope.stageId : !!scope.stageId)
       )
         throw new Error('Черновик проекта должен относиться к своей цели, плану или этапу.');
@@ -195,6 +232,12 @@ export class DraftStore {
       run.workspace !== scope.workspace
     )
       throw new Error('Черновик сообщения должен относиться к указанной задаче и её папке.');
+  }
+
+  /** Типизированный payload нельзя прикрепить к обычной задаче или другому назначению. */
+  private assertPayloadScope(scope: DraftScope, payload?: DraftPayload): void {
+    if (payload && payload.kind !== scope.purpose)
+      throw new Error('Параметры черновика не соответствуют его назначению.');
   }
 }
 

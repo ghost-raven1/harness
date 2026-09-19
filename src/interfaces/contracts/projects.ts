@@ -6,9 +6,20 @@ import {
   projectPurgePreviewSchema,
 } from '../../projects/schema.js';
 import { command, count } from './common.js';
+import { projectReadInputs, projectReadOutputs } from '../../projects/read-schema.js';
+import { planReadCommands } from '../../projects/plan-schema.js';
 
 /** Проекты управляются человеком через локальный IPC; инструменты MCP их не экспортируют. */
 export const projectCommands = {
+  ...planReadCommands,
+  'projects.reports': command(projectReadInputs.reports, projectReadOutputs.reports),
+  'projects.checkOutput': command(projectReadInputs.checkOutput, projectReadOutputs.checkOutput),
+  'projects.review': command(projectReadInputs.review, projectReadOutputs.review),
+  'projects.exportPreview': command(
+    projectReadInputs.exportPreview,
+    projectReadOutputs.exportPreview,
+  ),
+  'projects.exportReport': command(projectReadInputs.exportReport, projectReadOutputs.exportReport),
   'projects.list': command(projectInputs.list, projectListSchema),
   'projects.detail': command(projectInputs.detail, projectViewSchema),
   'projects.create': command(projectInputs.create, projectViewSchema),

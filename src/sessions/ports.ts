@@ -20,6 +20,8 @@ export interface RunCatalogEntry {
   task: string;
   taskTruncated?: boolean;
   status: RunRecord['status'];
+  pauseReason?: RunRecord['pauseReason'];
+  providerPause?: RunRecord['providerPause'];
   deletedAt?: string;
   createdAt: string;
   seq: number;

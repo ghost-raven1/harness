@@ -111,6 +111,29 @@ export const projectSummarySchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   archivedAt: z.string().optional(),
+  reason: z.string().optional(),
+  reasonCode: z.string().optional(),
+  currentRunId: key.optional(),
+  currentStageId: key.optional(),
+  attention: z
+    .object({
+      code: z.string(),
+      reason: z.string(),
+      action: z.enum([
+        'resolve',
+        'approvals',
+        'acceptPlan',
+        'manualCheck',
+        'review',
+        'resume',
+        'inspect',
+      ]),
+      priority: revision,
+      retryAt: z.string().optional(),
+      runId: key.optional(),
+      stageId: key.optional(),
+    })
+    .optional(),
   progress: z.object({
     total: revision,
     completed: revision,
@@ -127,6 +150,7 @@ export const projectEventSchema = z.object({
 export const projectViewSchema = projectSummarySchema.extend({
   plan: versionedPlanSchema.optional(),
   planVersion: revision.optional(),
+  acceptedVersion: revision.optional(),
   resultRevision: z.string().optional(),
   currentRunId: key.optional(),
   pendingApprovals: revision.optional(),
@@ -134,6 +158,7 @@ export const projectViewSchema = projectSummarySchema.extend({
   reasonCode: z.string().optional(),
   allowedActions: z.array(projectActionSchema),
   roles: z.array(z.object({ id: key, label: z.string() })),
+  tools: z.array(z.string()).optional(),
   stages: z.array(
     z.object({
       stageId: key,
@@ -168,6 +193,7 @@ export const projectListSchema = z.object({
   total: revision,
   page: revision,
   pages: revision.positive(),
+  attentionCount: revision.optional(),
 });
 export const projectPurgePreviewSchema = z.object({
   projectId: key,
@@ -198,6 +224,7 @@ export const projectInputs = {
       page: revision.default(0),
       limit: revision.min(1).max(50).default(10),
       includeArchived: z.boolean().default(false),
+      attentionOnly: z.boolean().optional(),
     })
     .strict(),
   detail: projectId.extend({

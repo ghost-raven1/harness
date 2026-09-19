@@ -114,7 +114,12 @@ export class DataReset {
       jobs: state.jobs.filter((job) => forgetKnowledge || runIds.has(job.runId)).length,
       artifacts,
       backups,
-      exports: exports.length,
+      exports:
+        exports.length +
+        inventory.filter(
+          (file) =>
+            file.path.startsWith('exports/projects/') && /\.(?:md|report\.json)$/.test(file.path),
+        ).length,
     };
     return {
       scope,

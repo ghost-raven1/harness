@@ -55,6 +55,7 @@ export async function createProjects(input: {
     () => loadConfig(input.configFile),
     () => learning.store.read().activeVersion,
   );
+  service.recoveryStatus = () => sessions.recoveryError;
   if (!sessions.recoveryError) await coordinator.initialize();
   return service;
 }

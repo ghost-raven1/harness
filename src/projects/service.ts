@@ -10,6 +10,8 @@ import { ProjectCoordinator } from './coordinator.js';
 import { planningMessage, replacePlan, validatePlan } from './plans.js';
 import { projectView } from './view.js';
 import { ProjectControls } from './controls.js';
+import { projectAttention } from './attention.js';
+import { PolicyService } from '../policy/service.js';
 
 export interface ProjectMaintenancePort {
   receipt(
@@ -33,6 +35,8 @@ export interface ProjectMaintenancePort {
 /** Локальные решения человека проверяют ревизию; модель не получает этот сервис как инструмент. */
 export class ProjectService {
   readonly controls: ProjectControls;
+  recoveryStatus?: () => string | undefined;
+  verifyAcceptance?: (project: ProjectRecord) => Promise<void>;
   maintenance?: ProjectMaintenancePort;
   constructor(
     readonly coordinator: ProjectCoordinator,
@@ -110,11 +114,11 @@ export class ProjectService {
   async list(input: ProjectInput<'list'> = {}) {
     const request = projectInputs.list.parse(input),
       query = request.query.toLocaleLowerCase();
-    const all = this.store
-      .catalog(request.includeArchived)
-      .filter(
-        (item) => !query || (item.title + ' ' + item.goal).toLocaleLowerCase().includes(query),
-      );
+    const matching = this.catalog(request.includeArchived).filter(
+      (item) => !query || (item.title + ' ' + item.goal).toLocaleLowerCase().includes(query),
+    );
+    const attentionCount = matching.filter((item) => item.attention).length;
+    const all = request.attentionOnly ? matching.filter((item) => item.attention) : matching;
     const pages = Math.max(1, Math.ceil(all.length / request.limit)),
       page = Math.min(request.page, pages - 1);
     return {
@@ -122,7 +126,17 @@ export class ProjectService {
       total: all.length,
       page,
       pages,
+      attentionCount,
     };
+  }
+  /** Обогащает сводки причинами ожидания без чтения исторических запусков. */
+  catalog(includeArchived = false) {
+    const projects = this.store.catalog(includeArchived);
+    return projectAttention(
+      projects,
+      projects.length ? this.runs.catalog() : [],
+      this.recoveryStatus?.() ?? this.store.recoveryError,
+    );
   }
   /** Живой просмотр не увеличивает ревизию проекта и не сбрасывает подтверждения плана. */
   async detail(input: ProjectInput<'detail'>) {
@@ -180,6 +194,8 @@ export class ProjectService {
         },
         project.config,
         this.coordinator.options.tools,
+        // Уже сохранённые планы 0.4 не ограничиваем размером нового черновика IPC.
+        false,
       );
       this.leases.acquire(project.id, project.workspace);
       try {
@@ -357,8 +373,8 @@ export class ProjectService {
         );
     }
   }
-  view(project: ProjectRecord, cursor = 0, eventLimit = 30) {
-    return projectView(
+  async view(project: ProjectRecord, cursor = 0, eventLimit = 30): Promise<ProjectView> {
+    const view = await projectView(
       project,
       this.store,
       this.runs,
@@ -366,6 +382,23 @@ export class ProjectService {
       cursor,
       eventLimit,
     );
+    const policy = new PolicyService();
+    return {
+      ...view,
+      acceptedVersion: project.acceptedVersion,
+      tools: this.coordinator.options.tools
+        .definitions()
+        .map((tool) => tool.name)
+        .filter((name) =>
+          Object.keys(project.config.value.roles).some((role) =>
+            policy.canAdvertise(
+              project.config.value,
+              { role, authorityRoles: [project.config.value.defaultRole] },
+              name,
+            ),
+          ),
+        ),
+    };
   }
   busy() {
     return this.store

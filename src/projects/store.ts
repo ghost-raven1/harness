@@ -325,6 +325,10 @@ export function projectSummary(record: ProjectRecord): ProjectSummary {
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     archivedAt: record.archivedAt,
+    reason: record.reason,
+    reasonCode: record.reasonCode,
+    currentRunId: record.intent?.runId,
+    currentStageId: record.intent?.stageId,
     progress: {
       total: record.plan?.stages.length ?? 0,
       completed: stages.filter((s) => s.status === 'completed').length,

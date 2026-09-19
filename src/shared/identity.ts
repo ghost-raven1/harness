@@ -42,6 +42,7 @@ export function applicationIdentity() {
       'history-verification',
       'derived-indexes',
       'projects-v1',
+      'projects-review-v1',
     ],
   };
 }

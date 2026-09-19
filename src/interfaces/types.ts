@@ -22,6 +22,7 @@ export interface ServiceInfo {
   activeRuns?: number;
   activeProjects?: number;
   projectCount?: number;
+  projectsAwaitingDecision?: number;
   recoveryError?: string;
   pendingApprovals?: number;
   learningVersion?: string;

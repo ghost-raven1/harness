@@ -19,6 +19,7 @@ export const serviceInfoSchema = z
     activeRuns: count.optional(),
     activeProjects: count.optional(),
     projectCount: count.optional(),
+    projectsAwaitingDecision: count.optional(),
     recoveryError: z.string().optional(),
     pendingApprovals: count.optional(),
     learningVersion: z.string().optional(),

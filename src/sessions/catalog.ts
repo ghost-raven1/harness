@@ -21,6 +21,10 @@ export const catalogEntrySchema = z.object({
   task: z.string(),
   taskTruncated: z.boolean().optional(),
   status: z.enum(['running', 'awaiting_approval', 'paused', 'completed', 'failed', 'cancelled']),
+  pauseReason: z.enum(['iterations', 'provider', 'project']).optional(),
+  providerPause: z
+    .object({ kind: z.enum(['rate_limit', 'quota']), retryAt: z.string().optional() })
+    .optional(),
   deletedAt: z.string().optional(),
   createdAt: z.string(),
   seq: z.number().int().positive(),
@@ -51,6 +55,8 @@ export function catalogEntry(run: RunRecord, seq: number): RunCatalogEntry {
     task: run.agents[run.rootAgentId]!.task.slice(0, 1000),
     ...(run.agents[run.rootAgentId]!.task.length > 1000 ? { taskTruncated: true } : {}),
     status: run.status,
+    pauseReason: run.pauseReason,
+    providerPause: run.providerPause,
     deletedAt: run.deletedAt,
     createdAt: run.createdAt,
     seq,

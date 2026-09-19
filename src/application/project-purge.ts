@@ -31,6 +31,7 @@ interface ProjectPurgeOptions {
   runtime: HarnessRuntime;
   scheduler: ToolScheduler;
   busy(): boolean;
+  onPurged?(projectId: string): void;
   serialize<T>(work: () => Promise<T>): Promise<T>;
 }
 
@@ -171,6 +172,7 @@ export class ProjectPurge {
         );
         started = true;
         await this.options.projects.recordPurge(record);
+        this.options.onPurged?.(project.id);
         for (const session of record.sessions) await this.options.sessions.recordPurge(session);
         for (const session of record.sessions) {
           await this.options.learningStore.purge(session);
@@ -223,6 +225,7 @@ export class ProjectPurge {
     for (const record of records) {
       if (complete) await removeProjectFiles(this.options.projects.directory, record);
       await this.options.projects.recordPurge({ ...record, complete });
+      this.options.onPurged?.(record.projectId);
     }
   }
 
@@ -279,6 +282,8 @@ export class ProjectPurge {
       (file) =>
         file.path.startsWith('project-records/' + project.id + '.') ||
         file.path.startsWith('project-index/' + project.id + '.') ||
+        file.path === 'exports/projects/' + project.id ||
+        file.path.startsWith('exports/projects/' + project.id + '/') ||
         file.path === 'project-artifacts/' + project.id ||
         file.path.startsWith('project-artifacts/' + project.id + '/') ||
         (file.path.startsWith('drafts/') &&
