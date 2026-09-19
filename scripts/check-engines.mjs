@@ -1,7 +1,9 @@
 import { readFile, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import semver from 'semver';
 const failures = [];
+const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));
+/** Проверяет фактически установленный пакет и его зафиксированную версию. */
 async function inspect(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
@@ -11,6 +13,11 @@ async function inspect(directory) {
       continue;
     }
     const pkg = JSON.parse(await readFile(join(location, 'package.json'), 'utf8'));
+    const locked = lock.packages?.[relative('.', location).replaceAll('\\', '/')];
+    if (!locked || locked.version !== pkg.version)
+      failures.push(
+        `${pkg.name}: lockfile ${locked?.version ?? 'missing'}, installed ${pkg.version}`,
+      );
     if (pkg.engines?.node && !semver.satisfies(process.version, pkg.engines.node)) {
       failures.push(`${pkg.name}@${pkg.version}: ${pkg.engines.node}`);
     }
