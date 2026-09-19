@@ -43,9 +43,23 @@ const toolLabels: Record<string, string> = {
 export class TaskWork {
   private readonly models = new Map<string, Operation>();
   private readonly tools = new Map<string, Operation>();
+  private recoveredAt = -Infinity;
 
   /** Начало и результат инструмента связываются по ID, а не по порядку параллельных вызовов. */
   event(event: StatusView['events'][number]): void {
+    if (event.type === 'run.recovered') {
+      // Инструменты приходят из того же журнала и не могут опередить это событие.
+      this.tools.clear();
+      const at = Date.parse(event.at ?? '');
+      if (Number.isFinite(at)) this.recoveredAt = Math.max(this.recoveredAt, at);
+      // Поток модели мог загрузиться раньше страницы журнала с восстановлением.
+      for (const [id, operation] of this.models) {
+        const since = Date.parse(operation.since ?? '');
+        if (!Number.isFinite(at) || !Number.isFinite(since) || since <= this.recoveredAt)
+          this.models.delete(id);
+      }
+      return;
+    }
     const data = event.payload as Record<string, unknown> | null;
     if (!data || typeof data.invocationId !== 'string') return;
     if (event.type === 'tool.started' && typeof data.agentId === 'string') {
@@ -59,6 +73,12 @@ export class TaskWork {
 
   /** Поток различает ожидание первого токена, получение ответа и повтор подключения. */
   output(event: OutputEvent): void {
+    // Один агент делает запросы последовательно, даже если старый поток оборвался без результата.
+    if (event.type === 'started')
+      for (const [id, operation] of this.models)
+        if (operation.agentId === event.agentId) this.models.delete(id);
+    // Поток читается отдельно от журнала: его старые страницы не оживляют прерванные запросы.
+    if (Date.parse(event.at) <= this.recoveredAt) return;
     if (event.type === 'started') {
       this.models.set(event.requestId, {
         agentId: event.agentId,

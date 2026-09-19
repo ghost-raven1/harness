@@ -88,6 +88,62 @@ it('при восстановлении страницы не выдаёт ст�
   expect(work.view(task({ agents: [] }))?.label).toBe('Задача выполняется');
 });
 
+it('продолжение после аварии не оживляет старый запрос или чтение из отдельного журнала', () => {
+  const work = new TaskWork();
+  work.output(output('started'));
+  work.event({
+    seq: 1,
+    at: started,
+    type: 'tool.started',
+    payload: {
+      agentId: 'root',
+      invocationId: 'interrupted-read',
+      tool: 'fs.read',
+    },
+  });
+  work.event({ seq: 2, at: '2026-09-20T00:01:00.000Z', type: 'run.recovered', payload: {} });
+  // Перечитывание потока после журнала соответствует загрузке карточки во втором окне.
+  work.output(output('started'));
+  expect(work.view(task())).toEqual({ kind: 'busy', label: 'Задача выполняется' });
+  const next = { ...output('started', 'after-recovery'), at: '2026-09-20T00:02:00.000Z' };
+  work.output(next);
+  expect(work.view(task())).toEqual({ kind: 'busy', label: 'Ожидаю ответ модели', since: next.at });
+  work.output({ ...next, requestId: 'next-request', at: '2026-09-20T00:03:00.000Z' });
+  expect(work.view(task())?.label).toBe('Ожидаю ответ модели');
+  work.output({ ...next, type: 'completed', requestId: 'next-request' });
+  expect(work.view(task())?.label).toBe('Задача выполняется');
+
+  const secondWindow = new TaskWork();
+  secondWindow.output(next);
+  secondWindow.event({
+    seq: 2,
+    at: '2026-09-20T00:01:00.000Z',
+    type: 'run.recovered',
+    payload: {},
+  });
+  expect(secondWindow.view(task())?.since).toBe(next.at);
+});
+
+it('восстановление убирает прерванный инструмент даже после перевода часов назад', () => {
+  const work = new TaskWork();
+  work.event({
+    seq: 1,
+    at: '2026-09-20T12:00:00.000Z',
+    type: 'tool.started',
+    payload: {
+      agentId: 'root',
+      invocationId: 'interrupted-read',
+      tool: 'fs.read',
+    },
+  });
+  work.event({ seq: 2, at: '2026-09-20T11:00:00.000Z', type: 'run.recovered', payload: {} });
+  work.output({ ...output('started', 'after-recovery'), at: '2026-09-20T11:00:01.000Z' });
+  expect(work.view(task())?.label).toBe('Ожидаю ответ модели');
+  // При неоднозначном времени следующего запроса остаётся общий статус без старого таймера.
+  work.output({ ...output('started', 'after-clock-change'), at: '2026-09-20T10:59:00.000Z' });
+  expect(work.view(task())).toEqual({ kind: 'busy', label: 'Задача выполняется' });
+});
+
 it.each(['completed', 'cancelled', 'failed'] as const)(
   'состояние %s останавливает индикатор даже при неполном потоке',
   (status) => {
