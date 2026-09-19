@@ -1,7 +1,78 @@
-import { expect, it } from 'vitest';
+import { expect, it, onTestFailed, onTestFinished, vi } from 'vitest';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { call, eventually, harness, output, ScriptedProvider } from './helpers.js';
+import { call, harness, output, ScriptedProvider } from './helpers.js';
+
+type Harness = Awaited<ReturnType<typeof harness>>;
+
+/** При сбое видны пауза, ошибка инструмента и очередь, а не только истечение времени. */
+function diagnostics(app: Harness): string {
+  return JSON.stringify(
+    app.sessions.catalog().map((item) => {
+      const run = app.sessions.get(item.id);
+      return {
+        task: item.task,
+        status: run.status,
+        error: run.error,
+        agents: Object.values(run.agents).map(({ role, status, error }) => ({
+          role,
+          status,
+          error,
+        })),
+        tools: Object.values(run.invocations).map((item) => ({
+          name: item.call.name,
+          status: item.status,
+          error: item.error,
+          result: item.result?.slice(0, 500),
+        })),
+        approvals: Object.values(run.approvals).map(({ tool, status }) => ({ tool, status })),
+      };
+    }),
+    null,
+    2,
+  );
+}
+
+/** Ждёт подтверждённых переходов состояния; скорость fsync не определяет корректность очереди. */
+function observeState(app: Harness) {
+  const listeners = new Set<() => void>();
+  const mutate = app.sessions.mutate.bind(app.sessions);
+  const observer = vi.spyOn(app.sessions, 'mutate').mockImplementation(async (...args) => {
+    const result = await mutate(...args);
+    for (const listener of [...listeners]) listener();
+    return result;
+  });
+  onTestFailed(() => {
+    console.error('Состояние проверки разрешений:\n' + diagnostics(app));
+  });
+  onTestFinished(() => {
+    observer.mockRestore();
+  });
+  return (check: () => boolean, signal?: AbortSignal): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const finish = (error?: Error): void => {
+        listeners.delete(inspect);
+        signal?.removeEventListener('abort', cancelled);
+        if (error) reject(error);
+        else resolve();
+      };
+      const cancelled = (): void =>
+        finish(new Error('Ожидание состояния отменено.\n' + diagnostics(app)));
+      const inspect = (): void => {
+        if (check()) return finish();
+        const runs = app.sessions.catalog();
+        if (
+          runs.length &&
+          runs.every((run) => !['running', 'awaiting_approval'].includes(run.status))
+        )
+          finish(new Error('Задачи остановились до ожидаемого перехода.\n' + diagnostics(app)));
+      };
+      listeners.add(inspect);
+      signal?.addEventListener('abort', cancelled, { once: true });
+      if (signal?.aborted) cancelled();
+      else inspect();
+    });
+}
 
 it.each(['allow', 'deny', 'cancel'] as const)(
   'ожидание разрешения не останавливает другую задачу; решение: %s',
@@ -40,19 +111,21 @@ it.each(['allow', 'deny', 'cancel'] as const)(
         return { written: true };
       },
     });
+    const waitFor = observeState(app);
     const waiting = await app.runtime.start({
       message: 'Нужно разрешение',
       workspace: app.workspace,
       requestKey: 'waiting',
     });
     try {
-      await eventually(() => app.approvals.pending().length === 1);
+      await waitFor(() => app.approvals.pending().length === 1);
       const other = await app.runtime.start({
         message: 'Независимая задача',
         workspace: app.workspace,
         requestKey: 'independent',
       });
-      await eventually(() => app.sessions.get(other.runId).status === 'completed');
+      await app.runtime.wait(other.runId);
+      expect(app.sessions.get(other.runId).status, diagnostics(app)).toBe('completed');
       expect(await readFile(join(app.workspace, 'other.txt'), 'utf8')).toBe(
         'Независимый результат',
       );
@@ -102,19 +175,21 @@ it('ожидающие разрешения чтения не занимают �
       return { read: true };
     },
   });
+  const waitFor = observeState(app);
   const waiting = await app.runtime.start({
     message: 'Нужно разрешение',
     workspace: app.workspace,
     requestKey: 'waiting-read',
   });
   try {
-    await eventually(() => app.approvals.pending().length === 1);
+    await waitFor(() => app.approvals.pending().length === 1);
     const other = await app.runtime.start({
       message: 'Независимая задача',
       workspace: app.workspace,
       requestKey: 'other-read',
     });
-    await eventually(() => app.sessions.get(other.runId).status === 'completed');
+    await app.runtime.wait(other.runId);
+    expect(app.sessions.get(other.runId).status, diagnostics(app)).toBe('completed');
     expect(reads).toBe(0);
     await app.approvals.resolve(app.approvals.pending()[0]!.id, true);
     await app.runtime.wait(waiting.runId);
@@ -127,6 +202,7 @@ it('ожидающие разрешения чтения не занимают �
 
 it('специалист завершает чтение, пока другая ветка ждёт разрешения записи', async () => {
   let app!: Awaited<ReturnType<typeof harness>>;
+  let waitFor!: ReturnType<typeof observeState>;
   const provider = new ScriptedProvider(async (request) => {
     const hasTask = (task: string) =>
       request.messages.some((item) => item.role === 'user' && item.content === task);
@@ -137,7 +213,7 @@ it('специалист завершает чтение, пока другая 
         : output('', [call('write', 'fs.write', { path: 'written.txt', content: 'Новый файл' })]);
     if (hasTask('Прочитай независимо')) {
       if (hasResult) return output('Прочитано');
-      await eventually(() => app.approvals.pending().length === 1);
+      await waitFor(() => app.approvals.pending().length === 1, request.signal);
       return output('', [call('read', 'fs.read', { path: 'sample.txt' })]);
     }
     return hasResult
@@ -150,6 +226,7 @@ it('специалист завершает чтение, пока другая 
   app = await harness(provider, (config) => {
     config.policy.rules.push({ tool: 'fs.write', decision: 'ask', args: {} });
   });
+  waitFor = observeState(app);
   await writeFile(join(app.workspace, 'sample.txt'), 'Данные для чтения');
   const { runId } = await app.runtime.start({
     message: 'Две независимые ветки',
@@ -157,7 +234,7 @@ it('специалист завершает чтение, пока другая 
     requestKey: 'parallel-approval',
   });
   try {
-    await eventually(() =>
+    await waitFor(() =>
       Object.values(app.sessions.get(runId).agents).some(
         (agent) => agent.task === 'Прочитай независимо' && agent.status === 'completed',
       ),
