@@ -62,19 +62,19 @@ export class InvocationExecutor {
         call.name,
         args as Record<string, unknown>,
       );
+      // Решение человека не занимает общую очередь инструментов других задач и ролей.
+      if (decision === 'deny')
+        return this.finish(runId, agentId, call, effect, 'denied', {
+          error: 'POLICY_DENIED',
+          tool: call.name,
+        });
+      if (decision === 'ask' && !(await this.approvals.request(runId, agentId, call, signal))) {
+        return this.finish(runId, agentId, call, effect, 'denied', {
+          error: 'HUMAN_DENIED',
+          tool: call.name,
+        });
+      }
       const work = async (): Promise<string> => {
-        abort(signal);
-        if (decision === 'deny')
-          return this.finish(runId, agentId, call, effect, 'denied', {
-            error: 'POLICY_DENIED',
-            tool: call.name,
-          });
-        if (decision === 'ask' && !(await this.approvals.request(runId, agentId, call, signal))) {
-          return this.finish(runId, agentId, call, effect, 'denied', {
-            error: 'HUMAN_DENIED',
-            tool: call.name,
-          });
-        }
         abort(signal);
         await this.store.mutate(
           runId,

@@ -3,6 +3,7 @@ import type { RunRecord, AgentState } from '../sessions/types.js';
 import type { ModelProvider, ToolDefinition } from '../providers/types.js';
 import { ProviderError } from '../providers/errors.js';
 import type { ToolRegistry } from '../tools/registry.js';
+import { ToolScheduler } from '../tools/scheduler.js';
 import type { PolicyService } from '../policy/service.js';
 import type { ContextService } from '../context/service.js';
 import { estimate } from '../context/service.js';
@@ -256,6 +257,11 @@ export class AgentLoop {
     const mixedHandoff =
       pending.some((call) => call.name === 'agents.handoff') && pending.length !== 1;
     const handleControl = this.services.agents.handleToolCall.bind(this.services.agents);
+    // Барьеры одной пачки сохраняются и во время разрешения; общий диспетчер ждёт только исполнения.
+    const batch = new ToolScheduler(run.config.value.limits.reads);
+    const effects = new Map(
+      this.services.registry.definitions().map((tool) => [tool.name, tool.effect]),
+    );
     const settled = await Promise.allSettled(
       pending.map(async (call) => {
         try {
@@ -264,7 +270,11 @@ export class AgentLoop {
               error: 'Handoff must be the only call; no batch operation was executed',
             });
           }
-          return await this.services.executor.execute(runId, agentId, call, signal, handleControl);
+          const execute = () =>
+            this.services.executor.execute(runId, agentId, call, signal, handleControl);
+          const effect = call.name.startsWith('agents.') ? undefined : effects.get(call.name);
+          // Отмену ожидающих вызовов фиксирует исполнитель, чтобы у каждого ID остался результат.
+          return await (effect ? batch.schedule(effect, execute) : execute());
         } catch (error) {
           this.services.stopRun(runId);
           throw error;
