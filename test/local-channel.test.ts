@@ -46,6 +46,15 @@ it('подтверждает защиту каталога после одног
     }),
     expect.any(Function),
   );
+  const args = vi.mocked(execFile).mock.calls[0]![1] as string[];
+  const script = Buffer.from(args.at(-1)!, 'base64').toString('utf16le');
+  expect(script).not.toMatch(/New-Object|Set-Acl/);
+  expect(script).toContain('[System.Security.AccessControl.DirectorySecurity]::new()');
+  expect(script).toContain('[System.Security.AccessControl.FileSystemAccessRule]::new(');
+  expect(script).toContain('[System.IO.Directory]::SetAccessControl(');
+  expect(script).toContain('$acl.SetOwner($identity)');
+  expect(script).toContain('$acl.SetAccessRuleProtection($true, $false)');
+  expect(script).not.toContain(directory);
 });
 
 it.each([

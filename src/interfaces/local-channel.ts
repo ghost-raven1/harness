@@ -37,15 +37,16 @@ export async function privateDirectory(directory: string): Promise<void> {
   const systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT;
   if (!systemRoot) throw new Error('SystemRoot is required to protect the state directory');
   // Передача пути через окружение исключает подстановку пользовательского текста в PowerShell-код.
+  // Прямой .NET API не запускает автозагрузку модулей New-Object/Set-Acl в новом профиле Windows.
   const script = [
     "$ErrorActionPreference = 'Stop'",
     '$identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().User',
-    '$acl = New-Object System.Security.AccessControl.DirectorySecurity',
+    '$acl = [System.Security.AccessControl.DirectorySecurity]::new()',
     '$acl.SetOwner($identity)',
     '$acl.SetAccessRuleProtection($true, $false)',
-    "$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($identity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')",
+    "$rule = [System.Security.AccessControl.FileSystemAccessRule]::new($identity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')",
     '$acl.AddAccessRule($rule)',
-    'Set-Acl -LiteralPath $env:HARNESS_PRIVATE_DIRECTORY -AclObject $acl',
+    '[System.IO.Directory]::SetAccessControl($env:HARNESS_PRIVATE_DIRECTORY, $acl)',
   ].join('; ');
   const startedAt = Date.now();
   try {
