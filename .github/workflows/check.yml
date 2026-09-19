@@ -44,6 +44,11 @@ jobs:
         run: |
           npm run benchmark:storage -- 1000 "$CI_LOG_DIR/storage-1000.json" 2>&1 | tee "$CI_LOG_DIR/storage-1000.log"
           npm run benchmark:storage -- 10000 "$CI_LOG_DIR/storage-10000.json" 2>&1 | tee "$CI_LOG_DIR/storage-10000.log"
+      - name: Каталог 100 и 1 000 проектов без чтения историй
+        if: runner.os == 'Linux'
+        run: |
+          npm run benchmark:projects -- 100 "$CI_LOG_DIR/projects-100.json" 2>&1 | tee "$CI_LOG_DIR/projects-100.log"
+          npm run benchmark:projects -- 1000 "$CI_LOG_DIR/projects-1000.json" 2>&1 | tee "$CI_LOG_DIR/projects-1000.log"
       - name: Проверка ZIP-поставки в новой папке
         run: |
           collect_release() {
@@ -110,6 +115,16 @@ jobs:
           }
           trap collect_project_pty EXIT
           "$RUNNER_TEMP/harness-pty-python/bin/python" scripts/playtest-projects.py --node "$(command -v node)" --output releases/project-playtest/frames.json 2>&1 | tee "$CI_LOG_DIR/projects-pty.log"
+      - name: Редактор и приёмка без JSON в PTY 48×24 и 80×24
+        if: runner.os == 'Linux'
+        env:
+          PYTHONUNBUFFERED: '1'
+        run: |
+          collect_editor_pty() {
+            cp -R releases/project-playtest "$CI_LOG_DIR/"
+          }
+          trap collect_editor_pty EXIT
+          "$RUNNER_TEMP/harness-pty-python/bin/python" scripts/playtest-project-editor.py --node "$(command -v node)" --output releases/project-playtest/editor-frames.json 2>&1 | tee "$CI_LOG_DIR/project-editor-pty.log"
       - name: Логи и свежие отчёты
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

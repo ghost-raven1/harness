@@ -78,6 +78,8 @@ def run_case(node, root, width, frames, checks):
         assert 'Исправлений каждого этапа: 3' in second.wait_text('Исправлений каждого этапа: 3')
         terminal.send('\r')
         terminal.open_label('Принять план')
+        capture('plan-comparison', 'Перед принятием плана')
+        terminal.send('\r')
         capture('accept-plan-preview', 'Принять план')
         plan['maxCorrections'] = 4
         mutate('editPlan', project_id, plan=plan)
@@ -114,7 +116,9 @@ def run_case(node, root, width, frames, checks):
         terminal.send('\x1b[D\r')
         wait_status(project_id, 'review')
         terminal.open_label('Принять результат')
-        capture('accept-result', 'Принять итог')
+        capture('result-evidence', 'Приёмка проекта')
+        terminal.send('\r')
+        capture('accept-result', 'Принять проверенный')
         terminal.send('\x1b[D\r')
         wait_status(project_id, 'completed')
         capture('completed', 'Принят')
@@ -134,7 +138,7 @@ def run_case(node, root, width, frames, checks):
             'title': 'Проверка с разрешением', 'goal': 'Проверить исходное состояние перед работой',
             'workspace': str(workspace), 'profile': 'fixture', 'requestKey': str(uuid.uuid4())})
         approval_id = approval_project['projectId']
-        command_args = ['-e', "process.stdout.write('HARNESS_PROJECT_BASELINE_OK')"]
+        command_args = ['-e', "process.stdout.write('HARNESS_PROJECT_BASELINE_OK'+'x'.repeat(18000)+'\\nFULL_STDOUT_END'); process.stderr.write('y'.repeat(1700)+'\\nERROR_AFTER_1500')"]
         mutate('editPlan', approval_id, plan={
             'maxCorrections': 2, 'fixBaselineFailures': False, 'stages': [{
                 'id': 'approved-stage', 'title': 'Работа после проверки',
@@ -183,6 +187,21 @@ def run_case(node, root, width, frames, checks):
         capture('approval-starts-stage', 'В работе')
         assert 'Рассмотреть разрешения' not in terminal.screen()
         second.wait_text('В работе', ['Ждёт разрешения: 1'])
+        terminal.open_label('Проверки · команды')
+        terminal.open_label('Проверка Node')
+        capture('saved-command', 'Буквальные аргументы')
+        terminal.send('\t\r')
+        terminal.open_label('Следующая страница stdout')
+        terminal.send('\t')
+        terminal.send('\x1b[F')
+        capture('full-output-next-page', 'FULL_STDOUT_END')
+        terminal.send('\t')
+        terminal.send('\x1b[F')
+        capture('stderr-after-1500', 'ERROR_AFTER_1500')
+        terminal.send('\x1b')
+        terminal.wait_text('Выберите проверку')
+        terminal.send('\x1b')
+        terminal.wait_text('Что дальше?')
         mutate('cancel', approval_id)
         wait_status(approval_id, 'cancelled')
         deadline = time.monotonic() + 10
