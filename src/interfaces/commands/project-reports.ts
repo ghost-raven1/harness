@@ -1,3 +1,4 @@
+import { requireProjectDiffs } from './project-changes.js';
 import { readFile } from 'node:fs/promises';
 import { Command, Option } from 'commander';
 import type { CliContext } from '../types.js';
@@ -113,7 +114,8 @@ export function registerProjectReadCommands(
         '--include-logs',
         'добавить сохранённые stdout/stderr; могут содержать данные команд',
         false,
-      );
+      )
+      .option('--include-diffs', 'добавить построчные изменения сохранённых текстов', false);
   exportOptions(
     projects
       .command('export-preview <projectId>')
@@ -121,16 +123,24 @@ export function registerProjectReadCommands(
   ).action(
     async (
       projectId: string,
-      options: { revision: number; format: 'markdown' | 'json'; includeLogs: boolean },
-    ) =>
+      options: {
+        revision: number;
+        format: 'markdown' | 'json';
+        includeLogs: boolean;
+        includeDiffs: boolean;
+      },
+    ) => {
+      if (options.includeDiffs) await requireProjectDiffs(context);
       context.output(
         await context.request('projects.exportPreview', {
           projectId,
           expectedRevision: options.revision,
           format: options.format,
           includeLogs: options.includeLogs,
+          ...(options.includeDiffs ? { includeDiffs: true } : {}),
         }),
-      ),
+      );
+    },
   );
   exportOptions(
     projects
@@ -146,10 +156,12 @@ export function registerProjectReadCommands(
           revision: number;
           format: 'markdown' | 'json';
           includeLogs: boolean;
+          includeDiffs: boolean;
           previewToken: string;
           key: string;
         },
-      ) =>
+      ) => {
+        if (options.includeDiffs) await requireProjectDiffs(context);
         context.output(
           await context.request('projects.exportReport', {
             projectId,
@@ -158,7 +170,9 @@ export function registerProjectReadCommands(
             includeLogs: options.includeLogs,
             previewToken: options.previewToken,
             requestKey: options.key,
+            ...(options.includeDiffs ? { includeDiffs: true } : {}),
           }),
-        ),
+        );
+      },
     );
 }

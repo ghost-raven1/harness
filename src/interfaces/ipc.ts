@@ -32,6 +32,7 @@ import { dispatch } from './routes.js';
 import { resourceErrorData, resourceErrorFromData } from '../shared/resource-errors.js';
 import { sessionConflictData, sessionConflictFromData } from '../shared/session-conflict.js';
 import { encodeFrame, IPC_REQUEST_BYTES, IPC_RESPONSE_BYTES } from './ipc-limits.js';
+import type { ModelProvider } from '../providers/types.js';
 
 const envelope = z
   .object({
@@ -96,6 +97,7 @@ export async function acquireLock(directory: string): Promise<() => Promise<void
 export async function serve(
   configFile: string,
   directory: string,
+  provider?: ModelProvider,
 ): Promise<{ app: Application; close(): Promise<void> }> {
   const address = socketPath(directory);
   const release = await acquireLock(directory);
@@ -109,7 +111,7 @@ export async function serve(
       });
     }
     token = await createAccessToken(directory);
-    app = await createApplication(configFile, directory);
+    app = await createApplication(configFile, directory, provider);
   } catch (error) {
     await release();
     throw error;

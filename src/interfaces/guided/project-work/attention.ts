@@ -7,6 +7,7 @@ import { inspectProject } from './detail.js';
 export async function openProjectDecision(
   context: CliContext,
   selected: ProjectSummary,
+  diffs = false,
 ): Promise<void> {
   const view = await context.request('projects.detail', { projectId: selected.projectId });
   const attention = selected.attention;
@@ -20,14 +21,14 @@ export async function openProjectDecision(
     );
   if (attention && view.revision === selected.revision && sameRun && sameStage) {
     if (attention.action === 'review' && view.status === 'review')
-      await projectAction(context, view, 'review', true);
+      await projectAction(context, view, 'review', true, diffs);
     else if (attention.action === 'approvals' && (view.pendingApprovals ?? 0) > 0)
-      await projectAction(context, view, 'approvals', true);
+      await projectAction(context, view, 'approvals', true, diffs);
     else if (
       ['acceptPlan', 'manualCheck', 'resolve'].includes(attention.action) &&
       view.allowedActions.some((action) => action === attention.action)
     )
-      await projectAction(context, view, attention.action, true);
+      await projectAction(context, view, attention.action, true, diffs);
   }
-  await inspectProject(context, selected.projectId, true);
+  await inspectProject(context, selected.projectId, true, diffs);
 }

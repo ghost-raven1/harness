@@ -46,7 +46,8 @@ export async function browseProjects(context: CliContext, preferences: Preferenc
     archived = false,
     notice = '',
     attentionOnly = false,
-    enhanced = false;
+    enhanced = false,
+    diffs = false;
   let items: ProjectSummary[] = [];
   while (true) {
     const choice = await liveSelect({
@@ -54,6 +55,7 @@ export async function browseProjects(context: CliContext, preferences: Preferenc
       load: async () => {
         const info = await context.request('system.info');
         enhanced = info.capabilities?.includes('projects-review-v1') === true;
+        diffs = info.capabilities?.includes('projects-diff-v1') === true;
         const list = await context.request('projects.list', {
           page: pageIndex,
           query,
@@ -113,12 +115,13 @@ export async function browseProjects(context: CliContext, preferences: Preferenc
     try {
       if (choice === 'create')
         await (enhanced
-          ? prepareProject(context, preferences)
+          ? prepareProject(context, preferences, diffs)
           : createProject(context, preferences));
       if (choice.startsWith('open:')) {
         const item = items.find((item) => item.projectId === choice.slice(5));
-        if (enhanced && attentionOnly && item?.attention) await openProjectDecision(context, item);
-        else await inspectProject(context, choice.slice(5), enhanced);
+        if (enhanced && attentionOnly && item?.attention)
+          await openProjectDecision(context, item, diffs);
+        else await inspectProject(context, choice.slice(5), enhanced, diffs);
       }
       if (choice === 'attention') {
         attentionOnly = !attentionOnly;

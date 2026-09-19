@@ -131,15 +131,35 @@ export async function inspectProjectCheck(
 }
 
 /** Фильтры читают страницы проверок, не загружая переписки связанных запусков. */
-export async function browseProjectReports(context: CliContext, projectId: string): Promise<void> {
+export async function browseProjectReports(
+  context: CliContext,
+  projectId: string,
+  focusReportId?: string,
+): Promise<void> {
   let offset = 0,
     phase: 'baseline' | 'stage' | 'final' | undefined,
     stageId: string | undefined,
     attempt: number | undefined;
+  let focused: string | undefined;
+  if (focusReportId) {
+    let cursor = 0;
+    while (true) {
+      const page = await context.request('projects.reports', { projectId, offset: cursor });
+      const report = page.items.find((report) => report.id === focusReportId);
+      if (report) {
+        offset = cursor;
+        focused = report.id + '/' + (report.checks[0]?.id ?? 'manual');
+        break;
+      }
+      if (page.nextOffset === undefined) break;
+      cursor = page.nextOffset;
+    }
+  }
   while (true) {
     let reports: EvidenceReport[] = [];
     const choice = await liveSelect({
       title: 'Проверки и доказательства',
+      initialValue: focused,
       load: async () => {
         const page = await context.request('projects.reports', {
           projectId,

@@ -1,9 +1,19 @@
 import color from 'picocolors';
 
-export const brandName = 'Harness by Ghost_Raven';
+export let brandName = 'Harness by Ghost_Raven';
+
+/** Помечает все учебные экраны и возвращает прежнюю подпись после завершения. */
+export function enterDemoBrand(): () => void {
+  const previous = brandName;
+  brandName = 'ДЕМО · Harness by Ghost_Raven';
+  return () => {
+    brandName = previous;
+  };
+}
 
 /** Терминальный знак H и название; ширина выбирается до добавления ANSI-цветов. */
 export function renderLogo(columns: number, ascii = false): string {
+  if (brandName.startsWith('ДЕМО')) return color.cyan('[H] ') + color.bold(brandName);
   if (columns < 11) return color.bold('H');
   if (ascii || columns < 28) {
     const heading = color.cyan('[H]') + ' ' + color.bold('Harness');

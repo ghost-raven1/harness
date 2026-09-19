@@ -255,7 +255,12 @@ it('живой список сохраняет фильтр внимания и 
     'projects.list',
     expect.objectContaining({ attentionOnly: true }),
   );
-  expect(inspectProject).toHaveBeenCalledExactlyOnceWith(expect.anything(), view.projectId, true);
+  expect(inspectProject).toHaveBeenCalledExactlyOnceWith(
+    expect.anything(),
+    view.projectId,
+    true,
+    false,
+  );
 });
 
 it('отказ уже отправленной редакции открывает сравнение и сохраняет весь неизменный запрос', async () => {

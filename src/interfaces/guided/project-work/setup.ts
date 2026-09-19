@@ -15,16 +15,23 @@ type Creation = {
   goal: string;
   workspace: string;
   profile: string;
+  captureEnabled?: boolean;
 };
 
 /** Подготовка хранит параметры отдельно от глобальных предпочтений и не вызывает модель до подтверждения. */
-export async function prepareProject(context: CliContext, preferences: Preferences): Promise<void> {
+export async function prepareProject(
+  context: CliContext,
+  preferences: Preferences,
+  diffs = false,
+  initialDraft?: TaskDraft,
+): Promise<void> {
   const scope = {
     workspace: preferences.workspace,
     profile: preferences.profile,
     purpose: 'project.create' as const,
   };
   let draft =
+    initialDraft ??
     (await chooseDraft(context, scope)) ??
     (await context.request('drafts.create', {
       scope,
@@ -34,6 +41,7 @@ export async function prepareProject(context: CliContext, preferences: Preferenc
         goal: '',
         workspace: preferences.workspace,
         profile: preferences.profile,
+        ...(diffs ? { captureEnabled: true } : {}),
       },
     }));
   let payload = draft.payload as Creation;
@@ -76,6 +84,18 @@ export async function prepareProject(context: CliContext, preferences: Preferenc
           { value: 'title', label: 'Изменить название' },
           { value: 'workspace', label: 'Выбрать папку' },
           { value: 'profile', label: 'Выбрать модель' },
+          ...(diffs
+            ? [
+                {
+                  value: 'capture',
+                  label: 'Содержимое файлов для сравнения',
+                  hint:
+                    payload.captureEnabled !== false
+                      ? 'сохранять в пределах лимитов'
+                      : 'не сохранять',
+                },
+              ]
+            : []),
           { value: 'back', label: 'Сохранить черновик и вернуться' },
         ],
       }),
@@ -111,6 +131,8 @@ export async function prepareProject(context: CliContext, preferences: Preferenc
         async (profile) => update({ ...payload, profile }),
       );
     }
+    if (choice === 'capture' && diffs)
+      await update({ ...payload, captureEnabled: payload.captureEnabled === false });
     if (choice === 'submit') {
       if (!payload.title.trim() || !payload.goal.trim()) {
         await goal();
@@ -142,20 +164,31 @@ export async function prepareProject(context: CliContext, preferences: Preferenc
       });
     }
   }
-  await sendProjectCreation(context, draft);
+  await sendProjectCreation(context, draft, diffs);
 }
 
 /** Неизменный черновик повторяет создание и подготовку с прежними ключами после потери ответа. */
-export async function sendProjectCreation(context: CliContext, draft: TaskDraft): Promise<void> {
+export async function sendProjectCreation(
+  context: CliContext,
+  draft: TaskDraft,
+  diffs = false,
+): Promise<void> {
   const payload = draft.payload;
   if (payload?.kind !== 'project.create' || draft.state !== 'pending')
     throw new Error('Сначала подтвердите параметры проекта.');
+  if (payload.captureEnabled !== undefined && !diffs)
+    throw new Error(
+      'Этот черновик содержит настройку сравнения файлов. Подключитесь к сервису с поддержкой этой функции. Черновик сохранён.',
+    );
   let view = await context.request('projects.create', {
     title: payload.title,
     goal: payload.goal,
     workspace: payload.workspace,
     profile: payload.profile,
     requestKey: draft.requestKey,
+    ...(diffs && payload.captureEnabled !== undefined
+      ? { captureEnabled: payload.captureEnabled }
+      : {}),
   });
   if (view.status === 'draft')
     view = await context.request('projects.plan', {
@@ -167,5 +200,5 @@ export async function sendProjectCreation(context: CliContext, draft: TaskDraft)
           : 'plan:' + hash(draft.requestKey),
     });
   await finishProjectDraft(context, draft);
-  await inspectProject(context, view.projectId, true);
+  await inspectProject(context, view.projectId, true, diffs);
 }

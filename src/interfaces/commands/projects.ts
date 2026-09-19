@@ -1,3 +1,4 @@
+import { registerProjectChangeCommands, requireProjectDiffs } from './project-changes.js';
 import { readFile } from 'node:fs/promises';
 import { Command, InvalidArgumentError } from 'commander';
 import { projectPlanSchema } from '../../projects/schema.js';
@@ -32,6 +33,7 @@ export function registerProjectCommands(program: Command, context: CliContext): 
     .command('projects')
     .description('Проекты: цель, план, этапы и приёмка результата');
   registerProjectReadCommands(projects, context, integer);
+  registerProjectChangeCommands(projects, context, integer);
   projects
     .command('list')
     .description('Список проектов')
@@ -65,12 +67,18 @@ export function registerProjectCommands(program: Command, context: CliContext): 
     .requiredOption('--workspace <directory>', 'рабочая папка')
     .option('--profile <name>', 'профиль модели')
     .requiredOption('--key <key>', 'ключ запроса; при повторе используйте прежний')
+    .option('--capture <mode>', 'сохранять содержимое будущих снимков: on или off')
     .action(
       async (
         title: string,
         goal: string,
-        options: { workspace: string; profile?: string; key: string },
-      ) =>
+        options: { workspace: string; profile?: string; key: string; capture?: string },
+      ) => {
+        if (options.capture !== undefined) {
+          if (options.capture !== 'on' && options.capture !== 'off')
+            throw new Error('Укажите --capture on или --capture off.');
+          await requireProjectDiffs(context);
+        }
         context.output(
           await context.request('projects.create', {
             title,
@@ -78,8 +86,10 @@ export function registerProjectCommands(program: Command, context: CliContext): 
             workspace: options.workspace,
             profile: options.profile,
             requestKey: options.key,
+            ...(options.capture === undefined ? {} : { captureEnabled: options.capture === 'on' }),
           }),
-        ),
+        );
+      },
     );
   mutation(projects.command('plan <projectId>').description('Предложить или пересмотреть план'))
     .option('--feedback <text>', 'что изменить в плане')

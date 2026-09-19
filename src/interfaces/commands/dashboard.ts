@@ -20,6 +20,7 @@ import { liveConfirm } from '../guided/live-confirm.js';
 import { workspaceLine } from '../guided/task-layout.js';
 import { learningVersionLabel } from '../guided/learning-labels.js';
 import { browseProjects } from '../guided/project-work/list.js';
+import { openDemoFromDesktop } from './demo.js';
 
 /** Обычный запуск включает сервис и рабочий стол в одном окне. */
 export function registerDashboard(program: Command, context: CliContext): void {
@@ -204,6 +205,11 @@ async function desktop(
               : []),
             { value: 'settings', label: 'Настройки' },
             { value: 'help', label: 'Как пользоваться', hint: 'примеры и подсказки' },
+            {
+              value: 'demo',
+              label: 'Попробовать на учебном проекте',
+              hint: 'без подключения модели',
+            },
             { value: 'knowledge', label: 'База знаний', hint: 'уроки, доказательства и проверки' },
             { value: 'exit', label: 'Выход' },
           ],
@@ -250,6 +256,7 @@ async function desktop(
       }
       if (action === 'tasks') await chooseTask(context, preferences);
       if (action === 'projects') await browseProjects(context, preferences);
+      if (action === 'demo') await openDemoFromDesktop();
       if (action === 'knowledge') await browseKnowledge(context);
       if (action === 'help') {
         page('Как пользоваться');

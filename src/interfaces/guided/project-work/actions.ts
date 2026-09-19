@@ -1,3 +1,5 @@
+import { browseProjectChanges } from './changes.js';
+import { changeProjectCapture } from './capture.js';
 import type { ProjectView } from '../../../projects/types.js';
 import { id } from '../../../shared/primitives.js';
 import { applicationErrorData } from '../../../shared/application-error.js';
@@ -131,17 +133,20 @@ export async function projectAction(
   view: ProjectView,
   action: string,
   enhanced = false,
+  diffs = false,
 ): Promise<boolean> {
   const ref = { projectId: view.projectId, expectedRevision: view.revision, requestKey: id() };
   if (action === 'plan') await requestPlan(context, view);
   if (action === 'acceptPlan') await acceptPlan(context, view, enhanced);
   if (action === 'editPlan')
     await (enhanced ? editProjectPlan(context, view) : editPlanOption(context, view));
+  if (diffs && action === 'changes') await browseProjectChanges(context, view.projectId);
+  if (diffs && action === 'capture') await changeProjectCapture(context, view);
   if (enhanced && action === 'reports') await browseProjectReports(context, view.projectId);
-  if (enhanced && action === 'review') await reviewProject(context, view.projectId);
+  if (enhanced && action === 'review') await reviewProject(context, view.projectId, false, diffs);
   if (enhanced && action === 'versions') await inspectPlanVersions(context, view.projectId);
-  if (enhanced && action === 'export') await exportProject(context, view.projectId);
-  if (enhanced && action === 'accept') await reviewProject(context, view.projectId, true);
+  if (enhanced && action === 'export') await exportProject(context, view.projectId, diffs);
+  if (enhanced && action === 'accept') await reviewProject(context, view.projectId, true, diffs);
   if (action === 'baseline') await editPlanOption(context, view, true);
   if (action === 'message') await messageProject(context, view);
   if (action === 'manualCheck') await manualProjectCheck(context, view);

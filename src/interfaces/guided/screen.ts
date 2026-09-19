@@ -5,14 +5,15 @@ import * as prompts from '@clack/prompts';
 let active = false;
 export { plainText as terminalText } from '../../shared/plain-text.js';
 /** Рабочий стол занимает отдельный буфер; выход восстанавливает исходный терминал. */
-export function enterDesktopScreen(): () => void {
+export function enterDesktopScreen(reuse = false): () => void {
   if (!process.stdout.isTTY || process.env.TERM === 'dumb') return () => undefined;
+  if (active) return () => undefined;
   active = true;
-  process.stdout.write('\u001b[?1049h');
+  if (!reuse) process.stdout.write('\u001b[?1049h');
   return () => {
     if (!active) return;
     active = false;
-    process.stdout.write('\u001b[?25h\u001b[?1049l');
+    process.stdout.write('\u001b[?25h' + (reuse ? '' : '\u001b[?1049l'));
   };
 }
 /** Новая страница заменяет предыдущую; JSON и перенаправленный вывод остаются обычными потоками. */

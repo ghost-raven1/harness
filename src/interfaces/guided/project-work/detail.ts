@@ -42,6 +42,7 @@ export async function inspectProject(
   context: CliContext,
   projectId: string,
   enhanced = false,
+  diffs = false,
 ): Promise<void> {
   const load = projectReader(context, projectId);
   let notice = '';
@@ -102,6 +103,20 @@ export async function inspectProject(
                       { value: 'export', label: 'Экспорт результата и доказательств' },
                     ]
                   : []),
+                ...(diffs
+                  ? [
+                      { value: 'changes', label: 'Изменения файлов · до и после' },
+                      ...(['draft', 'ready', 'paused'].includes(view.status)
+                        ? [
+                            {
+                              value: 'capture',
+                              label: 'Сохранять содержимое будущих снимков',
+                              hint: view.capture?.enabled ? 'включено' : 'выключено',
+                            },
+                          ]
+                        : []),
+                    ]
+                  : []),
                 ...(view.currentRunId || view.stages.some((stage) => stage.runId)
                   ? [{ value: 'logs', label: 'Журнал, мысли и ответ этапа' }]
                   : []),
@@ -117,7 +132,7 @@ export async function inspectProject(
         }
         notice = '';
         try {
-          if (await projectAction(context, await load(), action, enhanced)) return;
+          if (await projectAction(context, await load(), action, enhanced, diffs)) return;
         } catch (error) {
           if (missing(error)) throw error;
           if (message(error) !== 'INTERACTIVE_CANCEL') notice = explainError(error);

@@ -1,3 +1,4 @@
+import { browseProjectChanges } from './changes.js';
 import type { CommandResponse } from '../../contracts/index.js';
 import type { CliContext } from '../../types.js';
 import { id } from '../../../shared/primitives.js';
@@ -12,7 +13,22 @@ export function projectExportText(preview: CommandResponse<'projects.exportPrevi
   return [
     `Формат: ${preview.format === 'markdown' ? 'Markdown' : 'JSON'}`,
     `Куда: ${preview.destination}`,
+    ...(preview.includeDiffs === undefined
+      ? []
+      : [`Построчные изменения: ${preview.includeDiffs ? 'включены' : 'не включены'}`]),
     `Журналы: ${preview.includeLogs ? 'включены' : 'не включены'}`,
+    ...(preview.diffs
+      ? [
+          `Файлов в сравнении: ${preview.diffs.files}; без доступного сравнения: ${preview.diffs.unavailable}`,
+          ...preview.diffs.items.map(
+            (item) =>
+              `${item.path}: ${item.reason || (item.state === 'available' ? 'сохранённое сравнение' : 'текст недоступен')}`,
+          ),
+          ...(preview.diffs.truncated
+            ? ['Показана часть файлов. Полный список откройте перед экспортом.']
+            : []),
+        ]
+      : []),
     '\nСостав:',
     ...preview.sections,
     '\nКоманды пользователя:',
@@ -36,9 +52,14 @@ export function projectExportText(preview: CommandResponse<'projects.exportPrevi
 }
 
 /** Экспорт создаётся в состоянии Harness; изменение проекта отзывает показанный предпросмотр. */
-export async function exportProject(context: CliContext, projectId: string): Promise<void> {
+export async function exportProject(
+  context: CliContext,
+  projectId: string,
+  diffs = false,
+): Promise<void> {
   let format: 'markdown' | 'json' = 'markdown',
-    includeLogs = false;
+    includeLogs = false,
+    includeDiffs = false;
   while (true) {
     const choice = await liveSelect({
       title: 'Экспорт результата проекта',
@@ -55,11 +76,23 @@ export async function exportProject(context: CliContext, projectId: string): Pro
             hint: includeLogs ? 'да · могут содержать данные команд' : 'нет',
           },
           { value: 'readLogs', label: 'Открыть журналы перед экспортом' },
+          ...(diffs
+            ? [
+                {
+                  value: 'diffs',
+                  label: 'Включить построчные изменения',
+                  hint: includeDiffs ? 'да · содержимое файлов' : 'нет',
+                },
+                { value: 'readDiffs', label: 'Просмотреть изменения перед экспортом' },
+              ]
+            : []),
           { value: 'back', label: '← К проекту' },
         ],
       }),
     });
     if (typeof choice === 'symbol' || choice === 'back') return;
+    if (choice === 'readDiffs' && diffs) await browseProjectChanges(context, projectId);
+    if (choice === 'diffs' && diffs) includeDiffs = !includeDiffs;
     if (choice === 'readLogs') await browseProjectReports(context, projectId);
     if (choice === 'format') format = format === 'markdown' ? 'json' : 'markdown';
     if (choice === 'logs') includeLogs = !includeLogs;
@@ -70,6 +103,7 @@ export async function exportProject(context: CliContext, projectId: string): Pro
       expectedRevision: view.revision,
       format,
       includeLogs,
+      ...(diffs ? { includeDiffs } : {}),
     });
     if (
       (await readText(
@@ -106,6 +140,7 @@ export async function exportProject(context: CliContext, projectId: string): Pro
       requestKey: id(),
       format,
       includeLogs,
+      ...(diffs ? { includeDiffs } : {}),
     };
     while (true) {
       try {

@@ -1,3 +1,6 @@
+import { liveSelect } from '../live-select.js';
+import { browseProjectChanges } from './changes.js';
+import { browseProjectReports } from './reports.js';
 import type { ProjectReview } from '../../../projects/read-schema.js';
 import type { CliContext } from '../../types.js';
 import { id } from '../../../shared/primitives.js';
@@ -88,6 +91,7 @@ export async function reviewProject(
   context: CliContext,
   projectId: string,
   accept = false,
+  diffs = false,
 ): Promise<void> {
   let review = await context.request('projects.review', { projectId });
   const load = async () => {
@@ -96,17 +100,40 @@ export async function reviewProject(
       review = await context.request('projects.review', { projectId });
     return {
       tabs: reviewTabs(review),
-      actionLabel: accept && review.canAccept ? 'принять результат' : undefined,
+      actionLabel:
+        accept && review.canAccept
+          ? 'принять результат'
+          : !accept && diffs
+            ? 'изменения и проверки'
+            : undefined,
     };
   };
-  const snapshot = await load();
-  if (
-    (await readText('Приёмка проекта', snapshot.tabs, {
-      actionLabel: snapshot.actionLabel,
-      load,
-    })) !== 'action'
-  )
-    return;
+  while (true) {
+    const snapshot = await load();
+    if (
+      (await readText('Приёмка проекта', snapshot.tabs, {
+        actionLabel: snapshot.actionLabel,
+        load,
+      })) !== 'action'
+    )
+      return;
+    if (accept) break;
+    const action = await liveSelect({
+      title: 'Доказательства результата',
+      load: async () => ({
+        message: 'Что открыть?',
+        options: [
+          ...(diffs ? [{ value: 'changes', label: 'Изменения файлов · до и после' }] : []),
+          { value: 'checks', label: 'Проверки и полный вывод команд' },
+          { value: 'read', label: '← К итогам' },
+          { value: 'back', label: '← К проекту' },
+        ],
+      }),
+    });
+    if (typeof action === 'symbol' || action === 'back') return;
+    if (action === 'changes' && diffs) await browseProjectChanges(context, projectId);
+    if (action === 'checks') await browseProjectReports(context, projectId);
+  }
   const confirmed = await liveConfirm({
     title: 'Приёмка проекта',
     message: 'Принять проверенный результат?',
