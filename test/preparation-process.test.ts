@@ -92,6 +92,31 @@ await log.close();`,
           () => 'gone',
         );
         expect(['gone', 'Z', 'X']).toContain(state);
+      } else if (process.platform === 'darwin') {
+        let exists = true;
+        try {
+          process.kill(pid, 0);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+          exists = false;
+        }
+        if (exists) {
+          // PID может ещё существовать после завершения исполнителя, пока ОС не собрала его статус.
+          const state = await execute('/bin/ps', ['-o', 'stat=', '-p', String(pid)]).then(
+            ({ stdout }) => stdout.trim(),
+            (error: unknown) => {
+              const failure = error as { code?: number; stdout?: string; stderr?: string };
+              if (
+                failure.code === 1 &&
+                failure.stdout?.trim() === '' &&
+                failure.stderr?.trim() === ''
+              )
+                return 'gone';
+              throw error;
+            },
+          );
+          expect(['gone', 'Z', 'X']).toContain(state === 'gone' ? state : state[0]);
+        }
       } else expect(() => process.kill(pid!, 0)).toThrow();
       // В Windows открытый потомком файл помешал бы удалить временный проект.
       await rm(root, { recursive: true });
