@@ -129,6 +129,7 @@ export const projectViewSchema = projectSummarySchema.extend({
   planVersion: revision.optional(),
   resultRevision: z.string().optional(),
   currentRunId: key.optional(),
+  pendingApprovals: revision.optional(),
   reason: z.string().optional(),
   reasonCode: z.string().optional(),
   allowedActions: z.array(projectActionSchema),

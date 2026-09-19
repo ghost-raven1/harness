@@ -2,7 +2,7 @@ import type { ProjectView } from '../../../projects/types.js';
 import { id } from '../../../shared/primitives.js';
 import { applicationErrorData } from '../../../shared/application-error.js';
 import type { CliContext } from '../../types.js';
-import { selected } from '../../ui.js';
+import { decideApprovals, selected } from '../../ui.js';
 import { liveSelect } from '../live-select.js';
 import { liveConfirm } from '../live-confirm.js';
 import { followRun } from '../watch.js';
@@ -134,6 +134,11 @@ export async function projectAction(
   if (action === 'message') await messageProject(context, view);
   if (action === 'manualCheck') await manualProjectCheck(context, view);
   if (action === 'resolve') await resolveProjectOperation(context, view);
+  if (action === 'approvals') {
+    const current = await context.request('projects.detail', { projectId: view.projectId });
+    if (current.currentRunId && (current.pendingApprovals ?? 0) > 0)
+      await decideApprovals(context.directory(), current.currentRunId);
+  }
   if (action === 'logs') await inspectStage(context, view);
   if (action === 'pause') await context.request('projects.pause', ref);
   if (action === 'recheck') await context.request('projects.recheck', ref);

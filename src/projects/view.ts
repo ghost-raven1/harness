@@ -15,6 +15,16 @@ export async function projectView(
   const events = await store.events(project.id, cursor, eventLimit);
   const allowed: ProjectView['allowedActions'] = [];
   const busy = project.intent?.runId ? runs.busy(project.intent.runId) : false;
+  const currentRun =
+    busy && project.intent?.runId ? await runs.inspect(project.intent.runId) : undefined;
+  const pendingApprovals = Object.values(currentRun?.approvals ?? {}).filter(
+    (approval) => approval.status === 'pending',
+  ).length;
+  const awaitingApproval = pendingApprovals > 0 && project.status === 'running';
+  const reason = awaitingApproval
+    ? 'Требуется разрешение на действие. Откройте «Рассмотреть разрешения».'
+    : project.reason;
+  const reasonCode = awaitingApproval ? 'APPROVAL_REQUIRED' : project.reasonCode;
   if (
     !['completed', 'cancelled'].includes(project.status) &&
     !busy &&
@@ -50,8 +60,9 @@ export async function projectView(
     planVersion: project.plan?.version,
     resultRevision: project.resultSnapshot?.digest,
     currentRunId: project.intent?.runId ?? project.runIds.at(-1),
-    reason: project.reason,
-    reasonCode: project.reasonCode,
+    pendingApprovals,
+    reason,
+    reasonCode,
     allowedActions: [...new Set(allowed)],
     roles: Object.keys(project.config.value.roles).map((id) => ({ id, label: id })),
     stages: (project.plan?.stages ?? []).map((stage) => ({
@@ -63,11 +74,11 @@ export async function projectView(
     changesTruncated: changes.length > 1000,
     externalChanges: externalChanges.slice(0, 1000),
     externalChangesTruncated: externalChanges.length > 1000,
-    blockers: project.reasonCode
+    blockers: reasonCode
       ? [
           {
-            code: project.reasonCode,
-            message: project.reason ?? 'Требуется решение человека.',
+            code: reasonCode,
+            message: reason ?? 'Требуется решение человека.',
             runId: project.intent?.runId,
             stageId: project.intent?.stageId,
           },

@@ -7,22 +7,27 @@ import { liveSelect, menuFrame } from '../src/interfaces/guided/live-select.js';
 import { liveConfirm } from '../src/interfaces/guided/live-confirm.js';
 import { confirmProject } from '../src/interfaces/guided/project-work/confirm.js';
 import { manualProjectCheck } from '../src/interfaces/guided/project-work/checks.js';
-import { projectReader } from '../src/interfaces/guided/project-work/detail.js';
+import { inspectProject, projectReader } from '../src/interfaces/guided/project-work/detail.js';
 import {
   planText,
   projectSummary,
   projectTabs,
 } from '../src/interfaces/guided/project-work/format.js';
 import { projectFixture } from './project-ui-fixture.js';
-import { resumeProject } from '../src/interfaces/guided/project-work/actions.js';
+import { projectAction, resumeProject } from '../src/interfaces/guided/project-work/actions.js';
 import { ApplicationError } from '../src/shared/application-error.js';
 import type { CliContext } from '../src/interfaces/types.js';
+import { decideApprovals } from '../src/interfaces/ui.js';
 
 vi.mock('../src/interfaces/guided/live-select.js', async (original) => ({
   ...(await original<typeof import('../src/interfaces/guided/live-select.js')>()),
   liveSelect: vi.fn(),
 }));
 vi.mock('../src/interfaces/guided/live-confirm.js', () => ({ liveConfirm: vi.fn() }));
+vi.mock('../src/interfaces/ui.js', async (original) => ({
+  ...(await original<typeof import('../src/interfaces/ui.js')>()),
+  decideApprovals: vi.fn(),
+}));
 vi.mock('../src/interfaces/guided/text-reader.js', async (original) => ({
   ...(await original<typeof import('../src/interfaces/guided/text-reader.js')>()),
   readText: vi.fn(),
@@ -32,6 +37,52 @@ vi.mock('@clack/prompts', async (original) => ({
   text: vi.fn(),
 }));
 beforeEach(() => vi.clearAllMocks());
+
+it('карточка ожидания ведёт к разрешениям текущего запуска и обновляется после решения', async () => {
+  let view = projectFixture({
+    status: 'running',
+    currentRunId: 'baseline-run',
+    pendingApprovals: 1,
+    reasonCode: 'APPROVAL_REQUIRED',
+    allowedActions: ['pause', 'cancel'],
+  });
+  const request = vi.fn(async (_method: string) => view);
+  vi.mocked(readText).mockImplementation(async (_title, tabs, options) => {
+    expect(options?.subtitle).toContain('Ждёт разрешения: 1');
+    expect(tabs[0]?.text).toContain('Ждёт разрешения: 1');
+    return 'action';
+  });
+  vi.mocked(decideApprovals).mockImplementation(async () => {
+    view = { ...view, pendingApprovals: 0, reasonCode: undefined };
+  });
+  let menu = 0;
+  vi.mocked(liveSelect).mockImplementation(async (options) => {
+    const state = await options.load();
+    if (menu++ === 0) {
+      expect(state.summary).toContain('Ждёт разрешения: 1');
+      expect(state.options).toContainEqual({ value: 'approvals', label: 'Рассмотреть разрешения' });
+      return 'approvals';
+    }
+    expect(state.summary).toContain('В работе');
+    expect(state.options.some((option) => option.value === 'approvals')).toBe(false);
+    return 'back';
+  });
+  await inspectProject(
+    { request, directory: () => '/state' } as unknown as CliContext,
+    view.projectId,
+  );
+  expect(decideApprovals).toHaveBeenCalledExactlyOnceWith('/state', 'baseline-run');
+  expect(request.mock.calls.every(([method]) => method === 'projects.detail')).toBe(true);
+});
+
+it('исчезнувшее разрешение не открывает общий список чужих проектов', async () => {
+  const view = projectFixture({ status: 'running', pendingApprovals: 1, currentRunId: 'old-run' });
+  const request = vi
+    .fn()
+    .mockResolvedValue({ ...view, currentRunId: undefined, pendingApprovals: 0 });
+  await projectAction({ request } as unknown as CliContext, view, 'approvals');
+  expect(decideApprovals).not.toHaveBeenCalled();
+});
 
 it('план показывает точные аргументы и ручные проверки до принятия', () => {
   const view = projectFixture();

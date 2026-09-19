@@ -13,6 +13,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { createServer } from 'node:net';
 import { promisify } from 'node:util';
 import { expect, it } from 'vitest';
 import { temporary } from './helpers.js';
@@ -21,9 +22,44 @@ const execute = promisify(execFile);
 const repository = resolve('.');
 const release = `node-v24.21.0-${process.platform}-${process.arch}`;
 
+/** Повторяет адрес mutex протокола 2, чтобы проверять предусловия настоящего установщика. */
+function preparationPort(root: string) {
+  return 20000 + (createHash('sha256').update(root).digest().readUInt32BE(0) % 20000);
+}
+
+/** Исключает конфликт с временными соединениями других тестов до запуска конкурирующих процессов. */
+async function launcherRoot() {
+  const directory = await temporary();
+  const [first, last] =
+    process.platform === 'linux'
+      ? (await readFile('/proc/sys/net/ipv4/ip_local_port_range', 'utf8'))
+          .trim()
+          .split(/\s+/)
+          .map(Number)
+      : [49152, 65535];
+  for (let attempt = 0; attempt < 256; attempt++) {
+    const root = join(directory, `Harness с пробелами ${attempt}`);
+    const port = preparationPort(root);
+    if (port >= first! && port <= last!) continue;
+    const server = createServer();
+    try {
+      await new Promise<void>((done, fail) => {
+        server.once('error', fail);
+        server.listen({ host: '127.0.0.1', port, exclusive: true }, done);
+      });
+      return root;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error;
+    } finally {
+      if (server.listening) await new Promise<void>((done) => server.close(() => done()));
+    }
+  }
+  throw new Error('Не найден свободный канал подготовки вне диапазона временных портов.');
+}
+
 /** Архив и curl локальные; распаковка, установщик и процессы Node выполняются по-настоящему. */
 async function launcher() {
-  const root = join(await temporary(), 'Harness с пробелами');
+  const root = await launcherRoot();
   const archiveSource = join(root, 'archive-source');
   const staged = join(archiveSource, release);
   const fakeBin = join(root, 'fake-bin');
@@ -129,11 +165,55 @@ it.skipIf(process.platform === 'win32')(
 );
 
 it.skipIf(process.platform === 'win32')(
+  'занятый посторонним процессом канал отклоняет обе установки и сохраняет прежний runtime',
+  async () => {
+    const fixture = await launcher();
+    await mkdir(fixture.destination, { recursive: true });
+    await writeFile(join(fixture.destination, 'previous.txt'), 'прежний runtime');
+    const server = createServer();
+    await new Promise<void>((done, fail) => {
+      server.once('error', fail);
+      server.listen(
+        { host: '127.0.0.1', port: preparationPort(fixture.root), exclusive: true },
+        done,
+      );
+    });
+    try {
+      const results = await Promise.allSettled([fixture.install(), fixture.install()]);
+      for (const result of results) {
+        expect(result.status).toBe('rejected');
+        if (result.status === 'rejected')
+          expect(result.reason.stderr).toContain('Локальный канал подготовки занят');
+      }
+      expect(await readFile(join(fixture.destination, 'previous.txt'), 'utf8')).toBe(
+        'прежний runtime',
+      );
+      expect(await readdir(fixture.destination)).toEqual(['previous.txt']);
+      expect(await readdir(join(fixture.root, '.tools'))).toEqual([release]);
+    } finally {
+      await new Promise<void>((done) => server.close(() => done()));
+    }
+    await fixture.install();
+    expect(await readdir(fixture.destination)).toEqual(['bin', 'lib']);
+    expect(await readdir(join(fixture.root, '.tools'))).toEqual([release]);
+  },
+  30_000,
+);
+
+it.skipIf(process.platform === 'win32')(
   'параллельная публикация runtime оставляет одну целую папку без вложенного дубликата',
   async () => {
     const fixture = await launcher();
     const results = await Promise.allSettled([fixture.install(), fixture.install()]);
-    expect(results.some((result) => result.status === 'fulfilled')).toBe(true);
+    const failures = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    );
+    if (failures.length === results.length)
+      throw new AggregateError(
+        failures,
+        'Ни одна параллельная установка runtime не завершилась: ' +
+          failures.map((error) => error.stderr || error.message).join('\n'),
+      );
     for (const result of results) {
       if (result.status === 'rejected')
         expect(result.reason.stderr).toContain('Дождитесь завершения другой подготовки');

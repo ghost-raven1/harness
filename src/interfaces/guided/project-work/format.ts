@@ -60,10 +60,12 @@ export function planText(plan: ProjectPlan | undefined, roles: ProjectView['role
   ].join('\n');
 }
 /** Краткая карточка не обрезает цель: полный текст доступен в соседнем разделе. */
-export function projectSummary(view: ProjectSummary): string {
+export function projectSummary(view: ProjectSummary & { pendingApprovals?: number }): string {
   return [
     view.title,
-    projectStatusLabels[view.status],
+    (view.pendingApprovals ?? 0) > 0
+      ? 'Ждёт разрешения: ' + view.pendingApprovals
+      : projectStatusLabels[view.status],
     `Этапов проверено: ${view.progress.completed} из ${view.progress.total}`,
   ].join('\n');
 }

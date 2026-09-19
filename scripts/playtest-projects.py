@@ -128,6 +128,73 @@ def run_case(node, root, width, frames, checks):
         checks.append(case + '/purge-invalidates-second-window')
         second.send('\x1b')
         second.wait_text('Новый проект')
+
+        # Настоящая исходная команда с ask должна быть видна до запуска первого этапа.
+        approval_project = fixture.call('projects.create', {
+            'title': 'Проверка с разрешением', 'goal': 'Проверить исходное состояние перед работой',
+            'workspace': str(workspace), 'profile': 'fixture', 'requestKey': str(uuid.uuid4())})
+        approval_id = approval_project['projectId']
+        command_args = ['-e', "process.stdout.write('HARNESS_PROJECT_BASELINE_OK')"]
+        mutate('editPlan', approval_id, plan={
+            'maxCorrections': 2, 'fixBaselineFailures': False, 'stages': [{
+                'id': 'approved-stage', 'title': 'Работа после проверки',
+                'task': 'Начни только после исходной проверки', 'role': 'coordinator',
+                'dependsOn': [], 'expectedResult': 'Работа выполнена', 'requiredTools': [],
+                'verification': {'kind': 'commands', 'checks': [{
+                    'id': 'baseline', 'title': 'Проверка Node', 'command': node, 'args': command_args,
+                }]},
+            }]})
+        mutate('acceptPlan', approval_id, expectedPlanVersion=detail(approval_id)['planVersion'])
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            current = detail(approval_id)
+            if current.get('pendingApprovals') == 1:
+                break
+            terminal.drain(0.1)
+        assert current.get('pendingApprovals') == 1, current
+        assert current['reasonCode'] == 'APPROVAL_REQUIRED', current
+        assert current['stages'][0]['status'] == 'pending', current
+        check_run = current['currentRunId']
+        approval = next(item for item in fixture.call('approvals.list') if item['runId'] == check_run)
+        assert approval['tool'] == 'process.exec' and approval['args']['args'] == command_args, approval
+        terminal.open_label('Проверка с разрешением')
+        capture('approval-overview', 'Ждёт разрешения: 1')
+        second.open_label('Проверка с разрешением')
+        second.wait_text('Ждёт разрешения: 1')
+        terminal.send('\r')
+        capture('approval-action', 'Рассмотреть разрешения')
+        terminal.open_label('Рассмотреть разрешения')
+        capture('approval-list', 'process.exec')
+        terminal.open_label('process.exec')
+        capture('approval-confirmation', 'Точные аргументы операции')
+        assert detail(approval_id)['stages'][0]['status'] == 'pending'
+        terminal.send('\x1b[D\r')
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            current = detail(approval_id)
+            if current['stages'][0]['status'] == 'running':
+                break
+            terminal.drain(0.1)
+        assert current['stages'][0]['status'] == 'running', current
+        assert not current.get('pendingApprovals'), current
+        assert current['reports'][0]['phase'] == 'baseline' and current['reports'][0]['status'] == 'passed', current
+        assert 'HARNESS_PROJECT_BASELINE_OK' in current['reports'][0]['checks'][0]['summary'], current
+        assert fixture.call('runtime.status', {'runId': check_run})['status'] == 'completed'
+        capture('approval-starts-stage', 'В работе')
+        assert 'Рассмотреть разрешения' not in terminal.screen()
+        second.wait_text('В работе', ['Ждёт разрешения: 1'])
+        mutate('cancel', approval_id)
+        wait_status(approval_id, 'cancelled')
+        preview = fixture.call('projects.purgePreview', {'projectId': approval_id})
+        mutate('purge', approval_id, previewToken=preview['previewToken'])
+        terminal.wait_text('Проект удалён')
+        second.wait_text('Проект удалён')
+        terminal.send('\x1b')
+        second.send('\x1b')
+        terminal.wait_text('Новый проект')
+        second.wait_text('Новый проект')
+        checks.append(case + '/approval-project-purged')
+
         second.send('\x1b')
         second.wait_text('Чем займёмся?')
         second.open_label('Выход')

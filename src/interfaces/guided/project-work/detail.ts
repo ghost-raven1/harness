@@ -72,6 +72,9 @@ export async function inspectProject(context: CliContext, projectId: string): Pr
               message: 'Что дальше?',
               options: [
                 { value: 'read', label: 'Цель, план, проверки и журнал' },
+                ...((view.pendingApprovals ?? 0) > 0
+                  ? [{ value: 'approvals', label: 'Рассмотреть разрешения' }]
+                  : []),
                 ...view.allowedActions.map((value) => ({
                   value,
                   label:
