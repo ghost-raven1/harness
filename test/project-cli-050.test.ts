@@ -9,7 +9,10 @@ import type { TaskDraft } from '../src/sessions/drafts.js';
 import { chooseDraft } from '../src/interfaces/guided/task-drafts.js';
 import { liveSelect } from '../src/interfaces/guided/live-select.js';
 import { liveConfirm } from '../src/interfaces/guided/live-confirm.js';
-import { prepareProject } from '../src/interfaces/guided/project-work/setup.js';
+import {
+  sendProjectCreation,
+  prepareProject,
+} from '../src/interfaces/guided/project-work/setup.js';
 import { editProjectPlan } from '../src/interfaces/guided/project-work/editor.js';
 import { outputPageText } from '../src/interfaces/guided/project-work/reports.js';
 import { comparisonText } from '../src/interfaces/guided/project-work/plan-history.js';
@@ -320,4 +323,22 @@ it('копия максимально длинного названия оста
   const copied = freshStage(view, { ...view.plan!.stages[0]!, title: 'я'.repeat(500) });
   expect(copied.title).toHaveLength(500);
   expect(copied.title.endsWith(' · копия')).toBe(true);
+});
+
+it('длинный допустимый ключ черновика получает устойчивый ключ подготовки в пределах контракта', async () => {
+  const draft = { ...creationDraft(), state: 'pending' as const, requestKey: 'k'.repeat(200) };
+  const request = vi.fn(async (method: string) => {
+    if (method === 'projects.create') return projectFixture({ status: 'draft' });
+    if (method === 'projects.plan') throw new Error('Connection lost');
+    throw new Error(method);
+  });
+  const context = { request } as unknown as CliContext;
+  await expect(sendProjectCreation(context, draft)).rejects.toThrow('Connection lost');
+  await expect(sendProjectCreation(context, draft)).rejects.toThrow('Connection lost');
+  const plans = request.mock.calls.filter(([method]) => method === 'projects.plan');
+  expect(plans[0]).toEqual(plans[1]);
+  expect(request).toHaveBeenCalledWith(
+    'projects.plan',
+    expect.objectContaining({ requestKey: expect.stringMatching(/^plan:[a-f0-9]{64}$/) }),
+  );
 });

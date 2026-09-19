@@ -1,3 +1,4 @@
+import { hash } from '../../../shared/primitives.js';
 import type { TaskDraft } from '../../../sessions/drafts.js';
 import type { CliContext } from '../../types.js';
 import type { Preferences } from '../preferences.js';
@@ -160,7 +161,10 @@ export async function sendProjectCreation(context: CliContext, draft: TaskDraft)
     view = await context.request('projects.plan', {
       projectId: view.projectId,
       expectedRevision: view.revision,
-      requestKey: draft.requestKey + ':plan',
+      requestKey:
+        draft.requestKey.length <= 195
+          ? draft.requestKey + ':plan'
+          : 'plan:' + hash(draft.requestKey),
     });
   await finishProjectDraft(context, draft);
   await inspectProject(context, view.projectId, true);
