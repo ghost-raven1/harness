@@ -16,7 +16,16 @@ import { hash } from '../src/shared/primitives.js';
 import type { ModelOutput, ModelProvider, ModelRequest, ToolCall } from '../src/providers/types.js';
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
-  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+  const errors: unknown[] = [];
+  for (const cleanup of cleanups.splice(0).reverse()) {
+    try {
+      await cleanup();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  // Vitest добавляет ошибки afterEach к исходной ошибке, не заменяя её.
+  if (errors.length) throw new AggregateError(errors, 'Не удалось очистить ресурсы теста.');
 });
 export async function temporary(): Promise<string> {
   const path = await realpath(await mkdtemp(join(tmpdir(), 'hr-')));

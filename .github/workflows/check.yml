@@ -33,6 +33,12 @@ jobs:
         run: npm ci --include=dev --include=optional --no-audit --no-fund 2>&1 | tee "$CI_LOG_DIR/install.log"
       - name: Форматирование, типы, сборка и тесты
         run: npm run check 2>&1 | tee "$CI_LOG_DIR/check.log"
+      - name: Повторная подготовка и освобождение процессов Windows
+        if: runner.os == 'Windows'
+        run: |
+          for pass in 1 2; do
+            npm exec -- vitest run test/bootstrap.test.ts test/preparation-process.test.ts 2>&1 | tee "$CI_LOG_DIR/bootstrap-repeat-$pass.log"
+          done
       - name: Каталог 1 000 и 10 000 задач
         if: runner.os == 'Linux'
         run: |

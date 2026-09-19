@@ -3,6 +3,7 @@ import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promi
 import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
 import { expect, it, vi } from 'vitest';
 import { temporary } from './helpers.js';
 import { stopProcessTree } from '../src/tools/process.js';
@@ -114,10 +115,17 @@ async function prepare(root: string, timeoutMs = 20_000 * timeoutFactor) {
   const timer = setTimeout(() => {
     if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
     timedOut = true;
-    // Завершаем дерево до родителя: иначе npm продолжает удерживать временную папку Windows.
-    stopping = stopProcessTree(child.pid).catch(() => {
-      child.kill('SIGKILL');
-    });
+    stopping = (async () => {
+      if (process.platform !== 'win32') {
+        // Владелец передаст отмену отдельным группам npm и компилятора через lease.signal.
+        child.kill('SIGTERM');
+        await Promise.race([execution.catch(() => {}), delay(1500)]);
+      }
+      // Windows завершает дерево целиком; на POSIX это запасной выход для зависшего владельца.
+      await stopProcessTree(child.pid!).catch(() => {
+        child.kill('SIGKILL');
+      });
+    })();
   }, timeoutMs);
   try {
     const result = await execution;
@@ -147,10 +155,21 @@ it(
     );
     const compiled = join(root, 'dist/interfaces/cli.js');
     const before = await stat(compiled);
+    // У старой версии есть только prepared.json; обновление не требует новой установки.
+    await rm(join(root, '.tools/dependencies.json'));
     const second = await prepare(root);
     expect(second.stdout).toContain('Библиотеки готовы');
     expect(second.stdout).toContain('Приложение готово');
     expect((await stat(compiled)).mtimeMs).toBe(before.mtimeMs);
+    expect(
+      JSON.parse(await readFile(join(root, '.tools/dependencies.json'), 'utf8')),
+    ).toHaveProperty('dependencies');
+    const log = await readFile(join(root, '.tools/setup.log'), 'utf8');
+    expect(log.match(/npm-cli\.js ci /g)).toHaveLength(1);
+    for (const stage of ['npm-ci', 'npm-ls', 'build', 'CLI --help']) {
+      expect(log).toContain('stage=' + stage + ' start');
+      expect(log).toMatch(new RegExp('stage=' + stage + ' finish status=ok elapsedMs=\\d+'));
+    }
     expect((await execute(process.execPath, [compiled, '--help'], { cwd: root })).stdout).toContain(
       'HARNESS_FIXTURE_READY',
     );
@@ -238,12 +257,65 @@ it(
     await writeFile(join(root, 'dist/build-manifest.json'), 'null');
     const result = await prepare(root);
     expect(result.stdout).toContain('Всё готово');
+    expect(result.stdout).toContain('Библиотеки готовы');
+    expect(
+      (await readFile(join(root, '.tools/setup.log'), 'utf8')).match(/npm-cli\.js ci /g),
+    ).toHaveLength(1);
     expect(JSON.parse(await readFile(join(root, '.tools/prepared.json'), 'utf8'))).toHaveProperty(
       'dependencies',
     );
     expect(
       JSON.parse(await readFile(join(root, 'dist/build-manifest.json'), 'utf8')).schemaVersion,
     ).toBe(1);
+  },
+  40_000 * timeoutFactor,
+);
+
+it(
+  'изменение lockfile требует новой установки, даже когда дерево npm исправно',
+  async () => {
+    const root = await project();
+    await prepare(root);
+    const marker = join(root, '.tools/dependencies.json');
+    const previous = JSON.parse(await readFile(marker, 'utf8'));
+    const lockfile = join(root, 'package-lock.json');
+    const lock = JSON.parse(await readFile(lockfile, 'utf8'));
+    lock.packages[''].license = 'UNLICENSED';
+    await writeFile(lockfile, JSON.stringify(lock));
+    const result = await prepare(root);
+    expect(result.stdout).toContain('Устанавливаю библиотеки');
+    expect(JSON.parse(await readFile(marker, 'utf8')).dependencies).not.toBe(previous.dependencies);
+    expect(
+      (await readFile(join(root, '.tools/setup.log'), 'utf8')).match(/npm-cli\.js ci /g),
+    ).toHaveLength(2);
+  },
+  40_000 * timeoutFactor,
+);
+
+it(
+  'ошибка сборки сохраняет проверенную установку для следующей попытки',
+  async () => {
+    const root = await project();
+    const source = join(root, 'src/interfaces/cli.ts');
+    const valid = await readFile(source, 'utf8');
+    await writeFile(source, 'const value: number = "ошибка";');
+    await expect(prepare(root)).rejects.toThrow('Подготовка завершилась');
+    expect(await readFile(join(root, '.tools/setup.log'), 'utf8')).toMatch(
+      /stage=build finish status=error elapsedMs=\d+/,
+    );
+    await expect(stat(join(root, '.tools/prepared.json'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    expect(
+      JSON.parse(await readFile(join(root, '.tools/dependencies.json'), 'utf8')),
+    ).toHaveProperty('dependencies');
+    await writeFile(source, valid);
+    const result = await prepare(root);
+    expect(result.stdout).toContain('Библиотеки готовы');
+    expect(result.stdout).toContain('Всё готово');
+    expect(
+      (await readFile(join(root, '.tools/setup.log'), 'utf8')).match(/npm-cli\.js ci /g),
+    ).toHaveLength(1);
   },
   40_000 * timeoutFactor,
 );

@@ -55,7 +55,7 @@ export async function checkRelease(root, { full = false } = {}) {
   const project = join(temporary, 'Поставка [проверка] с пробелами');
   const state = join(temporary, 'отдельное состояние');
   const log = await open(join(releases, 'release-check.log'), 'w', 0o600);
-  let report;
+  let report, primaryError;
   try {
     for (const file of manifest.files) {
       if (
@@ -137,14 +137,33 @@ export async function checkRelease(root, { full = false } = {}) {
       fullCheck: full,
       cloudRequests: false,
     };
+  } catch (error) {
+    primaryError = error;
+    throw error;
   } finally {
-    try {
-      await copyFile(join(project, '.tools/setup.log'), join(releases, 'release-install.log'));
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    } finally {
-      await log.close();
-      await rm(temporary, { recursive: true, force: true });
+    const cleanupErrors = [];
+    for (const cleanup of [
+      async () => {
+        try {
+          await copyFile(join(project, '.tools/setup.log'), join(releases, 'release-install.log'));
+        } catch (error) {
+          if (error.code !== 'ENOENT') throw error;
+        }
+      },
+      () => log.close(),
+      () => rm(temporary, { recursive: true, force: true }),
+    ]) {
+      try {
+        await cleanup();
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
+    }
+    if (cleanupErrors.length) {
+      const error = new AggregateError(cleanupErrors, 'Не удалось очистить проверку поставки.');
+      // Исходная ошибка установки важнее вторичного отказа удаления временной папки.
+      if (primaryError) console.error(error);
+      else throw error;
     }
   }
   await writeJsonAtomic(join(releases, 'release-check.json'), report);

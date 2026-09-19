@@ -1,4 +1,4 @@
-# Устройство Harness 0.3.0
+# Устройство Harness 0.3.1
 
 ```mermaid
 flowchart LR

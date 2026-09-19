@@ -10,6 +10,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const version = (await readFile(join(root, '.nvmrc'), 'utf8')).trim();
 const cache = join(root, '.tools');
 const marker = join(cache, 'prepared.json');
+const dependencyMarker = join(cache, 'dependencies.json');
 const log = join(cache, 'setup.log');
 const npmCli =
   process.platform === 'win32'
@@ -23,22 +24,59 @@ const environment = {
     (process.env.PATH ?? ''),
 };
 
+/** Ошибка записи диагностики не заменяет исходную причину сбоя подготовки. */
+async function finishLog(message) {
+  try {
+    await appendFile(log, message);
+  } catch (error) {
+    console.error('Не удалось дополнить журнал подготовки: ' + error.message);
+  }
+}
+
+/** Начало, исход и длительность этапа помогают отличить медленную операцию от зависания. */
+async function loggedStage(name, action) {
+  const start = performance.now();
+  await appendFile(log, '\n' + new Date().toISOString() + ' stage=' + name + ' start\n');
+  let status = 'error';
+  try {
+    const result = await action();
+    status = typeof result === 'number' && result !== 0 ? 'exit_' + result : 'ok';
+    return result;
+  } catch (error) {
+    await finishLog('Ошибка этапа: ' + error.message + '\n');
+    throw error;
+  } finally {
+    await finishLog(
+      new Date().toISOString() +
+        ' stage=' +
+        name +
+        ' finish status=' +
+        status +
+        ' elapsedMs=' +
+        Math.round(performance.now() - start) +
+        '\n',
+    );
+  }
+}
+
 /** Подробный вывод остаётся в журнале; код возврата позволяет проверить повреждённый кэш. */
 async function npmCommand(args, signal) {
-  const command = [npmCli, ...args];
-  await appendFile(log, '\n' + new Date().toISOString() + ' node ' + command.join(' ') + '\n');
-  const handle = await open(log, 'a', 0o600);
-  try {
-    return await buildCommand(root, command, {
-      env: environment,
-      signal,
-      stdio: ['ignore', handle.fd, handle.fd],
-      allowFailure: true,
-      timeoutMs: args[0] === 'ls' ? 60_000 : 15 * 60_000,
-    });
-  } finally {
-    await handle.close();
-  }
+  return await loggedStage('npm-' + args[0], async () => {
+    const command = [npmCli, ...args];
+    await appendFile(log, 'node ' + command.join(' ') + '\n');
+    const handle = await open(log, 'a', 0o600);
+    try {
+      return await buildCommand(root, command, {
+        env: environment,
+        signal,
+        stdio: ['ignore', handle.fd, handle.fd],
+        allowFailure: true,
+        timeoutMs: args[0] === 'ls' ? 60_000 : 15 * 60_000,
+      });
+    } finally {
+      await handle.close();
+    }
+  });
 }
 
 /** Проверяет всё обязательное дерево, включая dev tools для локальной компиляции. */
@@ -46,23 +84,36 @@ async function dependenciesReady(signal) {
   return (await npmCommand(['ls', '--all', '--omit=optional', '--include=dev'], signal)) === 0;
 }
 
+/** Маркер установки переживает пересборку, но не изменение lockfile, Node или платформы. */
+async function installedDependencies() {
+  try {
+    const value = JSON.parse(await readFile(dependencyMarker, 'utf8'));
+    return value?.schemaVersion === 1 && typeof value.dependencies === 'string'
+      ? value.dependencies
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Проверка справки ограничена по времени и не открывает пользовательское состояние. */
 async function cliReady(signal) {
   const state = await mkdtemp(join(cache, 'cli-check-'));
   let handle;
   try {
-    await appendFile(log, '\n' + new Date().toISOString() + ' CLI --help\n');
     handle = await open(log, 'a', 0o600);
-    await buildCommand(root, [join(root, 'dist/interfaces/cli.js'), '--help'], {
-      stdio: ['ignore', handle.fd, handle.fd],
-      signal,
-      timeoutMs: 10_000,
-      env: { ...environment, HARNESS_STATE_DIR: state },
-    });
+    await loggedStage('CLI --help', () =>
+      buildCommand(root, [join(root, 'dist/interfaces/cli.js'), '--help'], {
+        stdio: ['ignore', handle.fd, handle.fd],
+        signal,
+        timeoutMs: 10_000,
+        env: { ...environment, HARNESS_STATE_DIR: state },
+      }),
+    );
     return true;
   } catch (error) {
     signal?.throwIfAborted();
-    await appendFile(log, 'Проверка CLI не пройдена: ' + error.message + '\n');
+    await finishLog('Проверка CLI не пройдена: ' + error.message + '\n');
     return false;
   } finally {
     await handle?.close();
@@ -84,8 +135,9 @@ async function prepare() {
     }
     let inputs = await buildInputs(root);
     const built = await validBuild(root, inputs);
+    const dependencies = await installedDependencies();
     const installed =
-      previous?.dependencies === inputs.dependencies &&
+      (dependencies ?? previous?.dependencies) === inputs.dependencies &&
       (await dependenciesReady(lease.signal)) &&
       (!built || (await cliReady(lease.signal)));
     if (!installed) {
@@ -99,16 +151,23 @@ async function prepare() {
         throw new Error('Не удалось установить библиотеки. Подробности: ' + log);
     } else console.log('[1/3] Библиотеки готовы');
     await lease.assertOwned();
+    // Ошибка сборки не обесценивает уже проверенную установку зависимостей.
+    if (!installed || dependencies !== inputs.dependencies)
+      await writeJsonAtomic(dependencyMarker, {
+        schemaVersion: 1,
+        dependencies: inputs.dependencies,
+      });
     if (!built) {
       console.log('[2/3] Подготавливаю приложение…');
-      await appendFile(log, '\n' + new Date().toISOString() + ' build\n');
       const handle = await open(log, 'a', 0o600);
       try {
-        inputs = await buildProject(root, {
-          stdio: ['ignore', handle.fd, handle.fd],
-          signal: lease.signal,
-          assertOwned: lease.assertOwned,
-        });
+        inputs = await loggedStage('build', () =>
+          buildProject(root, {
+            stdio: ['ignore', handle.fd, handle.fd],
+            signal: lease.signal,
+            assertOwned: lease.assertOwned,
+          }),
+        );
       } catch (error) {
         throw new Error(error.message + '\nПодробности: ' + log);
       } finally {
