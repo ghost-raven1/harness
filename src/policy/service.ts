@@ -4,7 +4,7 @@ import type { Config, Decision, PermissionRule } from '../configuration/schema.j
 import type { RunRecord, AgentState, Approval } from '../sessions/types.js';
 import type { ToolCall } from '../providers/types.js';
 import { hash, id, abort } from '../shared/primitives.js';
-import type { SessionStore } from '../sessions/ports.js';
+import type { RunCatalogEntry, SessionStore } from '../sessions/ports.js';
 
 /** Объединяет решения с приоритетом запрета, затем запроса разрешения. */
 function combine(decisions: Decision[]): Decision {
@@ -177,11 +177,12 @@ export class FileApprovalService implements ApprovalService {
     });
     this.waiters.get(approvalId)?.();
   }
-  /** Возвращает нерешённые запросы разрешений из работающих и приостановленных задач. */
-  pending(): Approval[] {
-    return this.store
-      .catalog()
-      .filter((run) => ['running', 'awaiting_approval', 'paused'].includes(run.status))
+  /** Возвращает нерешённые запросы; готовый каталог позволяет разделить одно чтение между счётчиками. */
+  pending(runs: RunCatalogEntry[] = this.store.catalog()): Approval[] {
+    return runs
+      .filter(
+        (run) => !run.deletedAt && ['running', 'awaiting_approval', 'paused'].includes(run.status),
+      )
       .flatMap((run) => run.pendingApprovals);
   }
 }

@@ -8,31 +8,28 @@ export async function systemCommand(
   _input: unknown,
 ): Promise<unknown> {
   switch (method) {
-    case 'system.info':
+    case 'system.info': {
+      const runs = app.sessions.catalog();
+      const projects = app.projects?.catalog(true, runs) ?? [];
+      const visibleProjects = projects.filter((project) => !project.archivedAt);
+      const learning = app.learning.store.read();
       return {
         configFile: app.configFile,
         ...applicationIdentity(),
         node: process.version,
         state: app.directory,
-        activeRuns: app.sessions
-          .catalog()
-          .filter((run) =>
-            ['running', 'awaiting_approval'].includes(
-              app.runtime.visibleStatus(run.id, run.status),
-            ),
-          ).length,
-        activeProjects:
-          app.projects?.store
-            .catalog(true)
-            .filter((project) => ['running', 'planning', 'pausing'].includes(project.status))
-            .length ?? 0,
-        projectCount: app.projects?.store.catalog().length ?? 0,
-        projectsAwaitingDecision:
-          app.projects?.catalog().filter((project) => project.attention).length ?? 0,
-        pendingApprovals: app.sessions.recoveryError ? 0 : app.approvals.pending().length,
+        activeRuns: runs.filter((run) =>
+          ['running', 'awaiting_approval'].includes(app.runtime.visibleStatus(run.id, run.status)),
+        ).length,
+        activeProjects: projects.filter((project) =>
+          ['running', 'planning', 'pausing'].includes(project.status),
+        ).length,
+        projectCount: visibleProjects.length,
+        projectsAwaitingDecision: visibleProjects.filter((project) => project.attention).length,
+        pendingApprovals: app.sessions.recoveryError ? 0 : app.approvals.pending(runs).length,
         recoveryError: app.sessions.recoveryError ?? app.projects?.store.recoveryError,
-        learningVersion: app.learning.store.read().activeVersion,
-        knowledgeCount: Object.keys(app.learning.store.read().candidates).length,
+        learningVersion: learning.activeVersion,
+        knowledgeCount: Object.keys(learning.candidates).length,
         workspaces: app.config.value.workspaces,
         defaultProfile: app.config.value.defaultProfile,
         profiles: Object.entries(app.config.value.profiles).map(([id, profile]) => ({
@@ -44,6 +41,7 @@ export async function systemCommand(
         })),
         tools: app.registry.definitions().map((tool) => tool.name),
       };
+    }
     default:
       throw new Error('Unknown local method: ' + method);
   }

@@ -4,6 +4,7 @@ import { hash, id, message } from '../shared/primitives.js';
 import { ApplicationError } from '../shared/application-error.js';
 import { isWithin } from '../configuration/loader.js';
 import type { ConfigSnapshot } from '../configuration/schema.js';
+import type { RunCatalogEntry } from '../sessions/ports.js';
 import type { DraftScope } from '../sessions/drafts.js';
 import { projectInputs } from './schema.js';
 import type { ProjectInput, ProjectRecord, ProjectView } from './types.js';
@@ -134,12 +135,12 @@ export class ProjectService {
       attentionCount,
     };
   }
-  /** Обогащает сводки причинами ожидания без чтения исторических запусков. */
-  catalog(includeArchived = false) {
+  /** Обогащает сводки причинами ожидания, переиспользуя готовый каталог запусков при его наличии. */
+  catalog(includeArchived = false, runs?: RunCatalogEntry[]) {
     const projects = this.store.catalog(includeArchived);
     return projectAttention(
       projects,
-      projects.length ? this.runs.catalog() : [],
+      projects.length ? (runs ?? this.runs.catalog()) : [],
       this.recoveryStatus?.() ?? this.store.recoveryError,
     );
   }
