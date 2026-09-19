@@ -103,7 +103,7 @@ export async function draftProject(
   });
   return app.projects.editPlan({ ...mutation(project), plan });
 }
-/** Ошибка ожидания включает состояние координатора, чтобы отличить паузу от зависания. */
+/** Опрос использует каталог без чтения истории; при ошибке добавляется состояние координатора. */
 export async function waitProject(
   app: Awaited<ReturnType<typeof projectHarness>>,
   projectId: string,
@@ -111,7 +111,9 @@ export async function waitProject(
 ) {
   try {
     await eventually(
-      async () => (await app.projects.detail({ projectId })).status === status,
+      () =>
+        app.projects.store.catalog(true).find((project) => project.projectId === projectId)
+          ?.status === status,
       15000,
     );
   } catch (error) {

@@ -60,9 +60,13 @@ async function learningProject() {
   return { app, project, configFile, state, provider };
 }
 
-/** Ждёт прикладного перехода, не вмешиваясь в финализаторы запуска. */
+/** Ждёт перехода по каталогу, не конкурируя с финализаторами за чтение истории. */
 async function waitStatus(app: Application, projectId: string, status: ProjectView['status']) {
-  await eventually(async () => (await app.projects.detail({ projectId })).status === status);
+  await eventually(
+    () =>
+      app.projects.store.catalog(true).find((project) => project.projectId === projectId)
+        ?.status === status,
+  );
   return app.projects.detail({ projectId });
 }
 
