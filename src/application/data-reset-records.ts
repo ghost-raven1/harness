@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { atomicJson, optionalJson, syncDirectory, assertRealDirectory } from '../sessions/files.js';
 import type { PurgeRecord } from '../sessions/purge-records.js';
 import { projectPurgeRecordSchema } from '../projects/purge-records.js';
+import { ApplicationError } from '../shared/application-error.js';
 
 export const dataResetScopeSchema = z.enum(['tasks', 'learning', 'all']);
 export type DataResetScope = z.infer<typeof dataResetScopeSchema>;
@@ -130,15 +131,33 @@ interface StorageEntry {
   changed: number;
 }
 
-/** Включает оставшиеся после аварии файлы, которых уже нет в индексе сессий; ссылки не обходит. */
+/** При атомарном переименовании перечитывает весь состав, не выдавая неполный токен удаления. */
 export async function taskStorageInventory(directory: string): Promise<StorageEntry[]> {
+  let cause: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await readTaskStorageInventory(directory);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      cause = error;
+    }
+  }
+  throw new ApplicationError(
+    'TASK_BUSY',
+    'Состав файлов Harness ещё меняется. Дождитесь завершения операций и повторите предпросмотр.',
+    { cause },
+  );
+}
+
+/** Включает оставшиеся после аварии файлы, которых уже нет в индексе сессий; ссылки не обходит. */
+async function readTaskStorageInventory(directory: string): Promise<StorageEntry[]> {
   await assertRealDirectory(join(directory, 'exports'));
   const result: StorageEntry[] = [];
   const visit = async (relative: string): Promise<void> => {
     const path = join(directory, relative),
       info = await lstat(path);
     if (info.isDirectory()) {
-      for (const name of await names(path)) await visit(relative + '/' + name);
+      for (const name of await readdir(path)) await visit(relative + '/' + name);
     } else
       result.push({
         path: relative,

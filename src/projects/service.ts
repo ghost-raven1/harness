@@ -282,7 +282,9 @@ export class ProjectService {
     const request = projectInputs.purgePreview.parse(input);
     if (!this.maintenance)
       throw new ApplicationError('STORAGE_UNAVAILABLE', 'Удаление проектов недоступно.');
-    return this.maintenance.preview(request.projectId);
+    const maintenance = this.maintenance;
+    // Финализатор сохраняет снимки в этой же очереди; предпросмотр ждёт их публикации.
+    return this.coordinator.serial.run(() => maintenance.preview(request.projectId));
   }
   async purge(input: ProjectInput<'purge'>) {
     const request = projectInputs.purge.parse(input);

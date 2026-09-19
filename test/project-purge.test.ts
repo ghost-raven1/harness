@@ -72,6 +72,43 @@ async function confirmation(item: Awaited<ReturnType<typeof projectFixture>>) {
   };
 }
 
+it('предпросмотр удаления ждёт финального снимка в очереди проекта и выдаёт устойчивый токен', async () => {
+  const item = await projectFixture();
+  const preview = vi.spyOn(item.app.projects.maintenance!, 'preview');
+  let finish!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const finalizer = item.app.projects.coordinator.serial.run(async () => {
+    await gate;
+    const project = await item.app.projects.store.get(item.project.id);
+    project.status = 'cancelled';
+    await item.app.projects.coordinator.checkpoint(project);
+  });
+  const pending = item.app.projects.purgePreview({ projectId: item.project.id });
+  try {
+    expect(preview).not.toHaveBeenCalled();
+  } finally {
+    finish();
+    await finalizer;
+    await pending;
+  }
+  const result = await pending;
+  expect(result.available).toBe(true);
+  expect(result.previewToken).toBe(
+    (await item.app.projects.purgePreview({ projectId: item.project.id })).previewToken,
+  );
+  const project = await item.app.projects.store.get(item.project.id);
+  await expect(
+    item.app.projects.purge({
+      projectId: project.id,
+      expectedRevision: project.revision,
+      requestKey: id(),
+      previewToken: result.previewToken,
+    }),
+  ).resolves.toMatchObject({ purged: true });
+});
+
 it('каскад удаляет все этапы и черновики, сохраняет рабочую папку и повторяет прежнюю квитанцию', async () => {
   const item = await projectFixture();
   const input = await confirmation(item);
@@ -136,7 +173,7 @@ it('прямое удаление, скрытие и восстановлени�
   expect(await files(item.directory)).toEqual(before);
 });
 
-it.each(['artifact', 'draft', 'run'] as const)(
+it.each(['artifact', 'draft', 'run', 'content'] as const)(
   'изменение %s делает подтверждение удаления устаревшим',
   async (kind) => {
     const item = await projectFixture();
@@ -156,6 +193,11 @@ it.each(['artifact', 'draft', 'run'] as const)(
       await item.app.sessions.mutate(item.next.runId, 'test.result', {}, (run) => {
         run.result = 'Новый ответ';
       });
+    if (kind === 'content') {
+      const folder = join(item.directory, 'project-content', item.project.id, 'manifests');
+      await mkdir(folder, { recursive: true });
+      await writeFile(join(folder, 'published.json'), '{"files":[]}');
+    }
     await expect(item.app.projects.purge(input)).rejects.toMatchObject({ code: 'STALE_PREVIEW' });
     expect((await readProjectPurgeRecords(item.directory)).length).toBe(0);
     expect(item.app.sessions.catalog(true)).toHaveLength(3);
