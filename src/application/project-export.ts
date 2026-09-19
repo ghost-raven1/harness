@@ -11,11 +11,14 @@ import { atomicJson, assertRealDirectory, syncDirectory } from '../sessions/file
 import { hash } from '../shared/primitives.js';
 import { ApplicationError } from '../shared/application-error.js';
 import { exportDocument, exportChunks } from './project-export-format.js';
+import type { ProjectChangeService } from '../projects/change-service.js';
+import { prepareExportDiffs, exportDiffChunks } from './project-export-diff.js';
 
 interface Dependencies {
   directory: string;
   projects: ProjectStore;
   evidence: ProjectEvidenceService;
+  changes?: ProjectChangeService;
   serialize<T>(work: () => Promise<T>): Promise<T>;
   assertWritable(): void;
   acceptedPlan?(project: ProjectRecord): Promise<VersionedPlan | undefined>;
@@ -70,6 +73,7 @@ export class ProjectExportService {
           previous.result.revision !== input.expectedRevision ||
           previous.result.format !== input.format ||
           previous.result.includeLogs !== input.includeLogs ||
+          Boolean(previous.result.includeDiffs) !== Boolean(input.includeDiffs) ||
           previous.result.path !== previousPath
         )
           throw new ApplicationError(
@@ -101,6 +105,7 @@ export class ProjectExportService {
         path: join(directory, basename),
         format: input.format,
         includeLogs: input.includeLogs,
+        ...(input.includeDiffs === undefined ? {} : { includeDiffs: input.includeDiffs }),
         bytes: 0,
       };
       const temporary = randomUUID();
@@ -125,7 +130,21 @@ export class ProjectExportService {
                 return log;
               }
             : undefined;
-          for await (const chunk of exportChunks(prepared.document, input.format, readLog)) {
+          const readDiffs = prepared.diffs
+            ? () =>
+                exportDiffChunks(
+                  this.dependencies.changes!,
+                  input.projectId,
+                  prepared.diffs!.digest,
+                  input.format,
+                )
+            : undefined;
+          for await (const chunk of exportChunks(
+            prepared.document,
+            input.format,
+            readLog,
+            readDiffs,
+          )) {
             digest.update(chunk);
             result.bytes += Buffer.byteLength(chunk);
             await file.writeFile(chunk);
@@ -215,6 +234,11 @@ export class ProjectExportService {
         });
       }
     }
+    if (input.includeDiffs && !this.dependencies.changes)
+      throw new ApplicationError('INVALID_REQUEST', 'Сервис не поддерживает экспорт исходников.');
+    const diffs = input.includeDiffs
+      ? await prepareExportDiffs(this.dependencies.changes!, project.id)
+      : undefined;
     const { checkedAt: _checkedAt, ...stableReview } = review;
     const previewToken = hash({
       projectId: project.id,
@@ -222,18 +246,23 @@ export class ProjectExportService {
       format: input.format,
       includeLogs: input.includeLogs,
       review: stableReview,
+      ...(input.includeDiffs === undefined ? {} : { includeDiffs: input.includeDiffs }),
+      ...(diffs ? { diffDigest: diffs.digest } : {}),
       logDigest: input.includeLogs ? contentDigest.digest('hex') : undefined,
     });
     return {
       document,
       project,
       logDigests,
+      diffs,
       preview: {
         projectId: project.id,
         revision: project.revision,
         previewToken,
         format: input.format,
         includeLogs: input.includeLogs,
+        ...(input.includeDiffs === undefined ? {} : { includeDiffs: input.includeDiffs }),
+        ...(diffs ? { diffs: diffs.summary } : {}),
         sections: [
           'Цель',
           'Принятый план',
@@ -241,12 +270,22 @@ export class ProjectExportService {
           'Изменённые файлы',
           'Автоматические и ручные проверки',
           ...(input.includeLogs ? ['Сохранённые stdout и stderr'] : []),
+          ...(input.includeDiffs ? ['Общий итоговый diff исходников'] : []),
         ],
         commands,
         logs,
         destination: await this.exportDirectory(project.id, false),
         warnings: [
           'Отчёт содержит цель проекта, пользовательские команды и их аргументы.',
+          ...(input.includeDiffs
+            ? ['Отчёт содержит сохранённый исходный код изменённых файлов.']
+            : []),
+          ...(diffs && !diffs.summary.files ? ['Сохранённого общего сравнения пока нет.'] : []),
+          ...(diffs?.summary.unavailable
+            ? [
+                'Часть файлов не имеет полного текстового сравнения; причины будут указаны в отчёте.',
+              ]
+            : []),
           ...(input.includeLogs && logs.length > 40
             ? [
                 'Фрагменты показаны для первых 40 команд; остальные журналы доступны в карточках проверок.',

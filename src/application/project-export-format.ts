@@ -33,6 +33,7 @@ export async function* exportChunks(
   document: Document,
   format: 'markdown' | 'json',
   readLog?: ReadLog,
+  readDiffs?: () => AsyncGenerator<string>,
 ): AsyncGenerator<string> {
   if (format === 'json') {
     const { reports, ...header } = document;
@@ -50,7 +51,9 @@ export async function* exportChunks(
       }
       yield ']}';
     }
-    yield ']}\n';
+    yield ']';
+    if (readDiffs) yield* readDiffs();
+    yield '}\n';
     return;
   }
   yield markdownIntroduction(document);
@@ -78,6 +81,7 @@ export async function* exportChunks(
         }
     }
   }
+  if (readDiffs) yield* readDiffs();
   yield '\n## Актуальность и замечания\n\nФайлы: ' +
     document.freshness +
     '\nПроверено: ' +

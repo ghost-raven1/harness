@@ -1,3 +1,4 @@
+import { ProjectChangeRecorder } from './change-recorder.js';
 import { Serial, id, message } from '../shared/primitives.js';
 import { ApplicationError } from '../shared/application-error.js';
 import type { ProjectRunPort, ProjectRunStart } from '../sessions/project-run.js';
@@ -20,9 +21,11 @@ export interface ProjectCoordinatorOptions {
 /** Координатор запускает этапы только после завершения финализаторов предыдущего дерева. */
 export class ProjectCoordinator {
   readonly serial = new Serial();
+  readonly changes: ProjectChangeRecorder;
   private readonly unsubscribe: () => void;
   private closing = false;
   constructor(readonly options: ProjectCoordinatorOptions) {
+    this.changes = new ProjectChangeRecorder(options.workspace);
     this.unsubscribe = options.runs.subscribeSettled((event) => {
       this.queueSettlement(event.runId, event.link.projectId);
     });
@@ -57,7 +60,9 @@ export class ProjectCoordinator {
             });
         }
       }
+      this.changes.link(project);
       if (['running', 'pausing', 'planning'].includes(project.status)) {
+        await this.changes.recovered(project);
         project.status = 'paused';
         project.reason = 'Работа прервалась. Проверьте состояние и продолжите проект.';
         project.reasonCode = 'RECOVERED';
@@ -75,6 +80,7 @@ export class ProjectCoordinator {
     project: ProjectRecord,
     intent: Omit<ProjectIntent, 'requestKey'>,
   ): Promise<ProjectRecord> {
+    await this.changes.begin(project, intent);
     project.intent = { ...intent, requestKey: project.id + ':' + id() };
     project = await this.save(
       project,
@@ -117,6 +123,7 @@ export class ProjectCoordinator {
     };
     const reference = await this.options.runs.start(input);
     project.intent = { ...intent, ...reference };
+    this.changes.link(project);
     if (!project.runIds.includes(reference.runId)) project.runIds.push(reference.runId);
     if (intent.kind === 'stage')
       Object.assign(project.stages[intent.stageId!]!, {
@@ -275,6 +282,8 @@ export class ProjectCoordinator {
       return;
     }
     if (intent.kind === 'stage') {
+      const after = await this.changes.after(project);
+      this.changes.finish(project, after);
       if (run.status !== 'completed')
         return this.pauseFailure(project, run.error ?? 'Этап не завершён.', 'STAGE_FAILED');
       project.stages[intent.stageId!]!.summary = (run.result ?? '').slice(0, 4000);
@@ -293,8 +302,9 @@ export class ProjectCoordinator {
       await this.verifyStage(project, project.plan!.stages.find((s) => s.id === intent.stageId)!);
       return;
     }
-    const after = await this.capture(project);
+    const after = await this.changes.after(project);
     const report = checkReport(intent, run, after);
+    this.changes.finish(project, after, report.id);
     const previousReport = project.reports.findIndex((item) => item.runId === report.runId);
     if (previousReport >= 0) project.reports[previousReport] = report;
     else project.reports.push(report);
@@ -391,6 +401,7 @@ export class ProjectCoordinator {
       );
       return this.advance(project);
     }
+    this.changes.overall(project, current);
     project.resultSnapshot = current;
     project.checkpoint = project.resultSnapshot;
     project.phase = 'acceptance';
@@ -420,16 +431,14 @@ export class ProjectCoordinator {
     return this.checkpoint(project);
   }
   capture(project: ProjectRecord) {
-    return this.options.workspace.capture(
-      project.id,
-      project.workspace,
-      project.config.value.tools.deniedPaths,
-    );
+    return this.changes.capture(project);
   }
   /** Пауза освобождает папку только после завершения всех исполнителей и сохранения её отпечатка. */
   async checkpoint(project: ProjectRecord): Promise<ProjectRecord> {
     try {
-      project.checkpoint = await this.capture(project);
+      const current = await this.capture(project);
+      this.changes.paused(project, current);
+      project.checkpoint = current;
     } catch (error) {
       project.reason =
         (project.reason ?? 'Проект приостановлен.') +

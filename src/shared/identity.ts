@@ -43,6 +43,7 @@ export function applicationIdentity() {
       'derived-indexes',
       'projects-v1',
       'projects-review-v1',
+      'projects-diff-v1',
     ],
   };
 }

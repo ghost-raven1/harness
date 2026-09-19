@@ -113,7 +113,13 @@ export async function removeProjectFiles(
   input: ProjectPurgeRecord,
 ): Promise<void> {
   const record = projectPurgeRecordSchema.parse(input);
-  for (const name of ['project-records', 'project-index', 'project-artifacts', 'drafts'])
+  for (const name of [
+    'project-records',
+    'project-index',
+    'project-artifacts',
+    'project-content',
+    'drafts',
+  ])
     await assertRealDirectory(join(directory, name));
   for (const folder of ['project-records', 'project-index']) {
     for (const name of await names(join(directory, folder)))
@@ -136,6 +142,8 @@ export async function removeProjectFiles(
   });
   await syncExisting(join(directory, 'exports', 'projects'));
   await syncExisting(join(directory, 'project-artifacts'));
+  await rm(join(directory, 'project-content', record.projectId), { recursive: true, force: true });
+  await syncExisting(join(directory, 'project-content'));
   for (const name of record.draftFiles) await rm(join(directory, 'drafts', name), { force: true });
   await syncExisting(join(directory, 'drafts'));
 }

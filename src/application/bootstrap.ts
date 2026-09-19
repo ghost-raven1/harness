@@ -27,6 +27,7 @@ import type { ProjectService } from '../projects/service.js';
 import { ProjectPlanService } from '../projects/plan-service.js';
 import { ProjectEvidenceService } from '../projects/evidence.js';
 import { ProjectExportService } from './project-export.js';
+import { ProjectChangeService } from '../projects/change-service.js';
 
 const CONFIG = Symbol('CONFIG'),
   MODEL = Symbol('MODEL');
@@ -51,6 +52,7 @@ export interface Application {
   projectPlans: ProjectPlanService;
   projectEvidence: ProjectEvidenceService;
   projectExports: ProjectExportService;
+  projectChanges: ProjectChangeService;
   close(): Promise<void>;
 }
 /** Собирает модули через Nest; тесты могут заменить только модельный транспорт. */
@@ -218,10 +220,16 @@ export async function createApplication(
     workspace: projects.coordinator.options.workspace,
   });
   projects.verifyAcceptance = (project) => projectEvidence.validateAccept(project);
+  const projectChanges = new ProjectChangeService({
+    readProject: (projectId) => projects!.store.get(projectId),
+    workspace: projects.coordinator.options.workspace,
+    content: projects.coordinator.options.workspace.content,
+  });
   const projectExports = new ProjectExportService({
     directory,
     projects: projects.store,
     evidence: projectEvidence,
+    changes: projectChanges,
     serialize: (work) => projects!.coordinator.serial.run(work),
     assertWritable: () => nest.get(FileSessionStore).assertWritable(),
     acceptedPlan: (project) =>
@@ -240,6 +248,8 @@ export async function createApplication(
     serialize: (work) => projects!.coordinator.serial.run(work),
     onPurged: (projectId) => {
       projectEvidence.forget(projectId);
+      projectChanges.forget(projectId);
+      projects!.coordinator.options.workspace.content.forget(projectId);
       projectPlans.history.forget(projectId);
     },
   });
@@ -259,6 +269,7 @@ export async function createApplication(
     projectPlans,
     projectEvidence,
     projectExports,
+    projectChanges,
     sessions: nest.get(FileSessionStore),
     drafts: new DraftStore(nest.get(FileSessionStore)),
     approvals: nest.get(FileApprovalService),
@@ -287,6 +298,7 @@ export async function createApplication(
         // Каждый ресурс закрывается даже при отказе журнала предыдущего модуля.
         for (const stop of [
           () => projects!.close(),
+          () => projectChanges.close(),
           () => runtime.close(),
           () => learning.close(),
           () => nest.get(McpClientService).close(),

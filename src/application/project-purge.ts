@@ -126,7 +126,10 @@ export class ProjectPurge {
       runs: plan.runs.length,
       sessions: new Set(plan.runs.map((run) => run.sessionId)).size,
       artifacts: plan.inventory.filter(
-        (file) => file.path.startsWith('artifacts/') || file.path.startsWith('project-artifacts/'),
+        (file) =>
+          file.path.startsWith('artifacts/') ||
+          file.path.startsWith('project-artifacts/') ||
+          file.path.startsWith('project-content/'),
       ).length,
     };
   }
@@ -284,6 +287,8 @@ export class ProjectPurge {
         file.path.startsWith('project-index/' + project.id + '.') ||
         file.path === 'exports/projects/' + project.id ||
         file.path.startsWith('exports/projects/' + project.id + '/') ||
+        file.path === 'project-content/' + project.id ||
+        file.path.startsWith('project-content/' + project.id + '/') ||
         file.path === 'project-artifacts/' + project.id ||
         file.path.startsWith('project-artifacts/' + project.id + '/') ||
         (file.path.startsWith('drafts/') &&

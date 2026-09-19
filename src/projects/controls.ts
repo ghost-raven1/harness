@@ -55,6 +55,7 @@ export class ProjectControls {
       this.service.leases.acquire(project.id, project.workspace);
       try {
         const current = await this.service.coordinator.capture(project);
+        this.service.coordinator.changes.external(project, current);
         if (
           project.checkpoint &&
           current.digest !== project.checkpoint.digest &&
@@ -91,6 +92,12 @@ export class ProjectControls {
           if (!project.intent.runId) return this.service.coordinator.dispatchIntent(project);
           const run = await this.service.runs.inspect(project.intent.runId);
           if (run.status === 'paused') {
+            this.service.coordinator.changes.continued(project, current);
+            project = await this.service.coordinator.save(
+              project,
+              'project.continuation_prepared',
+              'Продолжение текущей попытки закреплено.',
+            );
             await this.service.runs.resume(run.id);
             return project;
           }

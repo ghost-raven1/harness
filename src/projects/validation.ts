@@ -1,3 +1,5 @@
+import { projectChangeSetSchema } from './change-types.js';
+import { projectCaptureSettingsSchema } from '../configuration/project-capture.js';
 import { z } from 'zod';
 import { configSchema } from '../configuration/schema.js';
 import { hash } from '../shared/primitives.js';
@@ -13,7 +15,9 @@ import type { ProjectEvent, ProjectRecord } from './types.js';
 export const projectIdentifier = z.string().regex(/^[a-zA-Z0-9_-]{1,200}$/);
 const natural = z.number().int().nonnegative().safe();
 const text = z.string();
-const snapshot = z.object({ digest: text, ref: text, files: natural, createdAt: text }).strict();
+const snapshot = z
+  .object({ digest: text, ref: text, files: natural, createdAt: text, contentRef: text.optional() })
+  .strict();
 const recordSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -31,6 +35,8 @@ const recordSchema = z
     archivedAt: text.optional(),
     config: z.object({ hash: text, value: configSchema }),
     learningVersion: text,
+    capture: projectCaptureSettingsSchema.optional(),
+    changeSets: z.array(projectChangeSetSchema).optional(),
     plan: versionedPlanSchema.optional(),
     acceptedVersion: natural.positive().optional(),
     acceptedAt: text.optional(),
@@ -62,6 +68,7 @@ const recordSchema = z
         sessionId: text.optional(),
         expectedParentRunId: text.optional(),
         before: snapshot.optional(),
+        changeSetId: text.optional(),
         checks: z.array(projectCheckSchema).optional(),
       })
       .strict()
@@ -136,6 +143,24 @@ export function validateProject(value: unknown): ProjectRecord {
     project.messages?.some((item) => !project.runIds.includes(item.runId))
   )
     throw new Error('PROJECT_INVALID_RUN_REFERENCE');
+  if (project.changeSets) {
+    const identities = new Set(project.changeSets.map((entry) => entry.id));
+    if (
+      identities.size !== project.changeSets.length ||
+      project.changeSets.some(
+        (entry) =>
+          (entry.runId && !project.runIds.includes(entry.runId)) ||
+          (entry.reportId &&
+            !project.reports.some(
+              (report) => report.id === entry.reportId && report.runId === entry.runId,
+            )) ||
+          (entry.outcome === 'complete' && !entry.after) ||
+          (entry.outcome !== 'complete' && entry.after),
+      ) ||
+      (project.intent?.changeSetId && !identities.has(project.intent.changeSetId))
+    )
+      throw new Error('PROJECT_INVALID_CHANGE_REFERENCE');
+  }
   const intent = project.intent;
   if (
     intent &&

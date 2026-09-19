@@ -8,10 +8,18 @@ import {
 import { command, count } from './common.js';
 import { projectReadInputs, projectReadOutputs } from '../../projects/read-schema.js';
 import { planReadCommands } from '../../projects/plan-schema.js';
+import { projectChangeInputs, projectChangeOutputs } from '../../projects/change-schema.js';
 
 /** Проекты управляются человеком через локальный IPC; инструменты MCP их не экспортируют. */
 export const projectCommands = {
   ...planReadCommands,
+  'projects.changeSets': command(projectChangeInputs.changeSets, projectChangeOutputs.changeSets),
+  'projects.changes': command(projectChangeInputs.changes, projectChangeOutputs.changes),
+  'projects.fileChange': command(projectChangeInputs.fileChange, projectChangeOutputs.fileChange),
+  'projects.changeCapture': command(
+    projectChangeInputs.changeCapture,
+    projectChangeOutputs.changeCapture,
+  ),
   'projects.reports': command(projectReadInputs.reports, projectReadOutputs.reports),
   'projects.checkOutput': command(projectReadInputs.checkOutput, projectReadOutputs.checkOutput),
   'projects.review': command(projectReadInputs.review, projectReadOutputs.review),

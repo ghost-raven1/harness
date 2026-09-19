@@ -1,3 +1,4 @@
+import { projectCaptureSchema } from './project-capture.js';
 import { readFile, realpath } from 'node:fs/promises';
 import path, { dirname, resolve } from 'node:path';
 import { z } from 'zod';
@@ -20,7 +21,10 @@ const manifestSchema = z
     workspaces: z.array(z.string()),
     limits: z.record(z.number()).optional(),
     projects: z
-      .object({ maxCorrections: z.number().int().min(0).max(10) })
+      .object({
+        maxCorrections: z.number().int().min(0).max(10).optional(),
+        capture: projectCaptureSchema.optional(),
+      })
       .strict()
       .optional(),
   })

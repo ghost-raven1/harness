@@ -39,6 +39,7 @@ export const draftPayloadSchema = z.discriminatedUnion('kind', [
       goal: z.string().max(32000),
       workspace: z.string().max(16000),
       profile: z.string().max(200),
+      captureEnabled: z.boolean().optional(),
     })
     .strict(),
   z.object({ kind: z.literal('project.edit'), plan: draftPlanSchema }).strict(),

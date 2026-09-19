@@ -95,6 +95,7 @@ export async function linkedPurgeDirectories(directory: string): Promise<string[
     'project-records',
     'project-index',
     'project-artifacts',
+    'project-content',
     'project-purges',
   ]) {
     try {

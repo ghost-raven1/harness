@@ -1,3 +1,4 @@
+import { projectCaptureSettingsSchema } from '../configuration/project-capture.js';
 import { z } from 'zod';
 
 const key = z
@@ -148,6 +149,7 @@ export const projectEventSchema = z.object({
   message: z.string(),
 });
 export const projectViewSchema = projectSummarySchema.extend({
+  capture: projectCaptureSettingsSchema.optional(),
   plan: versionedPlanSchema.optional(),
   planVersion: revision.optional(),
   acceptedVersion: revision.optional(),
@@ -215,6 +217,7 @@ export const projectInputs = {
       goal: z.string().min(1).max(32000),
       workspace: z.string().min(1),
       profile: key.optional(),
+      captureEnabled: z.boolean().optional(),
       requestKey: key,
     })
     .strict(),
@@ -237,6 +240,7 @@ export const projectInputs = {
   }),
   editPlan: mutation.extend({ plan: projectPlanSchema }),
   acceptPlan: mutation.extend({ expectedPlanVersion: revision.positive() }),
+  changeCapture: mutation.extend({ enabled: z.boolean() }),
   pause: mutation,
   resume: mutation.extend({ acceptChanges: z.boolean().default(false) }),
   cancel: mutation,

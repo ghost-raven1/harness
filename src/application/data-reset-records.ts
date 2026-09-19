@@ -120,6 +120,7 @@ const taskDirectories = [
   'project-records',
   'project-index',
   'project-artifacts',
+  'project-content',
   'exports/projects',
 ] as const;
 interface StorageEntry {

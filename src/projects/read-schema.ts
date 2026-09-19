@@ -94,6 +94,7 @@ export const projectReadInputs = {
       expectedRevision: revision,
       format: z.enum(['markdown', 'json']).default('markdown'),
       includeLogs: z.boolean().default(false),
+      includeDiffs: z.boolean().optional(),
     })
     .strict(),
   exportReport: z
@@ -104,6 +105,7 @@ export const projectReadInputs = {
       requestKey: z.string().min(1).max(200),
       format: z.enum(['markdown', 'json']).default('markdown'),
       includeLogs: z.boolean().default(false),
+      includeDiffs: z.boolean().optional(),
     })
     .strict(),
 };
@@ -138,6 +140,7 @@ export const projectReadOutputs = {
     previewToken: z.string(),
     format: z.enum(['markdown', 'json']),
     includeLogs: z.boolean(),
+    includeDiffs: z.boolean().optional(),
     sections: z.array(z.string()),
     commands: z.array(z.object({ command: z.string(), args: z.array(z.string()) })),
     logs: z.array(
@@ -153,6 +156,21 @@ export const projectReadOutputs = {
         stderrPreview: z.string().optional(),
       }),
     ),
+    diffs: z
+      .object({
+        files: count,
+        unavailable: count,
+        characters: count,
+        items: z.array(
+          z.object({
+            path: z.string(),
+            state: z.enum(['available', 'unavailable', 'limited']),
+            reason: z.string().optional(),
+          }),
+        ),
+        truncated: z.boolean(),
+      })
+      .optional(),
     destination: z.string(),
     warnings: z.array(z.string()),
   }),
@@ -162,6 +180,7 @@ export const projectReadOutputs = {
     path: z.string(),
     format: z.enum(['markdown', 'json']),
     includeLogs: z.boolean(),
+    includeDiffs: z.boolean().optional(),
     bytes: count,
   }),
 };

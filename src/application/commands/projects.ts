@@ -3,6 +3,7 @@ import { ApplicationError } from '../../shared/application-error.js';
 import type { Application } from '../bootstrap.js';
 import { planReadCommands } from '../../projects/plan-schema.js';
 import { projectReadInputs } from '../../projects/read-schema.js';
+import { projectChangeInputs } from '../../projects/change-schema.js';
 
 /** Проверяет параметры проекта на прикладной границе без зависимости от транспорта. */
 export async function projectsCommand(
@@ -23,10 +24,21 @@ export async function projectsCommand(
       'projects.planVersions',
       'projects.comparePlans',
       'projects.validatePlan',
+      'projects.changeSets',
+      'projects.changes',
+      'projects.fileChange',
     ].includes(method)
   )
     throw new ApplicationError('STORAGE_UNAVAILABLE', recovery);
   switch (method) {
+    case 'projects.changeSets':
+      return app.projectChanges.changeSets(projectChangeInputs.changeSets.parse(input));
+    case 'projects.changes':
+      return app.projectChanges.changes(projectChangeInputs.changes.parse(input));
+    case 'projects.fileChange':
+      return app.projectChanges.fileChange(projectChangeInputs.fileChange.parse(input));
+    case 'projects.changeCapture':
+      return app.projects.changeCapture(projectChangeInputs.changeCapture.parse(input));
     case 'projects.reports':
       return app.projectEvidence.reports(projectReadInputs.reports.parse(input));
     case 'projects.checkOutput':

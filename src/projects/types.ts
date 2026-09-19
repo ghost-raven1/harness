@@ -1,3 +1,5 @@
+import type { ProjectChangeSet } from './change-types.js';
+import type { ProjectCaptureSettings } from '../configuration/project-capture.js';
 import type { z } from 'zod';
 import type { ConfigSnapshot } from '../configuration/schema.js';
 import type {
@@ -20,6 +22,7 @@ export type ProjectSummary = z.output<typeof projectSummarySchema>;
 export type ProjectEvent = z.output<typeof projectEventSchema>;
 export type ProjectInput<K extends keyof typeof projectInputs> = z.input<(typeof projectInputs)[K]>;
 export interface ProjectSnapshot {
+  contentRef?: string;
   digest: string;
   ref: string;
   files: number;
@@ -46,6 +49,7 @@ export interface ProjectIntent {
   sessionId?: string;
   expectedParentRunId?: string;
   before?: ProjectSnapshot;
+  changeSetId?: string;
   checks?: z.output<typeof import('./schema.js').projectCheckSchema>[];
 }
 /** Исходный журнал проекта хранит решения; полные переписки остаются в связанных задачах. */
@@ -65,6 +69,8 @@ export interface ProjectRecord {
   archivedAt?: string;
   config: ConfigSnapshot;
   learningVersion: string;
+  capture?: ProjectCaptureSettings;
+  changeSets?: ProjectChangeSet[];
   plan?: VersionedPlan;
   acceptedVersion?: number;
   acceptedAt?: string;

@@ -1,3 +1,4 @@
+import { resolveCaptureSettings } from '../configuration/project-capture.js';
 import { realpath } from 'node:fs/promises';
 import { hash, id, message } from '../shared/primitives.js';
 import { ApplicationError } from '../shared/application-error.js';
@@ -95,6 +96,10 @@ export class ProjectService {
         updatedAt: now,
         config,
         learningVersion: this.activeLearning(),
+        capture: {
+          ...resolveCaptureSettings(config.value.projects?.capture),
+          ...(request.captureEnabled === undefined ? {} : { enabled: request.captureEnabled }),
+        },
         stages: {},
         runIds: [],
         reports: [],
@@ -204,6 +209,7 @@ export class ProjectService {
         project.checkpoint = snapshot;
         project.acceptedVersion = project.plan.version;
         project.acceptedAt = new Date().toISOString();
+        this.coordinator.changes.overall(project, snapshot);
         project.status = 'running';
         project.phase = 'baseline';
         delete project.reason;
@@ -219,6 +225,29 @@ export class ProjectService {
           this.leases.release(project.id);
         throw error;
       }
+    });
+  }
+  /** Меняет только будущие копии после паузы; прошлые точки остаются неизменными. */
+  changeCapture(input: ProjectInput<'changeCapture'>) {
+    return this.mutate('changeCapture', input, async (project, request) => {
+      this.requireIdle(project);
+      await this.requireKnownOperations(project);
+      if (!['draft', 'ready', 'paused'].includes(project.status))
+        throw new ApplicationError(
+          'PROJECT_CONFLICT',
+          'Режим сохранения можно изменить до исполнения или после паузы.',
+        );
+      project.capture = {
+        ...(project.capture ?? resolveCaptureSettings(project.config.value.projects?.capture)),
+        enabled: request.enabled,
+      };
+      return this.coordinator.save(
+        project,
+        'project.capture_changed',
+        request.enabled
+          ? 'Исходники следующих контрольных точек будут сохранены.'
+          : 'Следующие контрольные точки сохранят только хеши файлов.',
+      );
     });
   }
   pause(input: ProjectInput<'pause'>) {
@@ -386,6 +415,7 @@ export class ProjectService {
     return {
       ...view,
       acceptedVersion: project.acceptedVersion,
+      capture: project.capture,
       tools: this.coordinator.options.tools
         .definitions()
         .map((tool) => tool.name)

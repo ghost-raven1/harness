@@ -8,6 +8,12 @@ import { z } from 'zod';
 import { isWithin } from '../configuration/loader.js';
 import { ApplicationError } from '../shared/application-error.js';
 import { assertRealDirectory, syncDirectory } from '../sessions/files.js';
+import { ProjectChangeContentStore, type ContentRecorder } from './change-content.js';
+import {
+  contentUnavailable,
+  textUnavailable,
+  type WorkspaceCaptureOptions,
+} from './change-capture.js';
 
 const excluded = new Set([
   '.git',
@@ -46,6 +52,7 @@ type Entry = z.infer<typeof entrySchema>;
 export interface WorkspaceSnapshot {
   digest: string;
   ref: string;
+  contentRef?: string;
   files: number;
   createdAt: string;
 }
@@ -66,15 +73,37 @@ function projectDirectory(directory: string, projectId: string): string {
   return join(directory, 'project-artifacts', projectId);
 }
 
-/** Хранит ограниченные манифесты хешей, не копируя и не изменяя исходные файлы. */
+/** Сохраняет прежний отпечаток папки и необязательные проверенные копии исходников. */
 export class ProjectWorkspace {
-  constructor(private readonly directory: string) {}
+  readonly content: ProjectChangeContentStore;
+  constructor(private readonly directory: string) {
+    this.content = new ProjectChangeContentStore(directory);
+  }
 
   /** Проверяет весь доступный снимок; частичный или меняющийся обход не публикуется. */
   async capture(
     projectId: string,
     workspace: string,
     deniedPaths: string[],
+    options?: WorkspaceCaptureOptions,
+  ): Promise<WorkspaceSnapshot> {
+    if (options)
+      return this.content.capture(
+        projectId,
+        options.settings,
+        (record) => this.captureSnapshot(projectId, workspace, deniedPaths, options, record),
+        options.link,
+      );
+    return this.captureSnapshot(projectId, workspace, deniedPaths);
+  }
+
+  /** Сначала публикует манифест хешей; вызвавшая операция затем фиксирует ссылку в журнале. */
+  private async captureSnapshot(
+    projectId: string,
+    workspace: string,
+    deniedPaths: string[],
+    options?: WorkspaceCaptureOptions,
+    recordContent?: ContentRecorder,
   ): Promise<WorkspaceSnapshot> {
     const destination = projectDirectory(this.directory, projectId);
     for (const path of [this.directory, dirname(destination), destination]) {
@@ -86,8 +115,13 @@ export class ProjectWorkspace {
     const temporary = join(destination, id + '.tmp');
     const handle = await open(temporary, 'wx', 0o600);
     try {
-      const snapshot = await this.scan(projectId, workspace, deniedPaths, (line) =>
-        handle.writeFile(line),
+      const snapshot = await this.scan(
+        projectId,
+        workspace,
+        deniedPaths,
+        (line) => handle.writeFile(line),
+        options,
+        recordContent,
       );
       await handle.sync();
       await handle.close();
@@ -116,6 +150,8 @@ export class ProjectWorkspace {
     workspace: string,
     deniedPaths: string[],
     sink?: (line: string) => Promise<void>,
+    options?: WorkspaceCaptureOptions,
+    recordContent?: ContentRecorder,
   ): Promise<Omit<WorkspaceSnapshot, 'ref'>> {
     const root = await realpath(workspace);
     const stateDirectory = await realpath(this.directory).catch((error: NodeJS.ErrnoException) => {
@@ -124,6 +160,7 @@ export class ProjectWorkspace {
     });
     const managedDirectories = [
       resolve(stateDirectory, 'project-artifacts'),
+      resolve(stateDirectory, 'project-content'),
       resolve(stateDirectory, 'exports', 'projects'),
     ];
     const managed = (path: string) =>
@@ -185,6 +222,7 @@ export class ProjectWorkspace {
           digest: createHash('sha256').update(portable).digest('hex'),
         };
         await record(entry);
+        await recordContent?.({ ...entry, unavailableReason: 'symlink' });
       } else if (before.isDirectory()) {
         if ((await realpath(path)) !== path)
           throw new Error('Папка заменена ссылкой во время чтения.');
@@ -208,13 +246,22 @@ export class ProjectWorkspace {
           if (fingerprint(await file.stat({ bigint: true })) !== fingerprint(before))
             throw new Error('Файл заменён перед чтением.');
           const content = createHash('sha256');
+          // Хеши исторического обхода сохраняются, но внутреннее состояние никогда не копируется.
+          const reason = isWithin(stateDirectory, path)
+            ? 'policy'
+            : options
+              ? contentUnavailable(options, local, before.size)
+              : 'disabled';
+          const chunks: Buffer[] | undefined = options && !reason ? [] : undefined;
           if (before.size > 0n)
             for await (const chunk of file.createReadStream({
               autoClose: false,
               highWaterMark: 64 * 1024,
               end: Number(before.size) - 1,
-            }))
+            })) {
               content.update(chunk);
+              chunks?.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            }
           if (fingerprint(await file.stat({ bigint: true })) !== fingerprint(before))
             throw new Error('Файл изменён во время чтения.');
           const entry: Entry = {
@@ -224,6 +271,14 @@ export class ProjectWorkspace {
             executable: (before.mode & 0o111n) !== 0n,
           };
           await record(entry);
+          if (recordContent) {
+            const bytes = chunks ? Buffer.concat(chunks) : undefined;
+            const unavailableReason = reason ?? (bytes ? textUnavailable(bytes) : 'disabled');
+            await recordContent(
+              { ...entry, unavailableReason },
+              unavailableReason ? undefined : bytes,
+            );
+          }
         } finally {
           await file.close();
         }
@@ -278,6 +333,11 @@ export class ProjectWorkspace {
     }
     for (const path of after.keys()) if (!before.has(path)) result.push({ path, kind: 'added' });
     return result.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  }
+
+  /** Возвращает проверенные метаданные, в том числе для старых снимков без копий текста. */
+  async readEntries(projectId: string, ref: string): Promise<Entry[]> {
+    return [...(await this.read(projectId, ref)).values()];
   }
 
   /** Проверяет принадлежность, размер и контрольную сумму манифеста при каждом чтении. */

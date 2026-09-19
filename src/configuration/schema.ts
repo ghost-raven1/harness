@@ -1,3 +1,4 @@
+import { projectCaptureSchema } from './project-capture.js';
 import { z } from 'zod';
 
 export const decisionSchema = z.enum(['allow', 'deny', 'ask']);
@@ -133,7 +134,10 @@ export const configSchema = z
     coordination: z.enum(['auto', 'manual']).default('auto'),
     defaultProfile: z.string(),
     projects: z
-      .object({ maxCorrections: z.number().int().min(0).max(10) })
+      .object({
+        maxCorrections: z.number().int().min(0).max(10).optional(),
+        capture: projectCaptureSchema.optional(),
+      })
       .strict()
       .optional(),
     profiles: z.record(profileSchema),
