@@ -88,6 +88,7 @@ export async function runDemo(): Promise<void> {
   // Обработчики устанавливаются до первого await: сигнал во время запуска тоже дождётся очистки.
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+  process.on('SIGHUP', shutdown);
   try {
     const session = await starting;
     if (shuttingDown) return;
@@ -164,23 +165,26 @@ export async function runDemo(): Promise<void> {
     } finally {
       process.off('SIGINT', shutdown);
       process.off('SIGTERM', shutdown);
+      process.off('SIGHUP', shutdown);
     }
   }
   process.stdout.write('Учебный проект завершён. Временные данные удалены. До встречи!\n');
 }
 
-/** Отделяет исполнителей демо от работающего рабочего стола и возвращает управление после выхода. */
-export async function openDemoFromDesktop(): Promise<void> {
+/** Возвращает признак закрытого терминала после остановки ребёнка; владелец завершится своим finally. */
+export async function openDemoFromDesktop(): Promise<boolean> {
   const cli = fileURLToPath(new URL('../cli.js', import.meta.url));
   const child = spawn(process.execPath, [cli, 'demo'], {
     stdio: 'inherit',
     env: { ...process.env, HARNESS_DEMO_PARENT_SCREEN: '1' },
   });
   const listeners = new Map<NodeJS.Signals, NodeJS.SignalsListener[]>();
+  let terminalClosed = false;
   const forward = (signal: NodeJS.Signals): void => {
+    if (signal === 'SIGHUP') terminalClosed = true;
     child.kill(signal);
   };
-  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
     listeners.set(signal, process.listeners(signal) as NodeJS.SignalsListener[]);
     process.removeAllListeners(signal);
     process.on(signal, forward);
@@ -198,4 +202,5 @@ export async function openDemoFromDesktop(): Promise<void> {
       for (const listener of saved) process.on(signal, listener);
     }
   }
+  return terminalClosed;
 }

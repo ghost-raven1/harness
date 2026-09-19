@@ -74,7 +74,7 @@ harness projects capture PROJECT_ID off --revision REVISION --key REQUEST_KEY
 
 Проверки: `test/demo.test.ts`, `test/project-change-*.test.ts`, `test/project-diff*.test.ts`, `test/project-diff-export-060.test.ts`; настоящий терминал — `scripts/playtest-demo.py` и `scripts/playtest-project-diff.py`. Последние запускаются после сборки с Python-окружением `pyte==0.8.2`, в размерах 48×24 и 80×24.
 
-`scripts/playtest-demo-signals.py` отдельно проверяет ранний SIGTERM, сигнал в открытом меню, освобождение временной папки и восстановление ECHO/ICANON. Ему достаточно стандартной библиотеки Python на Linux/macOS.
+`scripts/playtest-demo-signals.py` отдельно проверяет SIGTERM и закрытие терминала через SIGHUP во время запуска и в открытом меню, освобождение временной папки и восстановление ECHO/ICANON. Для запуска из главного меню проверяется закрытие владельца после дочернего демо. Стенду достаточно стандартной библиотеки Python на Linux/macOS.
 
 ## Локальный стенд перед выпуском
 

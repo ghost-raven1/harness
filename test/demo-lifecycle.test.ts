@@ -18,7 +18,7 @@ import { brandName } from '../src/interfaces/branding.js';
 import { eventually } from './helpers.js';
 
 /** Проверка отправляет сигнал обработчикам напрямую и не завершает процесс самого Vitest. */
-test.each(['SIGINT', 'SIGTERM'] as const)(
+test.each(['SIGINT', 'SIGTERM', 'SIGHUP'] as const)(
   'ранний %s закрывает только создаваемый сервис и удаляет его временные файлы',
   async (signal) => {
     const actual = await vi.importActual<typeof channel>('../src/interfaces/ipc.js');

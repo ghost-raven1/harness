@@ -256,7 +256,10 @@ async function desktop(
       }
       if (action === 'tasks') await chooseTask(context, preferences);
       if (action === 'projects') await browseProjects(context, preferences);
-      if (action === 'demo') await openDemoFromDesktop();
+      if (action === 'demo' && (await openDemoFromDesktop())) {
+        process.exitCode = 130;
+        return false;
+      }
       if (action === 'knowledge') await browseKnowledge(context);
       if (action === 'help') {
         page('Как пользоваться');
