@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
@@ -121,8 +121,12 @@ test('копирование исключает npm bin и отвергает с
 
 test('офлайн-проверка блокирует TCP/fetch и не передаёт пользовательские ключи', async () => {
   const root = await temporary();
-  const guard = resolve('scripts/portable-offline.mjs');
+  const guard = join(root, 'защита #100% с пробелами.mjs');
+  await copyFile(resolve('scripts/portable-offline.mjs'), guard);
   const env = check.portableEnvironment(root, guard);
+  const preload = JSON.parse(env.NODE_OPTIONS.slice('--import '.length));
+  expect(new URL(preload).protocol).toBe('file:');
+  expect(preload).toContain('%23100%25');
   expect(env.PATH).toBe('');
   expect(env.CODEX_HOME).toBe(join(root, 'codex'));
   expect(env).not.toHaveProperty('OPENAI_API_KEY');

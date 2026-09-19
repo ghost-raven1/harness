@@ -11,7 +11,7 @@ import {
 } from 'node:fs/promises';
 import { dirname, join, resolve, win32 } from 'node:path';
 import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runPreparationCommand } from './preparation-command.mjs';
 import { portableTarget } from './portable-content.mjs';
 import { fileHash, extractPortableZip, verifyPortableFiles } from './portable-files.mjs';
@@ -47,7 +47,7 @@ export function portableEnvironment(root, guard) {
     LOCALAPPDATA: join(root, 'localappdata'),
     CODEX_HOME: join(root, 'codex'),
     HARNESS_STATE_DIR: join(root, 'state'),
-    NODE_OPTIONS: '--import ' + JSON.stringify(guard),
+    NODE_OPTIONS: '--import ' + JSON.stringify(pathToFileURL(guard).href),
   };
 }
 
