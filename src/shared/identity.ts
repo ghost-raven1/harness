@@ -44,6 +44,7 @@ export function applicationIdentity() {
       'projects-v1',
       'projects-review-v1',
       'projects-diff-v1',
+      'execution-insights-v1',
     ],
   };
 }

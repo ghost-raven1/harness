@@ -162,6 +162,20 @@ export async function checkPortable(root) {
         (rows) => appendFile(logPath, '\nДиагностика ACL Windows: ' + JSON.stringify(rows) + '\n'),
       ),
     );
+    const benchmark = JSON.parse(
+      await run(node, [
+        cli,
+        '--json',
+        'benchmark',
+        'specialists',
+        '--output',
+        join(temporary, 'Сравнение специалистов'),
+      ]),
+    );
+    assert.equal(benchmark.status, 'completed');
+    assert.equal(benchmark.planned, 45);
+    assert.equal(benchmark.completed, 45);
+    assert.equal(benchmark.passed, 45);
     await verifyPortableFiles(unpacked, expected);
     const report = {
       status: 'passed',
@@ -178,6 +192,7 @@ export async function checkPortable(root) {
       cliHelp: true,
       mcpConfig: true,
       filesUnchanged: true,
+      specialistsOfflineRuns: benchmark.completed,
       ...behavior,
     };
     await writeJsonAtomic(reportPath, report);

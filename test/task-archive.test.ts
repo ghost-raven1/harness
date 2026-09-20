@@ -148,11 +148,12 @@ it('скрытую задачу можно прочитать и экспорт�
       'save',
       'details',
       'history',
+      'specialists',
       'purge',
       'back',
     ]);
   expect(new Set(request.mock.calls.map(([method]) => method))).toEqual(
-    new Set(['runtime.history', 'runtime.task', 'runtime.status']),
+    new Set(['runtime.history', 'runtime.task', 'runtime.status', 'system.info']),
   );
   expect(await readFile(join(app.workspace, 'Ответ Harness ' + hidden.runId + '.md'), 'utf8')).toBe(
     'Полный ответ: секретный ключ поиска\n',

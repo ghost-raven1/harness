@@ -1,3 +1,5 @@
+import type { ExecutionObserver, ObservationSpan } from '../insights/ports.js';
+import { observeAgent, observationRequestId } from './observations.js';
 import type { SessionStore } from '../sessions/ports.js';
 import type { RunRecord, AgentState } from '../sessions/types.js';
 import type { ModelProvider, ToolDefinition } from '../providers/types.js';
@@ -25,6 +27,7 @@ import { planningToolAllowed } from '../sessions/project-run.js';
 import { RunPausedError } from '../shared/run-pause.js';
 
 interface AgentLoopServices {
+  observer?: ExecutionObserver;
   store: SessionStore;
   provider: ModelProvider;
   context: ContextService;
@@ -55,143 +58,164 @@ export class AgentLoop {
   /** Ведёт одну ветку до результата, сохраняя обмены и проверяя общие пределы. */
   async run(runId: string, agentId: string, signal: AbortSignal): Promise<void> {
     let forcedCompaction = false;
-    while (true) {
-      abort(signal);
-      this.services.checkpoint?.(runId);
-      let run = this.services.store.get(runId);
-      let agent = run.agents[agentId]!;
-      const root = agentId === run.rootAgentId;
-      if (agent.status === 'completed' && !(root && hasPendingMessages(run))) return;
-      if (agent.pending?.length) {
-        await this.completePendingCalls(run, agent, signal);
-        continue;
-      }
-      if (root) {
-        run = await deliverMessages(this.services.store, run);
-        agent = run.agents[agentId]!;
-      }
-      const planning = needsPlanning(run, agent);
-      if (planning && run.coordination!.attempts >= 2)
-        throw new Error(
-          'Модель дважды вернула неверный план работы. Проверьте поддержку инструментов выбранного профиля или задайте coordination: manual в конфигурации.',
-        );
-      await this.services.store.mutate(
-        runId,
-        'model.requested',
-        { agentId, profile: this.services.context.profile(run, agent).id },
-        (state) => {
-          abort(signal);
-          this.services.checkpoint?.(runId);
-          const progress = iterationProgress(state);
-          if (progress.used >= progress.limit) {
-            const error = new IterationLimitError(progress.limit);
-            this.services.stopRun(runId, error);
-            throw error;
-          }
-          state.turns++;
-        },
-      );
-      const tools = planning ? [planningDefinition(run)] : this.definitions(run, agent);
-      if (forcedCompaction || this.services.context.needsCompaction(run, agent, tools)) {
-        run = await this.compactContext(run, agent, signal);
-        agent = run.agents[agentId]!;
-      }
-      this.services.context.assertFits(run, agent, tools);
-      const messages = this.services.context.build(run, agent, tools);
-      if (run.project?.kind === 'planning')
-        messages[0]!.content +=
-          '\n\nPROJECT PLANNING: inspect files with read-only tools. Return the requested proposal as JSON text. Do not execute the plan or delegate work.';
-      if (planning) messages[0]!.content += '\n\n' + planningInstruction(run);
-      const { profile } = this.services.context.profile(run, agent);
-      if (estimate(messages) + estimate(tools) > profile.contextTokens - profile.outputTokens)
-        throw new Error(
-          'CONTEXT_LIMIT: configured roles and routing instructions do not fit the selected model context',
-        );
-      let output;
-      const progress = await this.services.store.output.begin(runId, agentId, agent.role);
-      try {
-        output = await this.services.providerFor(runId).generate({
-          profile: this.services.context.profile(run, agent).profile,
-          messages,
-          tools,
-          signal,
-          onProgress: progress.progress,
-        });
-      } catch (error) {
-        await progress.finish();
-        if (error instanceof ProviderError && error.contextOverflow && !forcedCompaction) {
-          forcedCompaction = true;
+    let phase: ObservationSpan | undefined;
+    let activeRole: string | undefined;
+    try {
+      while (true) {
+        abort(signal);
+        this.services.checkpoint?.(runId);
+        let run = this.services.store.get(runId);
+        let agent = run.agents[agentId]!;
+        if (activeRole !== agent.role) {
+          phase?.end();
+          activeRole = agent.role;
+          phase = observeAgent(this.services.observer, run, agent).begin('agent');
+        }
+        const root = agentId === run.rootAgentId;
+        if (agent.status === 'completed' && !(root && hasPendingMessages(run))) return;
+        if (agent.pending?.length) {
+          await this.completePendingCalls(run, agent, signal);
           continue;
         }
-        throw error;
-      }
-      await progress.finish(output);
-      if (output.finish === 'length')
-        throw new Error('Model output token limit reached; no tool call was executed');
-      forcedCompaction = false;
-      if (output.calls.some((call) => agent.completedCalls.includes(call.id)))
-        throw new Error('Model reused an executed tool call ID');
-      if (new Set(output.calls.map((call) => call.id)).size !== output.calls.length)
-        throw new Error('Duplicate tool call IDs');
-      abort(signal);
-      if (planning) {
-        await this.recordPlan(run, agent, output);
-        continue;
-      }
-      await this.services.store.mutate(
-        runId,
-        'model.completed',
-        { agentId, finish: output.finish, requestId: progress.requestId },
-        (state) => {
-          const target = state.agents[agentId]!;
-          target.messages.push({
-            role: 'assistant',
-            content: output.text,
-            ...(output.calls.length ? { toolCalls: output.calls } : {}),
-            ...(output.reasoning
-              ? { reasoning: output.reasoning, reasoningSignature: output.reasoningSignature }
-              : {}),
-            ...(output.redactedReasoning ? { redactedReasoning: output.redactedReasoning } : {}),
-          });
-          if (output.calls.length) target.pending = output.calls;
-          state.usage.input += output.usage.input;
-          state.usage.output += output.usage.output;
-        },
-      );
-      if (output.calls.length) continue;
-      if (root && hasPendingMessages(this.services.store.get(runId))) continue;
-      const latest = this.services.store.get(runId).agents[agentId]!;
-      const uncollected = latest.children.filter(
-        (child) => !latest.collectedChildren.includes(child),
-      );
-      if (uncollected.length) {
-        const results = await Promise.all(
-          uncollected.map((child) =>
-            this.services.agents.childResult(runId, agentId, child, signal),
-          ),
-        );
+        if (root) {
+          run = await deliverMessages(this.services.store, run);
+          agent = run.agents[agentId]!;
+        }
+        const planning = needsPlanning(run, agent);
+        if (planning && run.coordination!.attempts >= 2)
+          throw new Error(
+            'Модель дважды вернула неверный план работы. Проверьте поддержку инструментов выбранного профиля или задайте coordination: manual в конфигурации.',
+          );
         await this.services.store.mutate(
           runId,
-          'agent.children_collected',
-          { agentId },
+          'model.requested',
+          { agentId, profile: this.services.context.profile(run, agent).id },
           (state) => {
             abort(signal);
-            state.agents[agentId]!.messages.push({
-              role: 'user',
-              content: '[HARNESS: incorporate completed child results]\n' + JSON.stringify(results),
-            });
-            state.agents[agentId]!.collectedChildren = [
-              ...new Set([...state.agents[agentId]!.collectedChildren, ...uncollected]),
-            ];
+            this.services.checkpoint?.(runId);
+            const progress = iterationProgress(state);
+            if (progress.used >= progress.limit) {
+              const error = new IterationLimitError(progress.limit);
+              this.services.stopRun(runId, error);
+              throw error;
+            }
+            state.turns++;
           },
         );
-        continue;
+        const tools = planning ? [planningDefinition(run)] : this.definitions(run, agent);
+        if (forcedCompaction || this.services.context.needsCompaction(run, agent, tools)) {
+          run = await this.compactContext(run, agent, signal);
+          agent = run.agents[agentId]!;
+        }
+        this.services.context.assertFits(run, agent, tools);
+        const messages = this.services.context.build(run, agent, tools);
+        if (run.project?.kind === 'planning')
+          messages[0]!.content +=
+            '\n\nPROJECT PLANNING: inspect files with read-only tools. Return the requested proposal as JSON text. Do not execute the plan or delegate work.';
+        if (planning) messages[0]!.content += '\n\n' + planningInstruction(run);
+        const { profile } = this.services.context.profile(run, agent);
+        if (estimate(messages) + estimate(tools) > profile.contextTokens - profile.outputTokens)
+          throw new Error(
+            'CONTEXT_LIMIT: configured roles and routing instructions do not fit the selected model context',
+          );
+        let output;
+        const progress = await this.services.store.output.begin(runId, agentId, agent.role);
+        const observation = observeAgent(this.services.observer, run, agent, progress.requestId);
+        const planningPhase = planning ? observation.begin('planning') : undefined;
+        try {
+          output = await this.services.providerFor(runId).generate({
+            observation,
+            profile: this.services.context.profile(run, agent).profile,
+            messages,
+            tools,
+            signal,
+            onProgress: progress.progress,
+          });
+        } catch (error) {
+          planningPhase?.end(signal.aborted ? 'cancelled' : 'failed');
+          await progress.finish();
+          if (error instanceof ProviderError && error.contextOverflow && !forcedCompaction) {
+            forcedCompaction = true;
+            continue;
+          }
+          throw error;
+        } finally {
+          planningPhase?.end();
+        }
+        await progress.finish(output);
+        if (output.finish === 'length')
+          throw new Error('Model output token limit reached; no tool call was executed');
+        forcedCompaction = false;
+        if (output.calls.some((call) => agent.completedCalls.includes(call.id)))
+          throw new Error('Model reused an executed tool call ID');
+        if (new Set(output.calls.map((call) => call.id)).size !== output.calls.length)
+          throw new Error('Duplicate tool call IDs');
+        abort(signal);
+        if (planning) {
+          await this.recordPlan(run, agent, output);
+          continue;
+        }
+        await this.services.store.mutate(
+          runId,
+          'model.completed',
+          { agentId, finish: output.finish, requestId: progress.requestId },
+          (state) => {
+            const target = state.agents[agentId]!;
+            target.messages.push({
+              role: 'assistant',
+              content: output.text,
+              ...(output.calls.length ? { toolCalls: output.calls } : {}),
+              ...(output.reasoning
+                ? { reasoning: output.reasoning, reasoningSignature: output.reasoningSignature }
+                : {}),
+              ...(output.redactedReasoning ? { redactedReasoning: output.redactedReasoning } : {}),
+            });
+            if (output.calls.length) target.pending = output.calls;
+            state.usage.input += output.usage.input;
+            state.usage.output += output.usage.output;
+          },
+        );
+        if (output.calls.length) continue;
+        if (root && hasPendingMessages(this.services.store.get(runId))) continue;
+        const latest = this.services.store.get(runId).agents[agentId]!;
+        const uncollected = latest.children.filter(
+          (child) => !latest.collectedChildren.includes(child),
+        );
+        if (uncollected.length) {
+          const results = await Promise.all(
+            uncollected.map((child) =>
+              this.services.agents.childResult(runId, agentId, child, signal),
+            ),
+          );
+          await this.services.store.mutate(
+            runId,
+            'agent.children_collected',
+            { agentId },
+            (state) => {
+              abort(signal);
+              state.agents[agentId]!.messages.push({
+                role: 'user',
+                content:
+                  '[HARNESS: incorporate completed child results]\n' + JSON.stringify(results),
+              });
+              state.agents[agentId]!.collectedChildren = [
+                ...new Set([...state.agents[agentId]!.collectedChildren, ...uncollected]),
+              ];
+            },
+          );
+          continue;
+        }
+        await this.services.store.mutate(runId, 'agent.completed', { agentId }, (state) => {
+          state.agents[agentId]!.status = 'completed';
+          state.agents[agentId]!.result = output.text;
+        });
+        return;
       }
-      await this.services.store.mutate(runId, 'agent.completed', { agentId }, (state) => {
-        state.agents[agentId]!.status = 'completed';
-        state.agents[agentId]!.result = output.text;
-      });
-      return;
+    } catch (error) {
+      phase?.end(signal.aborted ? 'cancelled' : 'failed');
+      throw error;
+    } finally {
+      phase?.end();
     }
   }
 
@@ -280,8 +304,13 @@ export class AgentLoop {
               error: 'Handoff must be the only call; no batch operation was executed',
             });
           }
-          const execute = () =>
-            this.services.executor.execute(runId, agentId, call, signal, handleControl);
+          const queued = observeAgent(this.services.observer, run, agent).begin('tool.queue', {
+            invocationId: agentId + ':' + call.id,
+          });
+          const execute = () => {
+            queued.end();
+            return this.services.executor.execute(runId, agentId, call, signal, handleControl);
+          };
           const effect = call.name.startsWith('agents.') ? undefined : effects.get(call.name);
           // Отмену ожидающих вызовов фиксирует исполнитель, чтобы у каждого ID остался результат.
           return await (effect ? batch.schedule(effect, execute) : execute());
@@ -327,12 +356,23 @@ export class AgentLoop {
   ): Promise<RunRecord> {
     const runId = run.id;
     const agentId = agent.id;
-    const compacted = await this.services.context.compact(
-      run,
-      agent,
-      this.services.providerFor(runId),
-      signal,
-    );
+    const observation = observeAgent(this.services.observer, run, agent, observationRequestId());
+    const phase = observation.begin('compaction');
+    let compacted;
+    try {
+      compacted = await this.services.context.compact(
+        run,
+        agent,
+        this.services.providerFor(runId),
+        signal,
+        observation,
+      );
+    } catch (error) {
+      phase.end(signal.aborted ? 'cancelled' : 'failed');
+      throw error;
+    } finally {
+      phase.end();
+    }
     await this.services.store.mutate(runId, 'context.compacted', { agentId }, (state) => {
       state.agents[agentId]!.messages = compacted.messages;
       state.agents[agentId]!.summary = compacted.summary;

@@ -113,6 +113,7 @@ export async function removeLessonExports(directory: string, ids: string[]): Pro
 const taskDirectories = [
   'runs',
   'output',
+  'activity',
   'artifacts',
   'file-backups',
   'drafts',

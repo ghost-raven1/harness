@@ -103,6 +103,7 @@ it.each([false, true])(
     vi.mocked(followRun).mockResolvedValue(current);
     const request = vi
       .fn()
+      .mockResolvedValueOnce({ capabilities: [] })
       .mockResolvedValueOnce(current)
       .mockImplementation(() => {
         throw new Error('После выбора «Назад» запросы запрещены');
@@ -114,7 +115,9 @@ it.each([false, true])(
       return 'back';
     });
     await chooseTask(client(request), current);
-    expect(request).toHaveBeenCalledExactlyOnceWith('runtime.status', { runId: 'run' });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request).toHaveBeenNthCalledWith(1, 'system.info');
+    expect(request).toHaveBeenNthCalledWith(2, 'runtime.status', { runId: 'run' });
     expect(catalogues).toBe(hidden ? 2 : 1);
   },
 );

@@ -9,6 +9,8 @@ import { ProviderError } from '../errors.js';
 import { codexProviderError } from '../rate-limits.js';
 import { retryModelRequest } from '../retry.js';
 import { CodexConnection, codexRestrictions } from './connection.js';
+import type { ModelAttemptObservation } from '../observation.js';
+import { CodexUsage } from './usage.js';
 
 const callSchema = z.object({
   threadId: z.string(),
@@ -20,6 +22,7 @@ const itemSchema = z.object({ type: z.string(), text: z.string().optional() }).p
 
 /** Codex предлагает динамические вызовы; исполнение, разрешения и история принадлежат Harness. */
 export class CodexModelProvider implements ModelProvider {
+  readonly observesRequests = true;
   constructor(
     private readonly connect = (signal: AbortSignal) => new CodexConnection(signal),
     private readonly threadOverrides: JsonObject = {},
@@ -27,10 +30,13 @@ export class CodexModelProvider implements ModelProvider {
 
   /** Выполняет запрос Codex с общими правилами повторов и отмены. */
   generate(request: ModelRequest): Promise<ModelOutput> {
-    return retryModelRequest(request, () => this.once(request));
+    return retryModelRequest(request, (observation) => this.once(request, observation));
   }
   /** Собирает ответ временной сессии и останавливает Codex до передачи вызовов Harness. */
-  private async once(request: ModelRequest): Promise<ModelOutput> {
+  private async once(
+    request: ModelRequest,
+    observation: ModelAttemptObservation,
+  ): Promise<ModelOutput> {
     const directory = await mkdtemp(join(tmpdir(), 'harness-codex-'));
     const timeout = deadline(request.signal, request.profile.timeoutMs);
     let connection: CodexConnection | undefined;
@@ -85,6 +91,7 @@ export class CodexModelProvider implements ModelProvider {
       };
       const responseCalls = new Map<string, ToolCall>();
       let hasUsage = false;
+      const tokenUsage = new CodexUsage();
       let responseComplete = false;
       const streamedText = new Set<string>();
       const streamedSummaries = new Set<string>();
@@ -113,6 +120,7 @@ export class CodexModelProvider implements ModelProvider {
             message.method === 'item/reasoning/summaryTextDelta'
           ) {
             const delta = z.object({ itemId: z.string(), delta: z.string() }).parse(params);
+            if (delta.delta) observation.firstOutput();
             const reasoning = message.method === 'item/reasoning/summaryTextDelta';
             (reasoning ? streamedSummaries : streamedText).add(delta.itemId);
             request.onProgress?.({ type: reasoning ? 'reasoning' : 'text', text: delta.delta });
@@ -122,6 +130,7 @@ export class CodexModelProvider implements ModelProvider {
             const call = callSchema.parse(params);
             const name = mapped.names.get(call.tool);
             if (!name) throw new ProviderError('Codex запросил инструмент вне реестра Harness.');
+            observation.firstOutput();
             if (!call.callId || !responseCalls.has(call.callId))
               output.calls.push({
                 id: id(),
@@ -142,6 +151,7 @@ export class CodexModelProvider implements ModelProvider {
                 .parse(item);
               const name = mapped.names.get(call.name);
               if (!name) throw new ProviderError('Codex запросил инструмент вне реестра Harness.');
+              observation.firstOutput();
               responseCalls.set(call.call_id, { id: id(), name, arguments: call.arguments });
             }
           } else if (message.method === 'rawResponse/completed') {
@@ -158,8 +168,13 @@ export class CodexModelProvider implements ModelProvider {
                   outputTokens: z.number().int().nonnegative(),
                 })
                 .parse(params.usage);
-              output.usage.input += usage.inputTokens;
-              output.usage.output += usage.outputTokens;
+              tokenUsage.response(
+                usage,
+                typeof params.responseId === 'string' ? params.responseId : undefined,
+              );
+              output.usage = tokenUsage.current();
+              output.usageSource = 'provider';
+              observation.usage({ ...output.usage, source: 'provider' });
               hasUsage = true;
             }
             if (output.calls.length) resolveOutput();
@@ -179,11 +194,15 @@ export class CodexModelProvider implements ModelProvider {
                 }),
               })
               .parse(params).tokenUsage.total;
-            output.usage = { input: usage.inputTokens, output: usage.outputTokens };
+            tokenUsage.total(usage);
+            output.usage = tokenUsage.current();
+            output.usageSource = 'provider';
+            observation.usage({ ...output.usage, source: 'provider' });
             hasUsage = true;
           } else if (message.method === 'item/completed') {
             const item = itemSchema.parse(params.item);
             if (item.type === 'agentMessage') {
+              if (item.text) observation.firstOutput();
               output.text += (output.text ? '\n' : '') + (item.text ?? '');
               if (!streamedText.has(String(item.id)) && item.text)
                 request.onProgress?.({ type: 'text', text: item.text });
@@ -195,6 +214,7 @@ export class CodexModelProvider implements ModelProvider {
                 .parse(item.summary ?? [])
                 .join('\n');
               if (summary) {
+                observation.firstOutput();
                 output.reasoning = (output.reasoning ? output.reasoning + '\n' : '') + summary;
                 if (!streamedSummaries.has(String(item.id)))
                   request.onProgress?.({ type: 'reasoning', text: summary });
@@ -250,11 +270,13 @@ export class CodexModelProvider implements ModelProvider {
       if (failure) throw failure;
       if (timeout.signal.aborted)
         throw new ProviderError('Запрос Codex отменён или истёк тайм-аут.');
-      if (!hasUsage)
+      if (!hasUsage) {
         output.usage = {
           input: Buffer.byteLength(JSON.stringify(request.messages)),
           output: Buffer.byteLength(output.text + JSON.stringify(output.calls)),
         };
+        output.usageSource = 'estimate';
+      }
       if (!output.calls.length && !output.text.trim())
         throw new ProviderError('Codex вернул пустой ответ.');
       if (output.usage.output > request.profile.outputTokens) {

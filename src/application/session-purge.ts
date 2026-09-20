@@ -41,6 +41,7 @@ export class SessionPurge {
     private readonly runtime: HarnessRuntime,
     private readonly scheduler: ToolScheduler,
     private readonly projects?: Pick<ProjectPurge, 'usesLearning' | 'serialize' | 'recoveryError'>,
+    private readonly forgetMeasurements?: (runIds: string[]) => Promise<void>,
   ) {}
 
   /** Вычисляет состав удаления, причины блокировки и привязанный к данным токен. */
@@ -179,6 +180,7 @@ export class SessionPurge {
           intentStarted = true;
           await this.sessions.recordPurge(record);
           await this.learningStore.purge(record);
+          await this.forgetMeasurements?.(record.runIds);
           await this.sessions.purgeFiles(record);
           record.complete = true;
           await this.sessions.recordPurge(record);

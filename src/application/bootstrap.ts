@@ -1,3 +1,4 @@
+import { InsightsService } from '../insights/service.js';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Module } from '@nestjs/common';
@@ -39,6 +40,7 @@ export interface Application {
   configFile: string;
   directory: string;
   runtime: HarnessRuntime;
+  insights: InsightsService;
   sessions: FileSessionStore;
   drafts: DraftStore;
   learning: LearningService;
@@ -99,6 +101,11 @@ export async function createApplication(
             return store;
           },
         },
+        {
+          provide: InsightsService,
+          inject: [FileSessionStore],
+          useFactory: (store: FileSessionStore) => new InsightsService(directory, store),
+        },
         { provide: PolicyService, useFactory: () => new PolicyService() },
         { provide: McpClientService, useFactory: () => new McpClientService() },
         { provide: ToolScheduler, useFactory: () => new ToolScheduler(config.value.limits.reads) },
@@ -131,6 +138,7 @@ export async function createApplication(
             ToolScheduler,
             PolicyService,
             FileApprovalService,
+            InsightsService,
           ],
           useFactory: (
             store: FileSessionStore,
@@ -138,7 +146,9 @@ export async function createApplication(
             scheduler: ToolScheduler,
             policy: PolicyService,
             approvals: FileApprovalService,
-          ) => new InvocationExecutor(store, tools, scheduler, policy, approvals),
+            insights: InsightsService,
+          ) =>
+            new InvocationExecutor(store, tools, scheduler, policy, approvals, insights.observer),
         },
         {
           provide: HarnessRuntime,
@@ -150,6 +160,7 @@ export async function createApplication(
             ToolRegistry,
             PolicyService,
             InvocationExecutor,
+            InsightsService,
           ],
           useFactory: (
             store: FileSessionStore,
@@ -159,8 +170,10 @@ export async function createApplication(
             tools: ToolRegistry,
             policy: PolicyService,
             executor: InvocationExecutor,
+            insights: InsightsService,
           ) =>
             new HarnessRuntime({
+              observer: insights.observer,
               configFile,
               initialConfig: config,
               store,
@@ -213,6 +226,7 @@ export async function createApplication(
     learning,
     registry: nest.get(ToolRegistry),
   });
+  const insights = nest.get(InsightsService);
   const projectPlans = new ProjectPlanService(projects);
   const projectEvidence = new ProjectEvidenceService({
     projects: projects.store,
@@ -237,7 +251,12 @@ export async function createApplication(
         ? projectPlans.history.read(project, project.acceptedVersion)
         : Promise.resolve(undefined),
   });
+  const forgetMeasurements = async (runIds: string[]): Promise<void> => {
+    runtime.observations.forget(runIds);
+    await insights.observer.forget(runIds);
+  };
   const projectPurge = new ProjectPurge({
+    forgetMeasurements,
     projects: projects.store,
     sessions: nest.get(FileSessionStore),
     learning,
@@ -263,6 +282,7 @@ export async function createApplication(
     configFile,
     directory,
     runtime,
+    insights,
     learning,
     diagnostics,
     projects,
@@ -282,6 +302,7 @@ export async function createApplication(
       runtime,
       nest.get(ToolScheduler),
       projectPurge,
+      forgetMeasurements,
     ),
     reset: new DataReset(
       nest.get(FileSessionStore),
@@ -290,6 +311,7 @@ export async function createApplication(
       runtime,
       nest.get(ToolScheduler),
       projectPurge,
+      forgetMeasurements,
     ),
     /** Останавливает задачи и обучение, затем закрывает MCP, контейнер и журнал диагностики. */
     close() {
@@ -301,6 +323,7 @@ export async function createApplication(
           () => projectChanges.close(),
           () => runtime.close(),
           () => learning.close(),
+          () => insights.observer.close(),
           () => nest.get(McpClientService).close(),
           () => nest.close(),
           () => diagnostics.record({ type: 'service.stopped' }),

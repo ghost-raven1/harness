@@ -24,6 +24,8 @@ import { saveAnswer } from './answer-export.js';
 import { completeResult } from '../result-client.js';
 import { canMessageTask, writeTaskMessage } from './task-message.js';
 import { inspectProject } from './project-work/detail.js';
+import { supportsInsights } from './specialists/capability.js';
+import { browseSpecialists } from './specialists/screens.js';
 export { saveAnswer } from './answer-export.js';
 
 /** Повторный вопрос остаётся в той же сессии; новая задача всегда получает отдельную историю. */
@@ -195,11 +197,12 @@ export async function chooseTask(
 }
 
 /** Показывает действия, допустимые для текущего состояния и режима скрытой задачи. */
-function taskActionOptions(status: StatusView) {
+function taskActionOptions(status: StatusView, insights = false) {
   if (status.project)
     return [
       { value: 'project', label: 'Открыть проект', hint: 'пауза, уточнения и приёмка' },
       { value: 'history', label: 'Журнал, мысли и полный ответ' },
+      ...(insights ? [{ value: 'specialists', label: 'Работа специалистов' }] : []),
       { value: 'details', label: 'Технические подробности' },
       { value: 'archive', label: '← К списку задач' },
     ];
@@ -250,6 +253,7 @@ function taskActionOptions(status: StatusView) {
     ...(!readOnly ? [{ value: 'iterations', label: 'Предел шагов задачи' }] : []),
     { value: 'details', label: 'Технические подробности' },
     { value: 'history', label: 'Журнал, мысли и полный ответ' },
+    ...(insights ? [{ value: 'specialists', label: 'Работа специалистов' }] : []),
     ...(!readOnly && !active ? [{ value: 'drafts', label: 'Черновики сообщений' }] : []),
     ...(!readOnly ? [{ value: 'delete', label: 'Убрать из списка' }] : []),
     ...(!active && !status.recoveryRequired ? [{ value: 'purge', label: 'Удалить навсегда' }] : []),
@@ -268,6 +272,7 @@ async function taskActions(
   let notice = '';
   let menuStatus = initial;
   try {
+    const insights = await supportsInsights(context);
     while (true) {
       const previousNotice = notice;
       notice = '';
@@ -284,7 +289,7 @@ async function taskActions(
               summary: taskSummary(status, undefined, undefined, previousNotice),
               summaryTitle: 'Состояние задачи',
               summaryRows: 12,
-              options: taskActionOptions(status),
+              options: taskActionOptions(status, insights),
             };
           },
         }),
@@ -296,7 +301,7 @@ async function taskActions(
         await inspectProject(context, status.project.projectId);
         return 'archive';
       }
-      if (!taskActionOptions(status).some((option) => option.value === action)) {
+      if (!taskActionOptions(status, insights).some((option) => option.value === action)) {
         notice = 'Состояние изменилось в другом окне. Выберите актуальное действие.';
         continue;
       }
@@ -317,6 +322,7 @@ async function taskActions(
         continue;
       }
       if (action === 'history') await followRun(context, status.runId, { inspect: true });
+      if (action === 'specialists') await browseSpecialists(context, status.runId, status.project);
       if (action === 'answer' && (await showTaskAnswer(context, status)) === 'removed')
         return 'archive';
       if (action === 'continue') {

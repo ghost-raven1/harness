@@ -4,6 +4,7 @@ import { Command, InvalidArgumentError } from 'commander';
 import { projectPlanSchema } from '../../projects/schema.js';
 import type { CliContext } from '../types.js';
 import { registerProjectReadCommands } from './project-reports.js';
+import { registerProjectInsightsCommand } from './insights.js';
 
 interface MutationOptions {
   revision: number;
@@ -34,6 +35,7 @@ export function registerProjectCommands(program: Command, context: CliContext): 
     .description('Проекты: цель, план, этапы и приёмка результата');
   registerProjectReadCommands(projects, context, integer);
   registerProjectChangeCommands(projects, context, integer);
+  registerProjectInsightsCommand(projects, context, integer);
   projects
     .command('list')
     .description('Список проектов')

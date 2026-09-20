@@ -1,6 +1,6 @@
 {
   "name": "modular-agent-harness",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "private": true,
   "description": "Local MCP agent harness with policy enforcement and evaluated procedural learning",
   "type": "module",
@@ -37,7 +37,8 @@
     "benchmark:projects": "node --max-old-space-size=768 scripts/benchmark-projects.mjs",
     "benchmark:diff": "node --max-old-space-size=768 scripts/benchmark-project-diff.mjs",
     "portable:pack": "node scripts/portable-pack.mjs",
-    "portable:check": "node scripts/portable-check.mjs"
+    "portable:check": "node scripts/portable-check.mjs",
+    "benchmark:insights": "node --max-old-space-size=768 scripts/benchmark-insights.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "1.2.12",

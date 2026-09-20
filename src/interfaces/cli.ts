@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { registerBenchmarkCommands } from './commands/benchmark.js';
+import { registerInsightsCommand } from './commands/insights.js';
 import { Command } from 'commander';
 import * as prompts from '@clack/prompts';
 import { homedir } from 'node:os';
@@ -77,6 +79,8 @@ export function createCli(): Command {
   registerServiceCommands(program, context);
   registerDoctorCommand(program, context);
   registerRunCommands(program, context);
+  registerInsightsCommand(program, context);
+  registerBenchmarkCommands(program, context);
   registerMessageCommand(program, context);
   registerProjectCommands(program, context);
   registerDemo(program, context);

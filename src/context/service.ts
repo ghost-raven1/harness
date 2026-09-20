@@ -1,3 +1,4 @@
+import type { ExecutionObservation } from '../insights/ports.js';
 import type { RunRecord, AgentState } from '../sessions/types.js';
 import type {
   ChatMessage,
@@ -115,6 +116,7 @@ export class ContextService {
     agent: AgentState,
     provider: ModelProvider,
     signal: AbortSignal,
+    observation?: ExecutionObservation,
   ): Promise<{
     messages: ChatMessage[];
     summary: string;
@@ -143,7 +145,7 @@ export class ContextService {
     ];
     if (estimate(messages) > profile.contextTokens - profile.outputTokens)
       throw new Error('CONTEXT_LIMIT: history exceeds summary request budget');
-    const output = await provider.generate({ profile, messages, tools: [], signal });
+    const output = await provider.generate({ profile, messages, tools: [], signal, observation });
     if (output.finish !== 'stop' || output.calls.length || !output.text.trim())
       throw new Error('Compaction did not return a complete summary');
     return { messages: agent.messages.slice(keepFrom), summary: output.text, usage: output.usage };

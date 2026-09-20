@@ -1,3 +1,5 @@
+import type { ExecutionObserver } from '../insights/ports.js';
+import { observedProvider, RunObservations } from './observations.js';
 import { ApplicationError } from '../shared/application-error.js';
 import { UsageLedger } from './usage.js';
 import {
@@ -38,6 +40,7 @@ import type {
 export { runInputSchema, type RunInput } from './run-factory.js';
 
 interface RuntimeServices {
+  observer?: ExecutionObserver;
   configFile: string;
   initialConfig: ConfigSnapshot;
   store: SessionStore;
@@ -57,6 +60,7 @@ export class HarnessRuntime {
   private readonly failures = new Map<string, unknown>();
   private readonly executions: RuntimeExecutions;
   readonly usage: UsageLedger;
+  readonly observations: RunObservations;
   private readonly iterations: IterationSettings;
   private readonly agents: AgentCoordinator;
   private readonly loop: AgentLoop;
@@ -75,6 +79,7 @@ export class HarnessRuntime {
 
   constructor(services: RuntimeServices) {
     this.store = services.store;
+    this.observations = new RunObservations(services.observer);
     this.inbox = new RunInbox(services.store);
     this.usage = new UsageLedger(services.store);
     this.iterations = new IterationSettings(services.store.stateFiles);
@@ -86,14 +91,17 @@ export class HarnessRuntime {
       services.learning,
       this.iterations,
     );
-    this.agents = new AgentCoordinator(services.store, (runId, agentId, signal) =>
-      this.loop.run(runId, agentId, signal),
+    this.agents = new AgentCoordinator(
+      services.store,
+      (runId, agentId, signal) => this.loop.run(runId, agentId, signal),
+      services.observer,
     );
     const checks = new CheckLoop(services.store, services.executor, (runId) =>
       this.executions.checkpoint(runId),
     );
     this.executions = new RuntimeExecutions({
       store: services.store,
+      observations: this.observations,
       agents: this.agents,
       failures: this.failures,
       executeRoot: (runId, signal) =>
@@ -116,7 +124,7 @@ export class HarnessRuntime {
         generate: async (request) => {
           try {
             this.executions.checkpoint(runId);
-            return await this.usage.provider(services.provider, runId).generate({
+            return await this.usage.provider(observedProvider(services.provider), runId).generate({
               ...request,
               signal: this.executions.waitingSignal(
                 runId,
@@ -322,7 +330,10 @@ export class HarnessRuntime {
         for (const agent of Object.values(state.agents))
           if (['running', 'waiting'].includes(agent.status)) agent.status = 'cancelled';
       });
-      if (!execution) this.notifySettled(runId);
+      if (!execution) {
+        await this.observations.stop(this.store.get(runId));
+        this.notifySettled(runId);
+      }
       return { done: execution?.done };
     });
     // Долгий инструмент или обучение не удерживают очередь команд остальных задач.
@@ -454,7 +465,8 @@ export class HarnessRuntime {
             errors.map((result) => result.reason),
             'Ошибка остановки задач',
           );
-      }));
+      })
+      .finally(() => this.observations.close()));
   }
   /** Не запускает новую работу после начала закрытия сервиса. */
   private assertOpen(): void {

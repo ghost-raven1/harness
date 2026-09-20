@@ -55,7 +55,14 @@ export class ScriptedProvider implements ModelProvider {
     ) => ModelOutput | Promise<ModelOutput>,
   ) {}
   async generate(request: ModelRequest): Promise<ModelOutput> {
-    this.requests.push(structuredClone({ ...request, signal: undefined, onProgress: undefined }));
+    this.requests.push(
+      structuredClone({
+        ...request,
+        signal: undefined,
+        onProgress: undefined,
+        observation: undefined,
+      }),
+    );
     return this.answer(request, this.requests.length - 1);
   }
 }

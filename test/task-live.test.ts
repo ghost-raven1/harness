@@ -127,7 +127,7 @@ it('список и действия перечитывают данные; ск
   await chooseTask(client(request), { workspace: '/workspace', profile: 'test' });
   expect(
     request.mock.calls.every(([method]) =>
-      ['runtime.history', 'runtime.status', 'runtime.task'].includes(method),
+      ['runtime.history', 'runtime.status', 'runtime.task', 'system.info'].includes(method),
     ),
   ).toBe(true);
   expect(prompts.confirm).not.toHaveBeenCalled();

@@ -20,6 +20,7 @@ export class JournalReadError extends Error {
 export async function* scanJournal<T = unknown>(
   path: string,
   start = 0,
+  maximumRecordBytes = 512 * 1024 * 1024,
 ): AsyncGenerator<{ value: T; offset: number; end: number }> {
   const stream = createReadStream(path, { start, highWaterMark: 64 * 1024 });
   let parts: Buffer[] = [],
@@ -35,6 +36,8 @@ export async function* scanJournal<T = unknown>(
           ? Buffer.concat([...parts, fragment], length + fragment.length)
           : fragment;
         const next = offset + length + fragment.length + 1;
+        if (line.length > maximumRecordBytes)
+          throw new JournalReadError('JOURNAL_RECORD_TOO_LARGE', offset);
         let value: T;
         try {
           value = JSON.parse(line.toString('utf8')) as T;
@@ -51,7 +54,7 @@ export async function* scanJournal<T = unknown>(
         const fragment = bytes.subarray(begin);
         parts.push(fragment);
         length += fragment.length;
-        if (length > 512 * 1024 * 1024)
+        if (length > maximumRecordBytes)
           throw new JournalReadError('JOURNAL_RECORD_TOO_LARGE', offset);
       }
     }

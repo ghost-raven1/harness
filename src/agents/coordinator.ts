@@ -1,3 +1,5 @@
+import type { ExecutionObserver } from '../insights/ports.js';
+import { noObservation } from '../insights/ports.js';
 import type { SessionStore } from '../sessions/ports.js';
 import type { ToolCall } from '../providers/types.js';
 import { UnknownOutcomeError } from '../runtime/executor.js';
@@ -15,6 +17,7 @@ export class AgentCoordinator {
   constructor(
     private readonly store: SessionStore,
     private readonly executeAgent: ExecuteAgent,
+    private readonly observer?: ExecutionObserver,
   ) {}
 
   /** Дожидается запущенных дочерних исполнителей, включая завершение после отмены. */
@@ -90,7 +93,25 @@ export class AgentCoordinator {
     const child = run.agents[childId];
     if (!child || child.parentId !== parentId)
       throw new Error('Only your own child agents may be awaited');
-    if (!['completed', 'failed'].includes(child.status)) await this.spawn(runId, childId, signal);
+    if (!['completed', 'failed'].includes(child.status)) {
+      const parent = run.agents[parentId]!;
+      const observation =
+        this.observer?.scope({
+          runId,
+          agentId: parentId,
+          role: parent.role,
+          profile: run.config.value.roles[parent.role]?.modelProfile ?? run.profile,
+        }) ?? noObservation;
+      const phase = observation.begin('children');
+      try {
+        await this.spawn(runId, childId, signal);
+      } catch (error) {
+        phase.end(signal.aborted ? 'cancelled' : 'failed');
+        throw error;
+      } finally {
+        phase.end();
+      }
+    }
     abort(signal);
     const current = this.store.get(runId).agents[childId]!;
     // Получение результата и его включение в историю — разные шаги. Отметку ставит цикл вместе с сообщением.

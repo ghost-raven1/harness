@@ -37,6 +37,7 @@ const scripts = [
   'benchmark-storage.mjs',
   'benchmark-projects.mjs',
   'benchmark-project-diff.mjs',
+  'benchmark-insights.mjs',
   'start-windows.ps1',
   'release-pack.mjs',
   'release-smoke.mjs',

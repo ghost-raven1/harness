@@ -7,6 +7,8 @@ import { id } from '../../../shared/primitives.js';
 import { readText, type TextTab } from '../text-reader.js';
 import { liveConfirm } from '../live-confirm.js';
 import { checkLabels, phaseLabels } from './reports.js';
+import { supportsInsights } from '../specialists/capability.js';
+import { browseProjectSpecialists } from '../specialists/project.js';
 
 const freshnessLabels = {
   current: 'Файлы соответствуют проверкам',
@@ -93,6 +95,7 @@ export async function reviewProject(
   accept = false,
   diffs = false,
 ): Promise<void> {
+  const insights = await supportsInsights(context);
   let review = await context.request('projects.review', { projectId });
   const load = async () => {
     const current = await context.request('projects.detail', { projectId });
@@ -103,8 +106,8 @@ export async function reviewProject(
       actionLabel:
         accept && review.canAccept
           ? 'принять результат'
-          : !accept && diffs
-            ? 'изменения и проверки'
+          : !accept && (diffs || insights)
+            ? 'проверки и работа специалистов'
             : undefined,
     };
   };
@@ -124,6 +127,7 @@ export async function reviewProject(
         message: 'Что открыть?',
         options: [
           ...(diffs ? [{ value: 'changes', label: 'Изменения файлов · до и после' }] : []),
+          ...(insights ? [{ value: 'specialists', label: 'Работа специалистов' }] : []),
           { value: 'checks', label: 'Проверки и полный вывод команд' },
           { value: 'read', label: '← К итогам' },
           { value: 'back', label: '← К проекту' },
@@ -133,6 +137,7 @@ export async function reviewProject(
     if (typeof action === 'symbol' || action === 'back') return;
     if (action === 'changes' && diffs) await browseProjectChanges(context, projectId);
     if (action === 'checks') await browseProjectReports(context, projectId);
+    if (action === 'specialists' && insights) await browseProjectSpecialists(context, projectId);
   }
   const confirmed = await liveConfirm({
     title: 'Приёмка проекта',

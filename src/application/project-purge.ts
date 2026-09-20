@@ -32,6 +32,7 @@ interface ProjectPurgeOptions {
   scheduler: ToolScheduler;
   busy(): boolean;
   onPurged?(projectId: string): void;
+  forgetMeasurements?(runIds: string[]): Promise<void>;
   serialize<T>(work: () => Promise<T>): Promise<T>;
 }
 
@@ -179,6 +180,7 @@ export class ProjectPurge {
         for (const session of record.sessions) await this.options.sessions.recordPurge(session);
         for (const session of record.sessions) {
           await this.options.learningStore.purge(session);
+          await this.options.forgetMeasurements?.(session.runIds);
           await this.options.sessions.purgeFiles(session);
           await this.options.sessions.recordPurge({ ...session, complete: true });
         }

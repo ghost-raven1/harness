@@ -1,3 +1,5 @@
+import type { ExecutionObserver } from '../insights/ports.js';
+import { observeAgent } from './observations.js';
 import { ApplicationError } from '../shared/application-error.js';
 import type { SessionStore } from '../sessions/ports.js';
 import type { ToolRegistry } from '../tools/registry.js';
@@ -44,6 +46,7 @@ export class InvocationExecutor {
     private readonly scheduler: ToolScheduler,
     private readonly policy: PolicyService,
     private readonly approvals: FileApprovalService,
+    private readonly observer?: ExecutionObserver,
   ) {}
   /** Подключает жизненный цикл runtime, оставляя исполнитель независимым от проектов. */
   setExecutionControl(control: ExecutionControl): void {
@@ -65,6 +68,8 @@ export class InvocationExecutor {
       return cached.result ?? JSON.stringify({ error: cached.error });
     const run = this.store.get(runId);
     const agent = run.agents[agentId]!;
+    const observation = observeAgent(this.observer, run, agent);
+    const details = { invocationId: key };
     const isControl = call.name.startsWith('agents.');
     let effect: ToolInvocation['effect'] = isControl ? 'control' : 'read';
     let started = false;
@@ -112,15 +117,24 @@ export class InvocationExecutor {
           error: 'POLICY_DENIED',
           tool: call.name,
         });
-      if (
-        decision === 'ask' &&
-        !(await this.approvals.request(
-          runId,
-          agentId,
-          call,
-          this.control.waitingSignal(runId, signal),
-        ))
-      ) {
+      let allowed = true;
+      if (decision === 'ask') {
+        const phase = observation.begin('approval', details);
+        try {
+          allowed = await this.approvals.request(
+            runId,
+            agentId,
+            call,
+            this.control.waitingSignal(runId, signal),
+          );
+        } catch (error) {
+          phase.end(signal.aborted ? 'cancelled' : 'failed');
+          throw error;
+        } finally {
+          phase.end();
+        }
+      }
+      if (!allowed) {
         return this.finish(runId, agentId, call, effect, 'denied', {
           error: 'HUMAN_DENIED',
           tool: call.name,
@@ -153,6 +167,7 @@ export class InvocationExecutor {
         abort(signal);
         started = true;
         const timeout = deadline(signal, run.config.value.tools.timeoutMs);
+        const phase = observation.begin('tool.execute', details);
         let resultReceived = false;
         try {
           // Ожидание подзадач использует отмену запуска и не удерживает блокировку инструментов.
@@ -179,7 +194,7 @@ export class InvocationExecutor {
             typeof result === 'object' &&
             (('isError' in result && result.isError === true) ||
               ('exitCode' in result && result.exitCode !== 0));
-          return await this.finish(
+          const packed = await this.finish(
             runId,
             agentId,
             call,
@@ -187,7 +202,10 @@ export class InvocationExecutor {
             failed ? 'error' : 'succeeded',
             result,
           );
+          phase.end(failed ? 'failed' : 'completed');
+          return packed;
         } catch (error) {
+          phase.end(signal.aborted ? 'cancelled' : 'failed');
           // Журнал мог сохраниться до отказа снимка. Подтверждённый исход уже нельзя понижать до ошибки.
           const saved = this.store.get(runId).invocations[key];
           if (resultReceived && saved && ['succeeded', 'error'].includes(saved.status))
@@ -200,16 +218,24 @@ export class InvocationExecutor {
           }
           throw error;
         } finally {
+          phase.end();
           timeout.close();
         }
       };
-      return isControl
-        ? await work()
-        : await this.scheduler.schedule(
-            effect as 'read' | 'write',
-            work,
-            this.control.waitingSignal(runId, signal),
-          );
+      if (isControl) return await work();
+      const queued = observation.begin('tool.queue', details);
+      try {
+        return await this.scheduler.schedule(
+          effect as 'read' | 'write',
+          () => {
+            queued.end();
+            return work();
+          },
+          this.control.waitingSignal(runId, signal),
+        );
+      } finally {
+        queued.end(signal.aborted ? 'cancelled' : 'failed');
+      }
     } catch (error) {
       if (error instanceof UnknownOutcomeError) throw error;
       if (

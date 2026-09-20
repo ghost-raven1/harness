@@ -8,6 +8,8 @@ import { explainError } from '../errors.js';
 import { projectSummary, projectTabs } from './format.js';
 import { projectAction } from './actions.js';
 import { projectWork } from './activity.js';
+import { supportsInsights } from '../specialists/capability.js';
+import { browseProjectSpecialists } from '../specialists/project.js';
 
 const labels: Record<ProjectView['allowedActions'][number], string> = {
   plan: 'Предложить план',
@@ -46,6 +48,7 @@ export async function inspectProject(
   diffs = false,
 ): Promise<void> {
   const load = projectReader(context, projectId);
+  const insights = await supportsInsights(context);
   let notice = '';
   let view = await load();
   const missing = (error: unknown) => isMissingResource(error, 'project');
@@ -81,6 +84,7 @@ export async function inspectProject(
               message: 'Что дальше?',
               options: [
                 { value: 'read', label: 'Цель, план, проверки и журнал' },
+                ...(insights ? [{ value: 'specialists', label: 'Работа специалистов' }] : []),
                 ...((view.pendingApprovals ?? 0) > 0
                   ? [{ value: 'approvals', label: 'Рассмотреть разрешения' }]
                   : []),
@@ -136,6 +140,10 @@ export async function inspectProject(
         }
         notice = '';
         try {
+          if (action === 'specialists' && insights) {
+            await browseProjectSpecialists(context, projectId);
+            continue;
+          }
           if (await projectAction(context, await load(), action, enhanced, diffs)) return;
         } catch (error) {
           if (missing(error)) throw error;

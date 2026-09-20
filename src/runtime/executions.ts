@@ -1,3 +1,4 @@
+import type { RunObservations } from './observations.js';
 import type { SessionStore } from '../sessions/ports.js';
 import type { AgentCoordinator } from '../agents/coordinator.js';
 import { ApplicationError } from '../shared/application-error.js';
@@ -17,6 +18,7 @@ interface Execution {
   stopReason?: Error;
 }
 interface ExecutionServices {
+  observations?: RunObservations;
   store: SessionStore;
   agents: AgentCoordinator;
   failures: Map<string, unknown>;
@@ -44,6 +46,7 @@ export class RuntimeExecutions extends Map<string, Execution> {
     if (this.has(runId)) throw new ApplicationError('TASK_BUSY', 'Run already executing');
     this.services.store.pin(runId);
     const controller = new AbortController();
+    const phase = this.services.observations?.start(this.services.store.get(runId));
     const done = Promise.resolve()
       .then(async () => {
         try {
@@ -116,7 +119,16 @@ export class RuntimeExecutions extends Map<string, Execution> {
         }
         throw error;
       })
-      .finally(() => {
+      .finally(async () => {
+        const run = this.services.store.get(runId);
+        phase?.end(
+          run.status === 'completed' || run.status === 'paused'
+            ? 'completed'
+            : run.status === 'cancelled'
+              ? 'cancelled'
+              : 'failed',
+        );
+        await this.services.observations?.stop(run);
         this.services.agents.forgetRun(runId);
         this.delete(runId);
         this.services.store.unpin(runId);

@@ -46,7 +46,9 @@ it('карточка ожидания ведёт к разрешениям те�
     reasonCode: 'APPROVAL_REQUIRED',
     allowedActions: ['pause', 'cancel'],
   });
-  const request = vi.fn(async (_method: string) => view);
+  const request = vi.fn(async (method: string) =>
+    method === 'system.info' ? { capabilities: [] } : view,
+  );
   vi.mocked(readText).mockImplementation(async (_title, tabs, options) => {
     expect(options?.subtitle).toContain('Ждёт разрешения: 1');
     expect(tabs[0]?.text).toContain('Ждёт разрешения: 1');
@@ -72,7 +74,12 @@ it('карточка ожидания ведёт к разрешениям те�
     view.projectId,
   );
   expect(decideApprovals).toHaveBeenCalledExactlyOnceWith('/state', 'baseline-run');
-  expect(request.mock.calls.every(([method]) => method === 'projects.detail')).toBe(true);
+  expect(request.mock.calls.filter(([method]) => method === 'system.info')).toHaveLength(1);
+  expect(
+    request.mock.calls
+      .filter(([method]) => method !== 'system.info')
+      .every(([method]) => method === 'projects.detail'),
+  ).toBe(true);
 });
 
 it('исчезнувшее разрешение не открывает общий список чужих проектов', async () => {

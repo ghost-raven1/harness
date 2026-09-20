@@ -7,9 +7,11 @@ import { providerLimit, limitError } from './rate-limits.js';
 import { retryModelRequest } from './retry.js';
 import { createModel } from './adapters.js';
 import { mapPrompt } from './prompt.js';
+import { ModelAttemptObservation, observedTokens, observeModelQueue } from './observation.js';
 
 /** Использует поток провайдера AI SDK, сохраняя исполнение и восстановление в нашем runtime. */
 export class SdkModelProvider implements ModelProvider {
+  readonly observesRequests = true;
   private readonly limiter: Semaphore;
   constructor(
     concurrency: number,
@@ -19,13 +21,15 @@ export class SdkModelProvider implements ModelProvider {
   }
   /** Ожидает свободное место и выполняет запрос SDK с ограниченным числом повторов. */
   generate(request: ModelRequest): Promise<ModelOutput> {
-    return this.limiter.use(
-      () => retryModelRequest(request, () => this.once(request)),
-      request.signal,
+    return observeModelQueue(request, this.limiter, () =>
+      retryModelRequest(request, (observation) => this.once(request, observation)),
     );
   }
   /** Собирает текст, вызовы и расход из полного потока SDK; обрыв возвращает как ошибку. */
-  private async once(request: ModelRequest): Promise<ModelOutput> {
+  private async once(
+    request: ModelRequest,
+    observation: ModelAttemptObservation,
+  ): Promise<ModelOutput> {
     const timeout = deadline(request.signal, request.profile.timeoutMs);
     try {
       const mapped = mapPrompt(request);
@@ -58,6 +62,7 @@ export class SdkModelProvider implements ModelProvider {
         complete = new Map<string, ToolCall>();
       let finished = false,
         bytes = 0;
+      let usageSource: ModelOutput['usageSource'];
       const reader = response.stream.getReader();
       try {
         while (true) {
@@ -75,16 +80,19 @@ export class SdkModelProvider implements ModelProvider {
               : new ProviderError('Model stream returned invalid data');
           }
           if (part.type === 'text-delta') {
+            if (part.textDelta) observation.firstOutput();
             output.text += part.textDelta;
             request.onProgress?.({ type: 'text', text: part.textDelta });
           }
           if (part.type === 'reasoning') {
+            if (part.textDelta) observation.firstOutput();
             output.reasoning = (output.reasoning ?? '') + part.textDelta;
             request.onProgress?.({ type: 'reasoning', text: part.textDelta });
           }
           if (part.type === 'reasoning-signature') output.reasoningSignature = part.signature;
           if (part.type === 'redacted-reasoning') (output.redactedReasoning ??= []).push(part.data);
           if (part.type === 'tool-call-delta') {
+            observation.firstOutput();
             const call = partial.get(part.toolCallId) ?? {
               id: part.toolCallId,
               name: mapped.names.get(part.toolName) ?? part.toolName,
@@ -94,6 +102,7 @@ export class SdkModelProvider implements ModelProvider {
             partial.set(call.id, call);
           }
           if (part.type === 'tool-call') {
+            observation.firstOutput();
             complete.set(part.toolCallId, {
               id: part.toolCallId,
               name: mapped.names.get(part.toolName) ?? part.toolName,
@@ -103,6 +112,13 @@ export class SdkModelProvider implements ModelProvider {
             });
           }
           if (part.type === 'finish') {
+            const input = observedTokens(part.usage.promptTokens);
+            const produced = observedTokens(part.usage.completionTokens);
+            observation.usage({
+              input,
+              output: produced,
+              source: input !== null || produced !== null ? 'provider' : 'unavailable',
+            });
             if (!['stop', 'tool-calls', 'length'].includes(part.finishReason))
               throw new ProviderError(
                 'Incomplete or unsupported model finish: ' + part.finishReason,
@@ -113,6 +129,7 @@ export class SdkModelProvider implements ModelProvider {
                 ? 'tools'
                 : (part.finishReason as 'stop' | 'length');
             output.usage = { input: part.usage.promptTokens, output: part.usage.completionTokens };
+            usageSource = input !== null && produced !== null ? 'provider' : 'estimate';
           }
         }
       } finally {
@@ -128,10 +145,11 @@ export class SdkModelProvider implements ModelProvider {
         throw new ProviderError('Tool calls missing from response');
       if (output.finish === 'stop' && !output.calls.length && !output.text.trim())
         throw new ProviderError('Модель вернула пустой ответ без вызовов инструментов.');
-      if (!Number.isFinite(output.usage.input))
+      if (observedTokens(output.usage.input) === null)
         output.usage.input = Buffer.byteLength(JSON.stringify(mapped.prompt));
-      if (!Number.isFinite(output.usage.output))
+      if (observedTokens(output.usage.output) === null)
         output.usage.output = Buffer.byteLength(JSON.stringify(output));
+      output.usageSource = usageSource;
       return output;
     } catch (error) {
       if (error instanceof ProviderError) throw error;

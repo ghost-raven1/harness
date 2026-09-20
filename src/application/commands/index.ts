@@ -1,3 +1,4 @@
+import { insightsCommand } from './insights.js';
 import { ApplicationError } from '../../shared/application-error.js';
 import type { Application } from '../bootstrap.js';
 import { observeCommand } from '../../diagnostics/observe-command.js';
@@ -13,6 +14,9 @@ import { projectsCommand } from './projects.js';
 
 /** В режиме диагностики команды не меняют задачи, разрешения, черновики и настройки исполнения. */
 const readOnlyCommands = new Set([
+  'runtime.insights',
+  'runtime.activity',
+  'projects.insights',
   'projects.list',
   'projects.detail',
   'projects.purgePreview',
@@ -64,6 +68,8 @@ export async function dispatch(app: Application, method: string, input: unknown)
 
 /** Маршрутизация не содержит файловых операций и логики жизненного цикла задачи. */
 function dispatchCommand(app: Application, method: string, input: unknown): Promise<unknown> {
+  if (['runtime.insights', 'runtime.activity', 'projects.insights'].includes(method))
+    return insightsCommand(app, method, input);
   if (method.startsWith('projects.')) return projectsCommand(app, method, input);
   if (method.startsWith('files.')) return fileCommand(app, method, input);
   if (method.startsWith('drafts.')) return draftCommand(app, method, input);

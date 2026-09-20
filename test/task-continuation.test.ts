@@ -509,7 +509,7 @@ it.each([
     expect(taskDetails(current).find((tab) => tab.id === 'errors')!.text).toContain(error);
     expect(
       request.mock.calls.every(([method]) =>
-        ['runtime.history', 'runtime.status'].includes(method),
+        ['runtime.history', 'runtime.status', 'system.info'].includes(method),
       ),
     ).toBe(true);
   },

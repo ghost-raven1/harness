@@ -47,7 +47,15 @@ export async function removeRunFiles(directory: string, record: PurgeRecord): Pr
     throw new Error('Внутренний каталог Harness заменён ссылкой: ' + unsafe.join(', '));
   const runIds = new Set(record.runIds);
   await removeSessionDrafts(directory, record.sessionId, record.requestDigests);
-  for (const folder of ['runs', 'output', 'indexes/runs', 'indexes/output', 'search']) {
+  for (const folder of [
+    'runs',
+    'output',
+    'activity',
+    'indexes/runs',
+    'indexes/output',
+    'indexes/activity',
+    'search',
+  ]) {
     const parent = join(directory, folder);
     for (const name of await names(parent)) {
       const runId = name.slice(0, 36);
@@ -82,6 +90,8 @@ export async function linkedPurgeDirectories(directory: string): Promise<string[
   for (const folder of [
     'runs',
     'output',
+    'activity',
+    'indexes/activity',
     'indexes',
     'indexes/runs',
     'indexes/output',

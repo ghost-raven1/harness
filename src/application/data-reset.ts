@@ -52,6 +52,7 @@ export class DataReset {
     private readonly runtime: HarnessRuntime,
     private readonly scheduler: ToolScheduler,
     private readonly projects?: ProjectPurge,
+    private readonly forgetMeasurements?: (runIds: string[]) => Promise<void>,
   ) {}
 
   /** Собирает выбранный состав очистки, блокирующие операции и токен подтверждения. */
@@ -206,6 +207,7 @@ export class DataReset {
             forgetKnowledge: scope !== 'tasks',
             runIds: record.learningRunIds,
           });
+          await this.forgetMeasurements?.(record.sessions.flatMap((item) => item.runIds));
           for (const item of record.sessions)
             await this.sessions.purgeFiles(resetSessionRecord(record, item));
           if (scope !== 'learning') await removeTaskStorage(this.sessions.directory);
