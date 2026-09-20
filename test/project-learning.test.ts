@@ -3,19 +3,11 @@ import { writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { createApplication, type Application } from '../src/application/bootstrap.js';
 import type { ProjectView } from '../src/projects/types.js';
-import {
-  cleanup,
-  temporary,
-  configDirectory,
-  eventually,
-  ScriptedProvider,
-  output,
-  call,
-} from './helpers.js';
+import { cleanup, temporary, configDirectory, ScriptedProvider, output, call } from './helpers.js';
 import { stagePlan, mutation } from './project-helpers.js';
 
 /** Проверяет настоящую сборку приложения: runtime, приёмку проекта и восстановление очереди. */
-async function learningProject() {
+async function learningProject(checkExitCode = 0) {
   const root = await temporary();
   const configFile = await configDirectory(root, 'http://127.0.0.1:1/v1');
   await writeFile(
@@ -40,7 +32,7 @@ async function learningProject() {
   const app = await createApplication(configFile, state, provider);
   cleanup(() => app.close());
   app.registry.get('process.exec').execute = async () => ({
-    exitCode: 0,
+    exitCode: checkExitCode,
     stdout: 'Тест пройден',
     stderr: '',
   });
@@ -60,15 +52,53 @@ async function learningProject() {
   return { app, project, configFile, state, provider };
 }
 
-/** Ждёт перехода по каталогу, не конкурируя с финализаторами за чтение истории. */
+/** Ждёт исполнителей и следующий проектный переход, не ограничивая всю цепочку пятью секундами. */
 async function waitStatus(app: Application, projectId: string, status: ProjectView['status']) {
-  await eventually(
-    () =>
-      app.projects.store.catalog(true).find((project) => project.projectId === projectId)
-        ?.status === status,
-  );
-  return app.projects.detail({ projectId });
+  const finished = new Set<string>();
+  for (;;) {
+    // runtime.wait включает финализаторы; барьер затем дожидается записанного перехода проекта.
+    const project = await app.projects.coordinator.serial.run(() =>
+      app.projects.store.get(projectId),
+    );
+    if (project.status === status) return app.projects.detail({ projectId });
+    const runId = project.intent?.runId;
+    if (
+      !['running', 'planning'].includes(project.status) ||
+      !runId ||
+      finished.has(runId) ||
+      app.projects.store.recoveryError ||
+      app.sessions.recoveryError
+    ) {
+      throw new Error(
+        'Ожидалось ' +
+          status +
+          ': ' +
+          JSON.stringify({
+            projectId,
+            status: project.status,
+            revision: project.revision,
+            phase: project.phase,
+            reasonCode: project.reasonCode,
+            reason: project.reason,
+            runId,
+            recoveryError: app.projects.store.recoveryError ?? app.sessions.recoveryError,
+            runs: app.sessions
+              .catalog(true)
+              .filter((run) => run.project?.projectId === projectId)
+              .map((run) => ({ id: run.id, status: run.status, busy: app.runtime.busy(run.id) })),
+          }),
+      );
+    }
+    await app.runtime.wait(runId);
+    finished.add(runId);
+  }
 }
+
+test('ожидание приёмки сообщает причину неожиданной паузы и состояния запусков', async () => {
+  await expect(learningProject(1)).rejects.toThrow(
+    /Ожидалось review:.*"status":"paused".*"reasonCode":"BASELINE_FAILED".*"runs":\[.*"status":"failed","busy":false/,
+  );
+});
 
 test('до приёмки проекта ни финализация, ни enqueue, ни отзыв не создают опыт', async () => {
   const { app, project } = await learningProject();
